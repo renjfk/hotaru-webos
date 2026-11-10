@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "../app.h"
+#include "../chiaki/session.h"
 #include "../config/config.h"
 #include "../input/input.h"
 #include "../log.h"
@@ -184,7 +185,7 @@ static void build_psn_pane(lv_obj_t *card) {
     wrapped(col, TXT_BODY, "3.  Type the code= value from the address bar");
     lv_obj_t *entry = ui_box(col, LV_FLEX_FLOW_ROW, SP_L);
     lv_obj_set_style_pad_ver(entry, SP_S, 0);
-    g.code = textarea(entry, "Code", NULL, 128, LV_KEYBOARD_MODE_TEXT_LOWER);
+    g.code = textarea(entry, "Code", NULL, SESSION_PSN_CODE_MAX, LV_KEYBOARD_MODE_TEXT_LOWER);
     g.link = button(entry, BTN_PRIMARY, LV_SYMBOL_OK, "Link", link_cb, NULL);
     ui_text(col, TXT_OVERLINE, "OR OPEN THIS LINK");
     lv_obj_t *url = wrapped(col, TXT_CAPTION, app_reg_psn_url());

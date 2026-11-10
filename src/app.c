@@ -281,7 +281,7 @@ void app_reg_submit_psn(const uint8_t account_id[8], bool ps5) {
 /* accepts the bare code or the whole redirect URL (its code= parameter) */
 void app_reg_submit_psn_code(const char *code, bool ps5) {
     if (!reg_begin(APP_REG_METHOD_PSN, ps5)) return;
-    char in[512], c[512];
+    char in[SESSION_PSN_CODE_MAX + 1], c[SESSION_PSN_CODE_MAX + 1];
     trim_copy(in, sizeof(in), code);
     const char *p = strstr(in, "code=");
     p = p ? p + 5 : in;

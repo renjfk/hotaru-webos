@@ -36,6 +36,9 @@
 
 #include "../config/config.h"
 
+/* an OAuth authorization code (or the redirect URL around it) is long: chiaki-ng keeps no limit either */
+#define SESSION_PSN_CODE_MAX 1024
+
 typedef enum {
     SESSION_EV_PROGRESS,    /* connecting, progress 0..100 */
     SESSION_EV_CONNECTED,   /* CHIAKI_EVENT_CONNECTED: stream is up */

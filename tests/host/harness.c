@@ -87,6 +87,17 @@ static lv_obj_t *find_btn(lv_obj_t *o, const char *txt) {
     }
     return NULL;
 }
+static lv_obj_t *find_textarea(lv_obj_t *o, const char *placeholder) {
+    if (lv_obj_check_type(o, &lv_textarea_class)) {
+        const char *p = lv_textarea_get_placeholder_text(o);
+        if (p && !strcmp(p, placeholder)) return o;
+    }
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) {
+        lv_obj_t *r = find_textarea(lv_obj_get_child(o, (int32_t)i), placeholder);
+        if (r) return r;
+    }
+    return NULL;
+}
 static lv_obj_t *first_on_page(int page, const lv_obj_class_t *cls) {
     lv_obj_t **o;
     _LV_LL_READ(&ui_group()->obj_ll, o) if (tabs_page_of(*o) == page && lv_obj_check_type(*o, cls)) return *o;
@@ -345,10 +356,6 @@ int main(void) {
     dpad(ABS_HAT0Y, 1);
     expect(lv_group_get_focused(ui_register_group()) != before && lv_group_get_focused(ui_group()) == main_focus,
            "D-pad moves the focus inside the overlay only");
-    /* TODO(test): PIN path through the overlay - focus the IP and PIN fields, type on the on-screen keyboard
-     * with the cursor, Register, pump ~2.5 s: "Paired with ..." shown, the console listed and selected. */
-    /* TODO(test): PSN path - type a code + Link, pump ~3.5 s: config_psn()->linked, then APP_REG_SUCCESS with a
-     * "(PSN)" console; the code "fail" and the PIN 00000000 end in APP_REG_FAILED with app_reg_error() shown. */
     lv_obj_t *field = NULL, **fo;
     _LV_LL_READ(&ui_register_group()->obj_ll, fo) if (!field && visible(*fo) && lv_obj_check_type(*fo, &lv_textarea_class)) field = *fo;
     lv_group_focus_obj(field); pump(100);
@@ -362,6 +369,59 @@ int main(void) {
     g_in.click = true; pump(80); g_in.click = false; pump(200);
     expect(!ui_register_active() && g_in.group == ui_group() && lv_group_get_focused(ui_group()) == main_focus &&
            lv_obj_get_parent(kb) == lv_scr_act(), "Close dismisses the overlay, gives back the keypad focus and keyboard");
+
+    /* the PIN path driven through the overlay's own fields and Register button */
+    ui_register_open(); pump(150);
+    lv_event_send(find_btn(ui_register_root(), "PIN from the console"), LV_EVENT_CLICKED, NULL); pump(100);
+    lv_obj_t *raddr = find_textarea(ui_register_root(), "192.168.1.100");
+    lv_obj_t *rpin = find_textarea(ui_register_root(), "12345678");
+    expect(raddr && rpin, "the PIN pane has the address and PIN fields");
+    lv_textarea_set_text(raddr, "10.10.10.77");
+    lv_textarea_set_text(rpin, "87654321");
+    int hosts1 = app_host_count();
+    lv_event_send(find_btn(ui_register_root(), "Register"), LV_EVENT_CLICKED, NULL);
+    pump(2600);
+    expect(app_reg_state() == APP_REG_SUCCESS && app_host_count() == hosts1 + 1 && app_host(app_selected()) &&
+           !strcmp(app_host(app_selected())->addr, "10.10.10.77"),
+           "the overlay's PIN path registers and selects the console");
+    shot("register-pin-done");
+    ui_register_close(); pump(100);
+
+    /* the PIN error path (00000000 is the simulated rejection) */
+    ui_register_open(); pump(150);
+    lv_event_send(find_btn(ui_register_root(), "PIN from the console"), LV_EVENT_CLICKED, NULL); pump(100);
+    lv_textarea_set_text(find_textarea(ui_register_root(), "192.168.1.100"), "10.10.10.78");
+    lv_textarea_set_text(find_textarea(ui_register_root(), "12345678"), "00000000");
+    lv_event_send(find_btn(ui_register_root(), "Register"), LV_EVENT_CLICKED, NULL);
+    pump(2600);
+    expect(app_reg_state() == APP_REG_FAILED && app_reg_error()[0], "a rejected PIN ends in a shown error");
+    shot("register-pin-error");
+    ui_register_close(); pump(100);
+
+    /* the PSN path through the overlay: code -> tokens -> registration */
+    ui_register_open(); pump(150);
+    lv_event_send(find_btn(ui_register_root(), "PSN account"), LV_EVENT_CLICKED, NULL); pump(100);
+    lv_obj_t *rcode = find_textarea(ui_register_root(), "Code");
+    expect(rcode, "the PSN pane has the code field");
+    lv_textarea_set_text(rcode, "SIM-CODE-123");
+    hosts1 = app_host_count();
+    lv_event_send(find_btn(ui_register_root(), "Link"), LV_EVENT_CLICKED, NULL);
+    pump(3600);
+    expect(config_psn()->linked && app_reg_state() == APP_REG_SUCCESS && app_host_count() == hosts1 + 1 &&
+           app_host(app_selected()) && strstr(app_host(app_selected())->addr, "PSN"),
+           "the overlay's PSN code path links the account and registers a console");
+    shot("register-psn-done");
+    ui_register_close(); pump(100);
+
+    /* the PSN error path (the code "fail" is the simulated rejection) */
+    config_psn_clear();
+    ui_register_open(); pump(150);
+    lv_event_send(find_btn(ui_register_root(), "PSN account"), LV_EVENT_CLICKED, NULL); pump(100);
+    lv_textarea_set_text(find_textarea(ui_register_root(), "Code"), "fail");
+    lv_event_send(find_btn(ui_register_root(), "Link"), LV_EVENT_CLICKED, NULL);
+    pump(1600);
+    expect(app_reg_state() == APP_REG_FAILED && app_reg_error()[0], "a rejected PSN code ends in a shown error");
+    ui_register_close(); pump(100);
 
     /* a simulated PIN registration stores the console, selects it, and it is still there after a reload */
     int hosts0 = app_host_count();

@@ -168,8 +168,10 @@ registration/forget/PSN changes immediately.
 ## Development tooling (macOS)
 
 - `tests/host/run.sh`: behaviour tests, real modules rendered offscreen against a fake
-  evdev pad (`brew install sdl2`). 39 checks, screenshots to `out/host-tests/shots/`; the
+  evdev pad (`brew install sdl2`). 46 checks, screenshots to `out/host-tests/shots/`; the
   config lives in `out/host-tests/config`, wiped per run, and the test seeds its own consoles.
+  The registration overlay is driven end to end through its own fields and buttons (both the
+  PIN and the PSN code path, success and the simulated failure).
 - `sim/run.sh`: the **whole** app - including `main.c` and the SDL display - built and run
   in a resizable window for fast iteration. The LVGL display stays 1920x1080 and only the
   window is scaled, so the layout matches the TV; the mouse drives the cursor path and the
