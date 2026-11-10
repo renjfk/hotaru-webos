@@ -3,6 +3,9 @@
 What is wired and proven, and how. Device: LG 50UP75003LF, webOS TV Lite 6.5.3,
 kernel 4.4.84 armv7l, 4 cores, 1.3 GB RAM (~340 MB free at runtime), Wi-Fi.
 
+> Picking this up fresh? See [`HANDOVER.md`](HANDOVER.md) for the current state,
+> how to build/test/verify, and the next task (console registration).
+
 Evidence comes from three places:
 - **TV**: the app running on the device, read back from `/tmp/chiaki.log` over SSH.
 - **Probe**: the earlier standalone `webOS Probe` app (`~/webos-probe`), raw results
