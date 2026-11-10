@@ -8,6 +8,7 @@
 #include "logo.h"
 #include "log_view.h"
 #include "pages.h"
+#include "register.h"
 #include "tabs.h"
 #include "widgets.h"
 
@@ -38,15 +39,22 @@ static void action_bar_refresh(void) {
     }
 }
 
+static void group_build(void);
+
 void ui_app_changed(app_change_t what) {
     switch (what) {
         case APP_CHANGED_HOST: page_hosts_refresh(); break;
+        case APP_CHANGED_HOSTS: page_hosts_reload(); group_build(); page_input_refresh(); break;
         case APP_CHANGED_CONN: page_log_refresh(); action_bar_refresh(); break;
         case APP_CHANGED_PROGRESS: page_log_progress(); break;
+        case APP_CHANGED_REG: ui_register_refresh(); page_input_refresh(); break;
     }
 }
 
-void ui_tab_step(int dir, const char *button) { tabs_step(dir, button); }
+/* L1/R1: the tabs stay put while an overlay covers them */
+void ui_tab_step(int dir, const char *button) {
+    if (!ui_register_active()) tabs_step(dir, button);
+}
 
 /* top-bar controller light: green when grabbed, red once lost, grey if never found */
 void ui_set_pad_state(pad_state_t state) {
@@ -81,6 +89,16 @@ static void textarea_cb(lv_event_t *e) {
 
 void ui_keyboard_attach(lv_obj_t *ta, lv_keyboard_mode_t mode) {
     lv_obj_add_event_cb(ta, textarea_cb, LV_EVENT_ALL, (void *)(intptr_t)mode);
+}
+
+/* the screen is below the top layer: an overlay there has to carry the keyboard itself */
+void ui_keyboard_host(lv_obj_t *parent) {
+    lv_obj_t *host = parent ? parent : lv_scr_act();
+    lv_keyboard_set_textarea(g_kb, NULL);
+    lv_obj_add_flag(g_kb, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_parent(g_kb, host);
+    /* align is relative to the host's content box: undo its bottom padding to stay on the screen edge */
+    lv_obj_align(g_kb, LV_ALIGN_BOTTOM_MID, 0, R_LG + lv_obj_get_style_pad_bottom(host, LV_PART_MAIN));
 }
 
 /* ---------- screen ---------- */
@@ -147,6 +165,18 @@ static void group_add_controls(lv_obj_t *parent) {
     }
 }
 
+/* keypad focus order: tab bar, each page's controls, action bar. Rebuilt when a page's
+ * controls change (the host list); the focused control keeps the focus if it still exists. */
+static void group_build(void) {
+    lv_obj_t *focused = lv_group_get_focused(g_group);
+    lv_group_remove_all_objs(g_group);
+    lv_group_add_obj(g_group, tabs_bar());
+    for (int i = 0; i < TAB__COUNT; i++) group_add_controls(tabs_page(i));
+    lv_group_add_obj(g_group, g_bar.connect);
+    lv_group_add_obj(g_group, g_bar.disc);
+    if (focused && lv_obj_get_group(focused) == g_group) lv_group_focus_obj(focused);
+}
+
 void ui_create(void) {
     lv_obj_t *scr = lv_scr_act();
     lv_obj_remove_style_all(scr);
@@ -163,12 +193,8 @@ void ui_create(void) {
     build_action_bar(scr);
     build_keyboard(scr);
 
-    /* keypad focus order: tab bar, each page's controls, action bar */
     g_group = lv_group_create();
-    lv_group_add_obj(g_group, tabs_bar());
-    for (int i = 0; i < TAB__COUNT; i++) group_add_controls(tabs_page(i));
-    lv_group_add_obj(g_group, g_bar.connect);
-    lv_group_add_obj(g_group, g_bar.disc);
+    group_build();
     lv_group_set_default(g_group);
     tabs_bind_group(g_group);
 

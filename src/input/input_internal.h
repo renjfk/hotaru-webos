@@ -19,6 +19,7 @@ extern input_ctx_t g_in;
 
 /* keypad.c: remote + D-pad key queue -> LVGL keypad indev */
 void keypad_init(lv_group_t *group);
+void keypad_set_group(lv_group_t *group);
 void keypad_push(lv_key_t key);
 lv_key_t keypad_from_sdl(SDL_Keycode key);
 

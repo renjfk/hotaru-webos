@@ -32,6 +32,7 @@ typedef struct {
 
 /* registers the keypad + pointer indevs and grabs a pad if one is present */
 void input_init(lv_group_t *group, lv_obj_t *cursor, const input_hooks_t *hooks);
+void input_set_group(lv_group_t *group);  /* keypad focus moves within `group` (an overlay's own group) */
 void input_tick(void);                    /* every main-loop iteration: pad, hotplug, cursor */
 void input_remote_key(SDL_Keycode key);   /* SDL_KEYDOWN from the TV remote */
 bool input_keypad_mode(void);             /* focus ring rather than cursor is in charge */

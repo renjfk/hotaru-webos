@@ -14,10 +14,12 @@ enum { TAB_HOSTS, TAB_VIDEO, TAB_INPUT, TAB_LOG, TAB__COUNT };
 
 void page_hosts_build(lv_obj_t *page);
 void page_hosts_refresh(void);       /* selection changed */
+void page_hosts_reload(void);        /* the host list changed: rebuilds the list (ui.c then rebuilds the group) */
 
 void page_video_build(lv_obj_t *page);
 
 void page_input_build(lv_obj_t *page);
+void page_input_refresh(void);       /* registration / PSN account / host count changed */
 
 void page_log_build(lv_obj_t *page);
 void page_log_refresh(void);         /* connection state changed */
@@ -26,5 +28,7 @@ lv_obj_t *page_log_console(void);
 
 /* ui.c: show the on-screen keyboard for a text area when it gains focus */
 void ui_keyboard_attach(lv_obj_t *textarea, lv_keyboard_mode_t mode);
+/* ui.c: the keyboard lives on the screen; an overlay on the top layer borrows it (NULL gives it back) */
+void ui_keyboard_host(lv_obj_t *parent);
 
 #endif

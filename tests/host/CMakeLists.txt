@@ -16,7 +16,8 @@ file(GLOB_RECURSE SRC CONFIGURE_DEPENDS ${APP}/src/*.c)
 list(FILTER SRC EXCLUDE REGEX "/src/main\\.c$|/src/platform/display\\.c$")
 add_executable(host-tests harness.c ${SRC})
 target_compile_definitions(host-tests PRIVATE INPUT_DIR="${CMAKE_BINARY_DIR}/devinput"
-                                              SHOTS_DIR="${CMAKE_BINARY_DIR}/shots")
+                                              SHOTS_DIR="${CMAKE_BINARY_DIR}/shots"
+                                              CONFIG_DIR="${CMAKE_BINARY_DIR}/config")
 target_include_directories(host-tests PRIVATE ${CMAKE_SOURCE_DIR}/shim ${APP}/src ${SDL2_INCLUDE_DIRS})
 target_compile_options(host-tests PRIVATE -Wall -Wextra -Wno-unused-function)
 target_link_libraries(host-tests PRIVATE lvgl ${SDL2_LINK_LIBRARIES})

@@ -19,6 +19,11 @@ void input_init(lv_group_t *group, lv_obj_t *cursor, const input_hooks_t *hooks)
     log_msg("indev ready");
 }
 
+void input_set_group(lv_group_t *group) {
+    g_in.group = group;
+    keypad_set_group(group);
+}
+
 void input_tick(void) { gamepad_tick(); }
 
 void input_remote_key(SDL_Keycode key) {

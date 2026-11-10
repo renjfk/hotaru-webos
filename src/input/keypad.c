@@ -10,6 +10,7 @@ static lv_key_t g_q[QN];
 static int g_qh, g_qt;
 static lv_key_t g_cur;
 static int g_release;
+static lv_indev_t *g_indev;
 
 lv_key_t keypad_from_sdl(SDL_Keycode k) {
     switch (k) {
@@ -61,5 +62,10 @@ void keypad_init(lv_group_t *group) {
     lv_indev_drv_init(&drv);
     drv.type = LV_INDEV_TYPE_KEYPAD;
     drv.read_cb = read_cb;
-    lv_indev_set_group(lv_indev_drv_register(&drv), group);
+    g_indev = lv_indev_drv_register(&drv);
+    lv_indev_set_group(g_indev, group);
+}
+
+void keypad_set_group(lv_group_t *group) {
+    if (g_indev) lv_indev_set_group(g_indev, group);
 }

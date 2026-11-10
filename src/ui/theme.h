@@ -82,6 +82,8 @@
 #define DECO_SIZE    84            /* faint PlayStation face-button diamond */
 #define DECO_GAP     118
 #define DECO_W       7
+#define QR_SIZE      450           /* PSN sign-in QR: 5 px modules for the ~570-char authorize URL */
+#define REG_SIDE_W   560           /* registration overlay: method + status column */
 
 /* motion */
 #define TRANS_MS     120

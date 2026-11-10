@@ -29,8 +29,9 @@ Evidence comes from three places:
 | Network transport (UDP/bcast, DNS, TCP, TLS 1.3, listen) | proven, not used by the app yet | probe (17/17) |
 | Video/audio (NDL) | not started | - |
 | libchiaki build + PS5 session | not started | - |
-| Settings/hosts persistence | stub | - |
-| Registration, wake-up | stub (UI only) | - |
+| Settings, consoles, PSN account persistence | done (`key=value` file) | host; TV path unconfirmed |
+| Registration (PIN + PSN QR/code) | UI + simulated backend; libchiaki/http pending | host + sim |
+| Wake-up, discovery | not started | - |
 
 ## Platform
 
@@ -113,9 +114,13 @@ LVGL theme (PlayStation-blue on dark navy, 40/32/28/24/20/16 px type scale), fou
 (Hosts, Video, Input, Log) with a sliding pill and no swipe, settings rows, dropdowns,
 sliders, switches, on-screen keyboard, log console, status lights, controller hints,
 focus rings that are never clipped, hover highlight under the cursor, app icon,
-startup splash. Host tests assert no overflow on any tab and no clipped focus ring
-(22 controls), and that the splash shows on the top layer and auto-dismisses.
-Content is demo data: three fake consoles, a simulated 3 s connection.
+startup splash, and the "Add a console" overlay. Host tests assert no overflow on any tab
+or on the overlay and no clipped focus ring (20 controls on the tabs, 14 on the overlay),
+and that the splash shows on the top layer and auto-dismisses.
+The Hosts list is the registered consoles from the config (no demo consoles any more);
+with none it shows an empty state pointing at "Add host". A console's state, firmware
+and address come from discovery, which does not exist yet: they show as "Unknown"/"-".
+Connecting is still a simulated 3 s handshake.
 
 The **startup splash** (`ui/splash.c`) is a full-screen overlay on `lv_layer_top()`
 shown once after `ui_create()`: the app mark (`ui_logo()`, the icon's play-waves glyph
@@ -124,10 +129,47 @@ two signal arcs) over "Chiaki webOS" and a spinner, fading in and dismissing its
 1.5 s. `CHIAKI_NO_SPLASH=1` skips it and `CHIAKI_SPLASH_MS=<ms>` overrides the hold time.
 The same `ui_logo()` mark is shown at the top-left of the app view.
 
+## Registration
+
+"Add host" (Hosts) and "Add a console" (Input) open `ui/register.c`, a full-screen overlay
+on `lv_layer_top()` with its own keypad focus group and the borrowed on-screen keyboard:
+
+- **PIN**: console IP + the 8-digit PIN from Settings > System > Remote Play > Link Device.
+- **PSN account**: Sony's authorize URL (`duid=` the stable device UID from config) as a
+  QR code (`ui/qr.c`, vendored Nayuki `qrcodegen` v1.8.0) plus the URL text; the user signs
+  in on a phone and types the `code=` value (the whole redirect URL also works). The QR in
+  the host-test screenshot decodes back to the exact URL (macOS CoreImage).
+
+`app.c` runs the state machine (idle / running / success / failed, progress, error) and
+announces `APP_CHANGED_REG`; on success the console is added to the config, saved,
+selected and listed. **The backend is simulated** in `chiaki/session.c`: ~2 s of progress,
+then an obviously fake "Simulated PS5" (MAC `02:00:..`); PIN `00000000` and the code
+`fail` exercise the error path. The real calls are marked `TODO(libchiaki)`
+(`chiaki_regist_start` + the `ChiakiRegistEvent` callback, PSN registration via holepunch)
+and `TODO(http)` (the code -> token exchange and the account id lookup).
+
+## Config file
+
+One `key=value` text file (format in `config/config.h`): stream + input settings, the
+consoles with their registration keys, the PSN account and tokens, the device UID. Written
+atomically (temp file, mode 0600, `rename`); a missing or corrupt file falls back to the
+defaults line by line. Settings edits are saved debounced (0.8 s) and on quit,
+registration/forget/PSN changes immediately.
+
+- Location: `$CHIAKI_CONFIG_DIR/chiaki.conf` if set (host tests, simulator); on the TV
+  `$HOME/conf/chiaki.conf`. The jailer sets `HOME` to the app's install directory
+  (`/media/developer/apps/usr/palm/applications/org.homebrew.chiakiwebos`), which is
+  writable on webOS 4+ and survives reboots; moonlight-tv keeps its pairing keys there the
+  same way. **Not yet confirmed on this TV** (offline): that the directory is writable and
+  what an update over the same app id does to `conf/` (an uninstall removes it). If it is
+  not writable the app logs `[CONFIG] ... not writable` and falls back to
+  `/tmp/chiaki-webos` (lost on reboot).
+
 ## Development tooling (macOS)
 
 - `tests/host/run.sh`: behaviour tests, real modules rendered offscreen against a fake
-  evdev pad (`brew install sdl2`). 22 checks, screenshots to `out/host-tests/shots/`.
+  evdev pad (`brew install sdl2`). 39 checks, screenshots to `out/host-tests/shots/`; the
+  config lives in `out/host-tests/config`, wiped per run, and the test seeds its own consoles.
 - `sim/run.sh`: the **whole** app - including `main.c` and the SDL display - built and run
   in a resizable window for fast iteration. The LVGL display stays 1920x1080 and only the
   window is scaled, so the layout matches the TV; the mouse drives the cursor path and the
@@ -143,9 +185,9 @@ The same `ui_logo()` mark is shown at the top-left of the app view.
   unverified.
 - **Protocol** (`chiaki/session.[ch]`): libchiaki not built here. The reference recipe
   is `scripts/chiaki-lg-build-webos.sh` (from chiaki-lg, not run in this repo).
-- **Config** (`config/config.[ch]`): settings live in memory; no file yet, and a writable
-  path that survives app reinstalls still has to be chosen.
-- **Registration / wake-up**: buttons log placeholder messages only.
+  Registration is simulated (see Registration).
+- **HTTP**: no client yet; the PSN token exchange is a `TODO(http)`.
+- **Wake-up / discovery**: the Wake button logs a placeholder; console state is unknown.
 
 ## Constraints
 

@@ -23,15 +23,17 @@ C11, SDL2 + LVGL 8.3.11 (software rendered). No web stack.
 src/
   main.c            entry: init modules, wire hooks, main loop (no logic here)
   log.[ch]          the only logger: /tmp/chiaki.log + on-screen Log page feed
-  app.[ch]          state the UI renders: hosts, selection, connection; glue to config/session
+  app.[ch]          state the UI renders: hosts, selection, connection, registration; glue to config/session
   platform/         display.[ch]: SDL window + streaming texture + LVGL display driver
   input/            remote + DualShock 4 -> LVGL indevs: input.h API, keypad.c, gamepad.c, pointer.c
   ui/               theme.[ch] tokens+styles, widgets.[ch] components, logo.[ch] the app mark,
-                    tabs.[ch], log_view.[ch], splash.[ch] startup overlay, ui.[ch] screen
-                    assembly, page_<name>.c one per tab (pages.h)
-  config/           settings + registered consoles (persistence is a stub)
-  chiaki/           session.[ch]: libchiaki wrapper (stub)
+                    tabs.[ch], log_view.[ch], splash.[ch] startup overlay, register.[ch] the
+                    "Add a console" overlay, qr.[ch] QR widget, ui.[ch] screen assembly,
+                    page_<name>.c one per tab (pages.h)
+  config/           settings, consoles, PSN account, device UID; one key=value file (config.h)
+  chiaki/           session.[ch]: libchiaki wrapper (stub; registration simulated)
   media/            ndl.[ch]: NDL hardware video/audio (stub)
+  vendor/           qrcodegen.[ch]: Nayuki's QR encoder (MIT), vendored unmodified
 docs/               STATUS.md, raw hardware evidence (DS4 map, network probe)
 tests/host/         macOS behaviour tests (see Testing)
 sim/                macOS TV simulator: the real app in a window (see Testing)
@@ -52,8 +54,12 @@ assets/             the app icon PNGs (icon.png 80, largeIcon.png 130, icon-400.
   shared styles are `st_*` from `ui/theme.h`
 - New module: add `src/<dir>/<name>.[ch]` (CMake globs `src/**/*.c`) and init/tick it from
   `main.c`. New tab page: follow the note in `ui/pages.h`. Build screens from `ui/widgets.h`
-- Stubs return false/"not available" honestly; keep `DEMO`/`TODO(session)` markers in
-  `app.c` until the real path replaces them
+- Stubs return false/"not available" honestly; keep the `DEMO`/`TODO(session)` markers in
+  `app.c` and the `TODO(libchiaki)`/`TODO(http)` call sites in `session.c` until the real
+  path replaces them
+- Config mutators only change memory: save afterwards (`config_save()`, or
+  `app_settings_changed()` for debounced settings edits); `app_*` re-reads the host list
+  itself after its own changes
 
 ## Build, Deploy, Logs
 
@@ -85,14 +91,17 @@ the log must show `UI created`, `gamepad ... grabbed` (if the pad is on) and `in
 
 - `tests/host/run.sh` (macOS, `brew install sdl2`): builds every module except `main.c` and the
   SDL display, renders offscreen and drives the real `gamepad.c` through a fake evdev FIFO. It
-  asserts layout (no overflow, no clipped focus rings), tabs, D-pad/dropdown, press-cancel,
-  the session flow, scrolling, hotplug and the startup splash, and writes per-tab screenshots to
-  `out/host-tests/shots/`. Run it after UI/input changes; add an assertion for new behaviour
+  asserts config persistence, layout (no overflow, no clipped focus rings), tabs,
+  D-pad/dropdown, press-cancel, the session flow, scrolling, hotplug, the registration overlay,
+  a simulated registration, the empty host list and the startup splash, and writes screenshots
+  to `out/host-tests/shots/`. Its config is `out/host-tests/config` (wiped per run, there are
+  no demo consoles: it seeds its own). Run it after UI/input changes; add an assertion for new
+  behaviour
 - `sim/run.sh` (macOS) builds the **whole** app (incl. `main.c`, `display.c`) and runs it in a
   window for fast iteration: the mouse drives the pointer path (hover/click), the keyboard is
-  the TV remote, `CHIAKI_NO_SPLASH=1` skips the splash. It compiles `gamepad.c` against
-  `tests/host/shim`, so no `/dev/input` is needed. The LVGL display is still 1920x1080; only
-  the window is scaled, so the layout matches the device
+  the TV remote, `CHIAKI_NO_SPLASH=1` skips the splash, settings persist in `out/sim/config`.
+  It compiles `gamepad.c` against `tests/host/shim`, so no `/dev/input` is needed. The LVGL
+  display is still 1920x1080; only the window is scaled, so the layout matches the device
 - The host tests and the simulator do not replace the TV check: rendering speed, the real DS4
   and webOS are only proven on the device
 
@@ -130,6 +139,15 @@ the log must show `UI created`, `gamepad ... grabbed` (if the pad is on) and `in
 - **Startup splash**: `ui/splash.c` is on `lv_layer_top()`, swallows input, and deletes
   itself after `SPLASH_MS`; `CHIAKI_NO_SPLASH=1` skips it and `CHIAKI_SPLASH_MS=<ms>`
   overrides the hold time (both handy in the simulator)
+- **Interactive overlays** (`ui/register.c`) on `lv_layer_top()` need: their own focus group
+  handed to the keypad (`input_set_group()`, give `ui_group()` back on close), the default
+  group set to NULL while building (LVGL auto-adds buttons to it), `lv_obj_move_background()`
+  to stay under the stick cursor (also on the top layer), the keyboard borrowed with
+  `ui_keyboard_host()` (the screen is below the top layer), and closing from their own
+  button/key event through `lv_async_call()` (the keypad still uses the object afterwards)
+- **Config file**: `$CHIAKI_CONFIG_DIR/chiaki.conf`, else `$HOME/conf/chiaki.conf` on the TV
+  (HOME is the app dir; survives reboots, surviving a reinstall is unconfirmed: `TODO(path)`),
+  else `/tmp/chiaki-webos`. It holds registration keys and PSN tokens (mode 0600)
 
 ## Code Style
 
@@ -150,5 +168,6 @@ the log must show `UI created`, `gamepad ... grabbed` (if the pad is on) and `in
 2. Build libchiaki for the TV (reuse `scripts/chiaki-lg-build-webos.sh`) and do a real PS5
    handshake in `chiaki/session.c`
 3. Wire the session into the UI (`app.c` replaces the simulated connection; pad -> session)
-4. Persist settings and consoles (`config/config.c`)
-5. Registration (PIN + PSN account id) and wake-up from standby
+4. Real registration: `chiaki_regist_start` for the PIN path, the PSN token exchange over HTTP
+   and PSN registration (the `TODO(libchiaki)`/`TODO(http)` sites in `chiaki/session.c`),
+   discovery for console state, wake-up from standby

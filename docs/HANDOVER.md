@@ -8,6 +8,13 @@ host tests green (22 checks), `./build.sh` green, `sim/run.sh` runs. Read
 If a cancelled background agent left any commits or edits after `2580738`, discard
 them (`git reset --hard 2580738 && git clean -fd`) before continuing.
 
+**Update:** the registration scaffold has landed on top of this (commit "Scaffold console
+registration (PIN + PSN) with a simulated backend and persist settings"): overlay UI, QR, `session_reg_*` API with
+a simulated backend, the `app_reg_*` state machine, and real config persistence (no more demo
+consoles). What remains is listed under `TODO(libchiaki)` / `TODO(http)` / `TODO(test)` /
+`TODO(path)`; see [`STATUS.md`](STATUS.md) "Registration" and "Config file". Do not reset to
+`2580738` any more.
+
 ## Where the project is
 
 Native LG webOS app **Chiaki webOS** (id `org.homebrew.chiakiwebos`, binary `chiaki`),

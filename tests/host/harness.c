@@ -1,7 +1,9 @@
 /* tests/host/harness.c - host behaviour tests: the real modules render offscreen and a fake
- * evdev FIFO drives the real gamepad code. Checks layout (no overflow, no clipped focus
- * rings), tabs (no swipe, animated L1/R1/click), D-pad + dropdown, press-cancel, the
- * simulated session, right-stick scrolling and hotplug. Run with tests/host/run.sh. */
+ * evdev FIFO drives the real gamepad code. Checks config persistence (round trip, corrupt
+ * file), layout (no overflow, no clipped focus rings), tabs (no swipe, animated L1/R1/click),
+ * D-pad + dropdown, press-cancel, the simulated session, right-stick scrolling, hotplug, the
+ * registration overlay, a simulated registration and the empty host list. The config lives
+ * in an isolated dir (CHIAKI_CONFIG_DIR), wiped on every run. Run with tests/host/run.sh. */
 #include <SDL.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -17,6 +19,8 @@
 #include "input/input_internal.h"
 #include "log.h"
 #include "ui/pages.h"
+#include "ui/qr.h"
+#include "ui/register.h"
 #include "ui/splash.h"
 #include "ui/tabs.h"
 #include "ui/theme.h"
@@ -100,6 +104,19 @@ static void check_overflow(lv_obj_t *o) {
     }
     for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) check_overflow(lv_obj_get_child(o, (int32_t)i));
 }
+static bool visible(lv_obj_t *o) {
+    for (; o; o = lv_obj_get_parent(o))
+        if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return false;
+    return true;
+}
+static lv_obj_t *find_type(lv_obj_t *o, const lv_obj_class_t *cls) {
+    if (lv_obj_check_type(o, cls)) return o;
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) {
+        lv_obj_t *r = find_type(lv_obj_get_child(o, (int32_t)i), cls);
+        if (r) return r;
+    }
+    return NULL;
+}
 static int check_clipping(lv_obj_t *o) {
     lv_obj_add_state(o, LV_STATE_FOCUS_KEY);
     lv_obj_refresh_ext_draw_size(o);
@@ -110,6 +127,57 @@ static int check_clipping(lv_obj_t *o) {
     while (clip && lv_obj_has_flag(clip, LV_OBJ_FLAG_OVERFLOW_VISIBLE)) clip = lv_obj_get_parent(clip);
     lv_obj_clear_state(o, LV_STATE_FOCUS_KEY);
     return clip && _lv_area_is_in(&need, &clip->coords, 0);
+}
+
+/* settings, consoles, the PSN account and the device UID survive config_save() + config_load() */
+static void test_persistence(void) {
+    expect(!config_load() && config_host_count() == 0 && !config_psn()->linked,
+           "no config file: defaults, no consoles, no PSN account");
+    expect(strncmp(config_path(), CONFIG_DIR "/", strlen(CONFIG_DIR) + 1) == 0, "the config file is in CHIAKI_CONFIG_DIR");
+    char duid[CONFIG_DUID_LEN + 1];
+    snprintf(duid, sizeof(duid), "%s", config_device_uid());
+    config_t *c = config_get();
+    c->stream.codec = CODEC_H264;
+    c->stream.width = 1280;
+    c->stream.height = 720;
+    c->stream.bitrate_kbps = 23000;
+    c->input.rumble = false;
+    c->input.cursor_speed = 150;
+    config_host_t h = { .nickname = "Round \\ trip\nPS5", .addr = "10.0.0.7", .is_ps5 = true,
+                        .server_mac = { 0x02, 1, 2, 3, 4, 5 } };
+    memcpy(h.rp_regist_key, "0123456789abcdef", 16);
+    for (int i = 0; i < 16; i++) h.rp_key[i] = (uint8_t)(0xf0 + i);
+    expect(config_host_add(&h) && !config_host_add(&h), "a console is added once, its duplicate is refused");
+    const uint8_t acc[8] = { 1, 2, 3, 4, 5, 6, 7, 0xff };
+    config_psn_set(acc, "tester", "access=token", "refresh-token");
+    expect(config_save(), "config_save() writes the file");
+
+    c->stream.bitrate_kbps = 5000;   /* change memory: what comes back must be the file */
+    config_host_remove(0);
+    config_psn_clear();
+    bool loaded = config_load();
+    const config_host_t *r = config_host(0);
+    const config_psn_t *p = config_psn();
+    expect(loaded && c->stream.codec == CODEC_H264 && c->stream.height == 720 && c->stream.bitrate_kbps == 23000 &&
+           !c->input.rumble && c->input.cursor_speed == 150 && config_host_count() == 1 && r &&
+           !strcmp(r->nickname, h.nickname) && !strcmp(r->addr, h.addr) && r->is_ps5 &&
+           !memcmp(r->server_mac, h.server_mac, 6) && !memcmp(r->rp_regist_key, h.rp_regist_key, 16) &&
+           !memcmp(r->rp_key, h.rp_key, 16) && p->linked && !memcmp(p->account_id, acc, 8) &&
+           !strcmp(p->online_id, "tester") && !strcmp(p->access_token, "access=token") &&
+           !strcmp(p->refresh_token, "refresh-token") && !strcmp(config_device_uid(), duid),
+           "settings, consoles, PSN account and device UID survive save + load");
+
+    FILE *f = fopen(config_path(), "w");
+    fputs("garbage \x01\x02 no equals sign\nstream.bitrate_kbps=lots\nstream.fps=45\nhost.99.addr=10.0.0.9\n"
+          "host.0.server_mac=zz\ninput.cursor_speed=120\n", f);
+    for (int i = 0; i < 3000; i++) fputc('x', f);   /* a line longer than any valid one */
+    fputs("\ninput.motion=0\n", f);
+    fclose(f);
+    expect(config_load() && c->stream.bitrate_kbps == 15000 && c->stream.fps == 60 && config_host_count() == 0 &&
+           c->input.cursor_speed == 120 && !c->input.motion,
+           "a corrupt file: bad lines are skipped, good ones kept, the rest defaults");
+    unlink(config_path());
+    config_load();
 }
 
 int main(void) {
@@ -124,10 +192,24 @@ int main(void) {
     drv.draw_buf = &db; drv.flush_cb = flush_cb; drv.hor_res = W; drv.ver_res = H;
     lv_disp_t *disp = lv_disp_drv_register(&drv);
 
-    if (system("rm -rf " DEV) != 0) return 1;
+    if (system("rm -rf " DEV " " CONFIG_DIR) != 0) return 1;
+    setenv("CHIAKI_CONFIG_DIR", CONFIG_DIR, 1);   /* never the developer's own settings */
     pad_plug("event9");
     theme_init(disp);
-    config_load();
+    test_persistence();
+    /* No demo consoles any more: seed three registered ones (not saved) so the Hosts list, the
+     * D-pad focus and the connect test below have something to act on. */
+    static const struct { const char *name, *addr; bool ps5; } seed[] = {
+        { "Living-room PS5", "10.10.10.40", true },
+        { "Bedroom PS5", "10.10.10.41", true },
+        { "Study PS4 Pro", "10.10.10.52", false },
+    };
+    for (int i = 0; i < 3; i++) {
+        config_host_t h = { .is_ps5 = seed[i].ps5, .server_mac = { 0x02, 0, 0, 0, 0, (uint8_t)(i + 1) } };
+        snprintf(h.nickname, sizeof(h.nickname), "%s", seed[i].name);
+        snprintf(h.addr, sizeof(h.addr), "%s", seed[i].addr);
+        config_host_add(&h);
+    }
     app_init(ui_app_changed);
     ui_create();
     const input_hooks_t hooks = { ui_tab_step, app_quit, ui_set_pad_state, ui_scroll_fallback };
@@ -232,6 +314,81 @@ int main(void) {
     shot("pad-offline");
     pad_plug("event12"); pump(1800);
     expect(input_pad_state() == PAD_ONLINE, "replug on a new node -> reconnected");
+
+    /* registration overlay: Add host opens it on the top layer, the keypad moves into it, it fits
+     * 1080p with both panes, its focus rings are not clipped, and Close gives the screen back */
+    lv_tabview_set_act(lv_obj_get_parent(tabs_bar()), TAB_HOSTS, LV_ANIM_OFF); pump(150);
+    lv_obj_t *add = find_btn(lv_scr_act(), "Add host");
+    center_of(add, &x, &y);
+    cursor_at(x, y);
+    g_in.click = true; pump(80); g_in.click = false; pump(200);
+    expect(ui_register_active() && lv_obj_get_parent(ui_register_root()) == lv_layer_top() &&
+           g_in.group == ui_register_group(), "Add host opens the registration overlay and its focus group");
+    lv_obj_t *reg = ui_register_root();
+    int fails0 = g_fail, reg_rings = 0;
+    clipped = 0;
+    for (int pane = 0; pane < 2; pane++) {
+        if (pane == 1) { lv_event_send(find_btn(reg, "PSN account"), LV_EVENT_CLICKED, NULL); pump(150); }
+        check_overflow(reg);
+        lv_obj_t **o;
+        _LV_LL_READ(&ui_register_group()->obj_ll, o) if (visible(*o)) { reg_rings++; clipped += !check_clipping(*o); }
+        shot(pane ? "register-psn" : "register-pin");
+    }
+    expect(g_fail == fails0, "no overflow on the registration overlay (PIN and PSN panes)");
+    printf("  %d focus rings checked\n", reg_rings);
+    expect(clipped == 0, "no focus ring clipped on the registration overlay");
+    lv_obj_t *qr = find_type(reg, &lv_canvas_class);
+    const char *url = app_reg_psn_url();
+    expect(qr && ui_qr_ok(lv_obj_get_parent(qr)) && !strncmp(url, "https://auth.api.sonyentertainmentnetwork.com/2.0/oauth/authorize?", 66) &&
+           strstr(url, config_device_uid()) && !strchr(url, ' '), "PSN pane shows the authorize URL (with the device UID) as a QR code");
+    lv_obj_t *before = lv_group_get_focused(ui_register_group()), *main_focus = lv_group_get_focused(ui_group());
+    dpad(ABS_HAT0Y, 1);
+    expect(lv_group_get_focused(ui_register_group()) != before && lv_group_get_focused(ui_group()) == main_focus,
+           "D-pad moves the focus inside the overlay only");
+    /* TODO(test): PIN path through the overlay - focus the IP and PIN fields, type on the on-screen keyboard
+     * with the cursor, Register, pump ~2.5 s: "Paired with ..." shown, the console listed and selected. */
+    /* TODO(test): PSN path - type a code + Link, pump ~3.5 s: config_psn()->linked, then APP_REG_SUCCESS with a
+     * "(PSN)" console; the code "fail" and the PIN 00000000 end in APP_REG_FAILED with app_reg_error() shown. */
+    lv_obj_t *field = NULL, **fo;
+    _LV_LL_READ(&ui_register_group()->obj_ll, fo) if (!field && visible(*fo) && lv_obj_check_type(*fo, &lv_textarea_class)) field = *fo;
+    lv_group_focus_obj(field); pump(100);
+    lv_obj_t *kb = find_type(reg, &lv_keyboard_class);
+    expect(kb && visible(kb) && kb->coords.y2 >= H - 1, "a text field in the overlay brings the keyboard up over it");
+    shot("register-keyboard");
+    lv_group_focus_obj(before); pump(100);
+    lv_obj_t *close = find_btn(reg, "Close");
+    center_of(close, &x, &y);
+    cursor_at(x, y);
+    g_in.click = true; pump(80); g_in.click = false; pump(200);
+    expect(!ui_register_active() && g_in.group == ui_group() && lv_group_get_focused(ui_group()) == main_focus &&
+           lv_obj_get_parent(kb) == lv_scr_act(), "Close dismisses the overlay, gives back the keypad focus and keyboard");
+
+    /* a simulated PIN registration stores the console, selects it, and it is still there after a reload */
+    int hosts0 = app_host_count();
+    app_reg_submit_pin(" 10.10.10.60 ", "12345678", true);
+    expect(app_reg_state() == APP_REG_RUNNING, "PIN registration starts");
+    pump(2600);
+    expect(app_reg_state() == APP_REG_SUCCESS && app_host_count() == hosts0 + 1 && app_selected() == hosts0 &&
+           !strcmp(app_host(hosts0)->addr, "10.10.10.60") && first_on_page(TAB_HOSTS, &lv_list_btn_class),
+           "simulated PIN registration adds and selects the console");
+    shot("hosts-registered");
+    config_load();
+    expect(config_host_count() == hosts0 + 1 && !strcmp(config_host(hosts0)->addr, "10.10.10.60"),
+           "the registered console is in the saved config");
+    app_reg_cancel();
+
+    /* forgetting every console leaves the empty state: nothing selected, nothing to dereference */
+    while (app_host_count()) app_forget();
+    pump(150);
+    fails0 = g_fail;
+    check_overflow(lv_scr_act());
+    shot("hosts-empty");
+    app_connect();
+    expect(app_selected() == -1 && !app_host(app_selected()) && app_conn_state() == CONN_IDLE &&
+           !first_on_page(TAB_HOSTS, &lv_list_btn_class) && config_host_count() == 0 && g_fail == fails0,
+           "empty host list: empty state, no selection, Connect does nothing");
+    config_load();
+    expect(config_host_count() == 0, "forgetting is saved");
 
     /* startup splash: shows on the top layer, then dismisses itself */
     splash_show();

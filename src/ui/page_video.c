@@ -1,6 +1,7 @@
 /* ui/page_video.c - Video tab: stream settings (config_get()->stream) + summary card. */
 #include <stdbool.h>
 
+#include "../app.h"
 #include "../config/config.h"
 #include "pages.h"
 #include "widgets.h"
@@ -33,6 +34,7 @@ static void changed_cb(lv_event_t *e) {
     s->bitrate_kbps = lv_slider_get_value(g_video.bitrate);
     s->hdr = lv_obj_has_state(g_video.hdr, LV_STATE_CHECKED);
     refresh();
+    app_settings_changed();
 }
 
 static void build_settings(lv_obj_t *page, const stream_settings_t *s) {
