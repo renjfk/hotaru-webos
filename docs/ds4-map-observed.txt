@@ -1,0 +1,54 @@
+Observed DS4 (Sony DualShock 4 v2, USB id 054c:09cc) mapping on the LG
+50UP75003LF (webOS TV Lite 6.5.3), paired over Bluetooth.
+
+Captured with padprobe (guided mapping), from /tmp/padprobe-map.txt.
+The device is a userspace `uhid` device created by webOS's Bluetooth HID
+stack, NOT the kernel hid-sony driver, so the mapping is webOS's own.
+
+BUTTONS
+webOS maps the DS4's native HID button order sequentially onto Linux gamepad
+codes starting at 0x130 (BTN_SOUTH). This shifts everything by one relative
+to a standard hid-sony mapping.
+
+  Physical          Linux code   Linux name       Standard driver would say
+  Square            0x130        BTN_SOUTH/A      Cross
+  Cross             0x131        BTN_EAST/B       Circle
+  Circle            0x132        BTN_C            (n/a)
+  Triangle          0x133        BTN_NORTH/X      Triangle
+  L1                0x134        BTN_WEST/Y       Square
+  R1                0x135        BTN_Z            (n/a)
+  L2 (click)        0x136        BTN_TL           L1
+  R2 (click)        0x137        BTN_TR           R1
+  Share             0x138        BTN_TL2          (n/a)
+  Options           0x139        BTN_TR2          (n/a)
+  L3                0x13a        BTN_SELECT       (n/a)
+  R3                0x13b        BTN_START        (n/a)
+  PS                0x13c        BTN_MODE         PS
+  Touchpad click    0x13d        BTN_THUMBL       (n/a)
+
+AXES
+  Left stick X      ABS_X    (0x0)   0..255
+  Left stick Y      ABS_Y    (0x1)   0..255
+  Right stick X     ABS_Z    (0x2)   0..255   <- NOT ABS_RX
+  L2 analog         ABS_RX   (0x3)   0..255
+  R2 analog         ABS_RY   (0x4)   0..255
+  Right stick Y     ABS_RZ   (0x5)   0..255   <- NOT ABS_RY
+  D-pad X           ABS_HAT0X(0x10) -1..1
+  D-pad Y           ABS_HAT0Y(0x11) -1..1
+
+Also present on the same node but NOT user controls:
+  Motion/aux axes 0x28..0x2d  (6 gyro/accel axes, very noisy)
+  Touchpad        ABS_MT_POSITION_X (0x35), ABS_MT_POSITION_Y (0x36),
+                  ABS_MT_TRACKING_ID (0x39), ABS_MT_SLOT (0x2f)
+
+Porting notes
+- EVIOCGRAB on the physical node succeeds, so an app gets exclusive input and
+  the TV stops intercepting Back/OK-style buttons.
+- Do NOT assume hid-sony mapping. Use the table above.
+- This is why chiaki-lg shows "L2/R2 acting like axis movement": it maps
+  ABS_RX/ABS_RY to the right stick, but on this stack those are the triggers.
+- Rumble: CONFIRMED working. The node advertises the full DS4 FF set
+  (FF_RUMBLE, FF_PERIODIC, FF_SQUARE/TRIANGLE/SINE, FF_GAIN) and an
+  FF_RUMBLE effect uploaded via EVIOCSFF (effect id 0); writing EV_FF
+  starts and stops the motor on the real controller. Opened read-write for
+  this. So rumble is usable from a native app even over the BT uhid stack.

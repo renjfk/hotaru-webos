@@ -7,7 +7,10 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL2 REQUIRED sdl2)
 
-add_executable(chiaki "src/main.c")
+# every .c under src/ is part of the app: a new module needs no CMake change
+file(GLOB_RECURSE CHIAKI_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.c")
+add_executable(chiaki ${CHIAKI_SOURCES})
+target_compile_options(chiaki PRIVATE -Wall -Wextra)
 target_include_directories(chiaki SYSTEM PRIVATE ${SDL2_INCLUDE_DIRS})
 target_link_libraries(chiaki PRIVATE ${SDL2_LIBRARIES})
 

@@ -5,8 +5,12 @@ Play) to LG **webOS** TVs - a native app.
 
 ## Layout
 
-- `src/` - the app (SDL2 + LVGL UI, evdev gamepad input, later the chiaki session).
+- `src/` - the app, one module per folder (display, input, ui, app state, and stubs
+  for config, the chiaki session and NDL media); module map in [`AGENTS.md`](AGENTS.md).
 - `chiaki-ng/` - vendored upstream (git submodule); only `lib/` is used.
+- `docs/` - [`STATUS.md`](docs/STATUS.md) (what works and how it was proven) plus raw
+  hardware evidence (DS4 map, network probe).
+- `tests/host/` - macOS behaviour tests (`tests/host/run.sh`).
 - `scripts/` - cross-build reference (dependency build recipe).
 - `assets/make-icon.sh` - source of the app icon (see below).
 - `build.sh` - cross-compile for webOS and package an `.ipk`.
@@ -60,8 +64,8 @@ ssh -i ~/.ssh/webos_rsa -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithm
 ## Status
 
 UI shell + input are in place (LVGL theme, stick-cursor + remote + D-pad nav,
-gamepad hotplug). The chiaki protocol library and the NDL media path are the
-next milestones - see the project notes.
+gamepad hotplug). The NDL media path and the chiaki protocol library are the
+next milestones - see [`docs/STATUS.md`](docs/STATUS.md).
 
 ## Notes
 

@@ -1,0 +1,36 @@
+Network capabilities of a native webOS app, measured from the "webOS Probe"
+app on the LG 50UP75003LF (webOS TV Lite 6.5.3) with no PS5 involved.
+
+Result: 17 / 17 checks passed. Every transport primitive a Remote Play port
+needs is available from a jailbroken native app.
+
+Interfaces / routing
+  lo     127.0.0.1, ::1
+  wlan0  10.10.10.12 (IPv4 + link-local IPv6), UP RUN
+  default route: wlan0 via 10.10.10.1
+  (the TV is on Wi-Fi, not Ethernet - relevant for stream throughput)
+
+/ etc/resolv.conf is not used (empty/unreadable to the app); webOS resolves
+through its own service. Name resolution still works, so this is informational.
+
+Primitives (all PASS)
+  socket AF_INET / AF_INET6      ok
+  udp loopback                   echo ok
+  udp broadcast                  sendto 255.255.255.255 ok   <- needed for PS5 discovery/wakeup
+  dns udp 1.1.1.1                reply, rcode=0, answers=2
+  dns udp 8.8.8.8                reply, rcode=0, answers=2
+  getaddrinfo                    resolves in ~5ms
+  tcp 1.1.1.1:80                 connected
+  tcp example.com:80             connected
+  tls example.com:443            TLSv1.3 / TLS_AES_256_GCM_SHA384
+  tcp listen                     bind+listen ok
+
+Implications for a chiaki-ng port
+- Raw UDP (unicast + broadcast), DNS, raw TCP, TLS and listening sockets all
+  work from a native app - the transport layer is not a blocker.
+- TLS works with OpenSSL, but the TV ships OpenSSL 1.0.2 while the webOS SDK
+  sysroot provides 1.1: link OpenSSL STATICALLY (libssl.a/libcrypto.a). A
+  runtime dependency on libssl.so.1.1 fails to load and WebAppMgr relaunches
+  the app in a loop. chiaki-lg does the same for this reason.
+- No CA bundle problem was tested for verification; the probe used
+  SSL_VERIFY_NONE. Production would need a CA store (chiaki-ng bundles one).
