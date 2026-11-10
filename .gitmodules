@@ -1,0 +1,3 @@
+[submodule "chiaki-ng"]
+	path = chiaki-ng
+	url = https://github.com/streetpea/chiaki-ng.git

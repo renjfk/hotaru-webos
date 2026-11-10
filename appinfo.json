@@ -1,0 +1,13 @@
+{
+  "id": "org.homebrew.chiakiwebos",
+  "type": "native",
+  "main": "chiaki",
+  "icon": "icon.png",
+  "largeIcon": "icon.png",
+  "title": "Chiaki",
+  "appDescription": "PlayStation Remote Play for LG webOS",
+  "version": "0.1.0",
+  "vendor": "renjfk",
+  "resolution": "1920x1080",
+  "requiredPermissions": [ "network.http", "network.https" ]
+}
