@@ -8,6 +8,7 @@ Play) to LG **webOS** TVs - a native app.
 - `src/` - the app (SDL2 + LVGL UI, evdev gamepad input, later the chiaki session).
 - `chiaki-ng/` - vendored upstream (git submodule); only `lib/` is used.
 - `scripts/` - cross-build reference (dependency build recipe).
+- `assets/make-icon.sh` - source of the app icon (see below).
 - `build.sh` - cross-compile for webOS and package an `.ipk`.
 
 ## Build
@@ -27,6 +28,21 @@ tar xzf ares-cli-rs-v0.7.0-macos-aarch64.tar.gz
 
 ./build.sh   # -> dist/org.homebrew.chiakiwebos_<ver>_arm.ipk
 ```
+
+## App icon
+
+A TV screen with a PlayStation-blue Play triangle under two Remote Play signal
+arcs, on the app's dark navy tile. `icon.png` (80x80, launcher), `largeIcon.png`
+(130x130) and `icon-400.png` (400x400, store/preview) are generated from one
+vector description by `assets/make-icon.sh` (ImageMagick 7, no other tools):
+
+```sh
+assets/make-icon.sh   # rewrites icon.png, largeIcon.png, icon-400.png
+```
+
+Each size is rendered from the vector shapes at 4x and downsampled, so none is an
+upscale. The script composes ImageMagick draw primitives and gradient images
+rather than an SVG because ImageMagick's built-in SVG renderer drops gradients.
 
 ## Install / run
 
