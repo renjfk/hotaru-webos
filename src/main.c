@@ -1,7 +1,7 @@
 /* main.c - entry point: init the modules, wire them together, run the loop.
  *
- * chiaki-webos is a PlayStation Remote Play client (chiaki-ng port) for LG
- * webOS TVs. Module map: see AGENTS.md / docs/ARCHITECTURE.md.
+ * Chiaki webOS is a PlayStation Remote Play client (chiaki-ng port) for LG
+ * webOS TVs. Module map: see AGENTS.md / docs/STATUS.md.
  */
 #include <SDL.h>
 #include <lvgl.h>
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
     log_init(LOG_PATH);
-    log_msg("chiaki starting (LVGL %d.%d.%d)", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
+    log_msg("Chiaki webOS starting (LVGL %d.%d.%d)", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
 
     lv_init();
     if (!display_init()) return 1;

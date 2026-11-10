@@ -40,7 +40,7 @@ Evidence comes from three places:
 - Logging: `/tmp/chiaki.log` only (no journald, no usable stdout).
 
 ```
-chiaki starting (LVGL 8.3.11)
+Chiaki webOS starting (LVGL 8.3.11)
 display mode 1920x1080
 renderer name=opengles2
 display 1920x1080 ready
@@ -115,10 +115,11 @@ startup splash. Host tests assert no overflow on any tab and no clipped focus ri
 Content is demo data: three fake consoles, a simulated 3 s connection.
 
 The **startup splash** (`ui/splash.c`) is a full-screen overlay on `lv_layer_top()`
-shown once after `ui_create()`: the app mark (the icon's play-waves glyph, drawn
-procedurally on an `lv_canvas` - a rounded gradient tile plus a white triangle and two
-signal arcs) over "Chiaki" and a spinner, fading in and dismissing itself after 1.5 s.
-`CHIAKI_NO_SPLASH=1` skips it.
+shown once after `ui_create()`: the app mark (`ui_logo()`, the icon's play-waves glyph
+drawn procedurally on an `lv_canvas` - a rounded gradient tile plus a white triangle and
+two signal arcs) over "Chiaki webOS" and a spinner, fading in and dismissing itself after
+1.5 s. `CHIAKI_NO_SPLASH=1` skips it and `CHIAKI_SPLASH_MS=<ms>` overrides the hold time.
+The same `ui_logo()` mark is shown at the top-left of the app view.
 
 ## Development tooling (macOS)
 

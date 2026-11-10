@@ -32,7 +32,7 @@ bool display_init(void) {
     int w = 1920, h = 1080;
 #ifdef CHIAKI_SIM
     int ww = w / 2, wh = h / 2;   /* a desktop-sized window; keeps 16:9 */
-    g_win = SDL_CreateWindow("chiaki (webOS sim)", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+    g_win = SDL_CreateWindow("Chiaki webOS (sim)", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                              ww, wh, SDL_WINDOW_RESIZABLE);
     if (g_win) SDL_ShowCursor(SDL_DISABLE);   /* the app draws its own cursor, like the TV */
     log_msg("simulator window %dx%d (display %dx%d)", ww, wh, w, h);
@@ -40,7 +40,8 @@ bool display_init(void) {
     SDL_DisplayMode mode;
     if (SDL_GetCurrentDisplayMode(0, &mode) == 0 && mode.w > 0) { w = mode.w; h = mode.h; }
     log_msg("display mode %dx%d", w, h);
-    g_win = SDL_CreateWindow("chiaki", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h, SDL_WINDOW_FULLSCREEN);
+    g_win = SDL_CreateWindow("Chiaki webOS", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h,
+                             SDL_WINDOW_FULLSCREEN);
 #endif
     if (!g_win) { log_msg("window: %s", SDL_GetError()); return false; }
 

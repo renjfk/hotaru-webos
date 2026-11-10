@@ -1,7 +1,7 @@
-# chiaki-webos
+# Chiaki webOS
 
 A port of [chiaki-ng](https://github.com/streetpea/chiaki-ng) (PlayStation Remote
-Play) to LG **webOS** TVs - a native app.
+Play) to LG **webOS** TVs - a native app. (Repo / directory name: `chiaki-webos`.)
 
 ## Layout
 

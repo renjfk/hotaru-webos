@@ -5,6 +5,7 @@
 
 #include "../chiaki/session.h"
 #include "../log.h"
+#include "logo.h"
 #include "log_view.h"
 #include "pages.h"
 #include "tabs.h"
@@ -92,11 +93,11 @@ static void build_topbar(lv_obj_t *scr) {
     lv_obj_set_size(top, LV_PCT(100), TOPBAR_H);
     lv_obj_set_style_pad_hor(top, PAGE_MARGIN, 0);
     lv_obj_set_flex_grow(top, 0);
-    ui_tile(top, &st_badge, LV_SYMBOL_PLAY, TILE_MD, FONT_HEADING);
+    ui_logo(top, TILE_MD);
     lv_obj_t *col = ui_box(top, LV_FLEX_FLOW_COLUMN, 0);
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    ui_text(col, TXT_TITLE, "Chiaki");
-    ui_text(col, TXT_CAPTION, "PS Remote Play for webOS");
+    ui_text(col, TXT_TITLE, "Chiaki webOS");
+    ui_text(col, TXT_CAPTION, "PlayStation Remote Play");
     ui_spacer(top);
     ui_status_init(&g_bar.pad, top, COL_DIM, "No controller");
     char ver[32];

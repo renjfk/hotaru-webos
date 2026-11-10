@@ -1,4 +1,4 @@
-# AGENTS.md - chiaki-webos
+# AGENTS.md - Chiaki webOS
 
 Guidelines for AI agents working in this repository. Keep this file concise -
 only document constraints and rules an agent would get wrong without being told.
@@ -7,11 +7,11 @@ what is unproven: [`docs/STATUS.md`](docs/STATUS.md).
 
 ## Project Overview
 
-**chiaki-webos** is a native LG webOS TV app: a PlayStation Remote Play client,
-porting [chiaki-ng](https://github.com/streetpea/chiaki-ng). C11, SDL2 + LVGL
-8.3.11 (software rendered). No web stack.
+**Chiaki webOS** (repo `chiaki-webos`) is a native LG webOS TV app: a PlayStation
+Remote Play client, porting [chiaki-ng](https://github.com/streetpea/chiaki-ng).
+C11, SDL2 + LVGL 8.3.11 (software rendered). No web stack.
 
-- **App:** id `org.homebrew.chiakiwebos`, title "Chiaki", binary `chiaki`, version in `appinfo.json`
+- **App:** id `org.homebrew.chiakiwebos`, title "Chiaki webOS", binary `chiaki`, version in `appinfo.json`
 - **Target TV:** LG 50UP75003LF, webOS TV Lite 6.5.3, 1920x1080, kernel 4.4.84 armv7l, 4 cores,
   1.3 GB RAM (~340 MB free at runtime), Wi-Fi only (no Ethernet)
 - **Install:** Developer Mode sideload; SSH as `prisoner` on port 9922
@@ -26,9 +26,9 @@ src/
   app.[ch]          state the UI renders: hosts, selection, connection; glue to config/session
   platform/         display.[ch]: SDL window + streaming texture + LVGL display driver
   input/            remote + DualShock 4 -> LVGL indevs: input.h API, keypad.c, gamepad.c, pointer.c
-  ui/               theme.[ch] tokens+styles, widgets.[ch] components, tabs.[ch], log_view.[ch],
-                    splash.[ch] startup overlay, ui.[ch] screen assembly, page_<name>.c one per
-                    tab (pages.h)
+  ui/               theme.[ch] tokens+styles, widgets.[ch] components, logo.[ch] the app mark,
+                    tabs.[ch], log_view.[ch], splash.[ch] startup overlay, ui.[ch] screen
+                    assembly, page_<name>.c one per tab (pages.h)
   config/           settings + registered consoles (persistence is a stub)
   chiaki/           session.[ch]: libchiaki wrapper (stub)
   media/            ndl.[ch]: NDL hardware video/audio (stub)
@@ -124,10 +124,12 @@ the log must show `UI created`, `gamepad ... grabbed` (if the pad is on) and `in
 - **Icon**: the app icon lives in `assets/` (icon.png 80 for the launcher, largeIcon.png
   130, icon-400.png for preview); `CMakeLists.txt` installs the first two to the app root.
   It is a checked-in asset with no generator script - redraw it externally if it changes
-- **Startup splash**: `ui/splash.c` draws the mark procedurally (rounded gradient tile from the
-  theme + a white triangle/arcs on an `lv_canvas`); there is no embedded image. It lives on
-  `lv_layer_top()`, swallows input, and deletes itself after `SPLASH_MS`; `CHIAKI_NO_SPLASH=1`
-  skips it (handy in the simulator)
+- **The app mark** lives in `ui/logo.c` (`ui_logo()`), used by the top bar and the splash
+  so both match the launcher icon; it draws the play-waves glyph procedurally on an
+  `lv_canvas` (rounded gradient tile + a white triangle/arcs), no embedded image
+- **Startup splash**: `ui/splash.c` is on `lv_layer_top()`, swallows input, and deletes
+  itself after `SPLASH_MS`; `CHIAKI_NO_SPLASH=1` skips it and `CHIAKI_SPLASH_MS=<ms>`
+  overrides the hold time (both handy in the simulator)
 
 ## Code Style
 
