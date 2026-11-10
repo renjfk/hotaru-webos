@@ -334,6 +334,7 @@ static void session_ev(const session_event_t *ev) {
             break;
         case SESSION_EV_QUIT:
             if (g_conn != CONN_IDLE) {
+                session_stop();   /* the console ended it (or an error): release the backend */
                 set_conn(CONN_IDLE);
                 log_event(LOG_WARN, "NET", "Session ended%s%s", ev->reason[0] ? ": " : "", ev->reason);
             }

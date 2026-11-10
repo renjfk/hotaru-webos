@@ -6,8 +6,8 @@
  *   log_event() user-visible events, written as "ui: [TAG] msg" and forwarded
  *               to the registered sink (the on-screen Log page).
  */
-#ifndef CHIAKI_LOG_H
-#define CHIAKI_LOG_H
+#ifndef CHIAKI_WEBOS_LOG_H
+#define CHIAKI_WEBOS_LOG_H
 
 #define LOG_PATH "/tmp/chiaki.log"
 

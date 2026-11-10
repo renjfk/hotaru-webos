@@ -30,8 +30,8 @@
  * simulator and the host tests can walk the whole flow. The simulation fails
  * on PIN 00000000 and on the code "fail" to exercise the error path.
  */
-#ifndef CHIAKI_SESSION_H
-#define CHIAKI_SESSION_H
+#ifndef CHIAKI_WEBOS_SESSION_H
+#define CHIAKI_WEBOS_SESSION_H
 
 #include <stdbool.h>
 #include <stdint.h>

@@ -17,11 +17,24 @@ export PATH="$TOOLCHAIN_DIR/bin:$ARES_BIN:$PATH"
 # shellcheck disable=SC1091
 source "$TOOLCHAIN_DIR/environment-setup"
 
+# Link the real libchiaki when a staging tree from scripts/chiaki-lib-build-webos.sh
+# is present (out/ is gitignored); otherwise the app builds with the simulated backend.
+CHIAKI_STAGING="${CHIAKI_LIB_STAGING:-}"
+if [ -z "$CHIAKI_STAGING" ] && [ -f "$SCRIPT_DIR/out/chiaki-lib-staging/lib/libchiaki.a" ]; then
+    CHIAKI_STAGING="$SCRIPT_DIR/out/chiaki-lib-staging"
+fi
+if [ -n "$CHIAKI_STAGING" ]; then
+    echo "Using libchiaki from $CHIAKI_STAGING"
+else
+    echo "libchiaki staging not found: building with the simulated session backend"
+fi
+
 BUILD="$SCRIPT_DIR/out/build"
 rm -rf "$BUILD"
 cmake -S "$SCRIPT_DIR" -B "$BUILD" -G "Unix Makefiles" \
     -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_DIR/share/buildroot/toolchainfile.cmake" \
-    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCHIAKI_LIB_STAGING="$CHIAKI_STAGING"
 cmake --build "$BUILD" --target chiaki -j"$(sysctl -n hw.ncpu)"
 cmake --build "$BUILD" --target chiaki-package
 

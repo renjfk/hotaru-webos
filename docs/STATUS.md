@@ -28,11 +28,12 @@ Evidence comes from three places:
 | TV remote keypad | done | TV (earlier builds) + host |
 | Network transport (UDP/bcast, DNS, TCP, TLS 1.3, listen) | proven, not used by the app yet | probe (17/17) |
 | Video/audio (NDL) | not started | - |
-| Session wiring (console -> Start Remote Play, events) | done; simulated backend | host + sim |
-| libchiaki build + real PS5 session | not started | - |
+| libchiaki cross-build (static + deps) | done | build + link test; not run on the TV |
+| Session wiring (console -> Start Remote Play, events) | real via libchiaki; media dropped | TV build links (handshake unverified) |
 | Settings, consoles, PSN account persistence | done (`key=value` file) | host; TV path unconfirmed |
-| Registration (PIN + PSN QR/code) | UI + simulated backend; libchiaki/http pending | host + sim |
-| Wake-up, discovery | not started | - |
+| Registration PIN | real via libchiaki | not verified on the TV |
+| Registration PSN (QR/code) | UI + authorize URL; http/holepunch pending | host + sim |
+| Wake-up, discovery | wake-up via libchiaki; discovery not started | - |
 
 ## Platform
 
@@ -144,25 +145,41 @@ on `lv_layer_top()` with its own keypad focus group and the borrowed on-screen k
 
 `app.c` runs the state machine (idle / running / success / failed, progress, error) and
 announces `APP_CHANGED_REG`; on success the console is added to the config, saved,
-selected and listed. **The backend is simulated** in `chiaki/session.c`: ~2 s of progress,
-then an obviously fake "Simulated PS5" (MAC `02:00:..`); PIN `00000000` and the code
-`fail` exercise the error path. The real calls are marked `TODO(libchiaki)`
-(`chiaki_regist_start` + the `ChiakiRegistEvent` callback, PSN registration via holepunch)
-and `TODO(http)` (the code -> token exchange and the account id lookup).
+selected and listed. Two backends live behind `chiaki/session.h`: `session_real.c`
+(`CHIAKI_HAVE_LIBCHIAKI`) calls libchiaki, and `session.c` simulates the flow (~2 s, an
+obviously fake "Simulated PS5", `02:00:..`; PIN `00000000` and the code `fail` fail) for the
+host tests and the simulator. **The PIN path is real** (`chiaki_regist_start` + the
+`ChiakiRegistEvent` callback fills a `config_host_t`). PSN is not wired yet: the authorize
+URL/QR is real, but the code -> token exchange (`TODO(http)`) and the holepunch registration
+(`TODO(libchiaki)`) are not.
 
 ## Session
 
 `app_connect()` starts `session_start(config_host(app_selected()), &config_get()->stream)`;
 `app_tick()` drains `session_poll()` and maps the events to app state: progress while connecting,
 connected -> Streaming, quit -> Idle; a login-PIN request and rumble are logged (the PIN prompt
-and the pad -> session forwarding are `TODO`). `app_disconnect()` calls `session_stop()`. **The
-backend is simulated** in `chiaki/session.c` (the only stub layer): ~3 s of progress, then
-connected, using the console's stored registration keys; the real `chiaki_session_start`/`_stop`
-calls are marked `TODO(libchiaki)`, as is `session_wakeup` (needs discovery, a PSN console has no
-local address).
+and the pad -> session forwarding are `TODO`). `app_disconnect()` calls `session_stop()`.
 
-The host tests walk the whole path: add a console (PIN and PSN), then Start Remote Play and assert
-the session runs with that console, reaches Streaming, and that Disconnect stops it.
+`session_real.c` builds a `ChiakiConnectInfo` from the stored console (regist key + rp_key as
+`morning`, video profile from the stream settings), libchiaki runs the handshake on its own
+threads and pushes events into the queue. **Media is not wired yet**: the video sample and the
+audio frames are accepted and dropped (`TODO(ndl)`). `session.c` simulates the whole session
+(~3 s) for the host tests and the simulator. `session_wakeup()` is real (a discovery wake-up)
+and needs the console's address.
+
+The host tests walk the whole path on the simulated backend: add a console (PIN and PSN), Start
+Remote Play with it, reach Streaming, and Disconnect stops it.
+
+## libchiaki
+
+`scripts/chiaki-lib-build-webos.sh` cross-builds libchiaki (chiaki-ng 43728af) and its static
+deps (OpenSSL 3.2.1, Opus, json-c, miniupnpc, libevent, curl with WebSockets, Jerasure +
+GF-Complete, nanopb) into `out/chiaki-lib-staging/` (`include/`, `lib/`, `link.txt`). Patches
+go to a **copy** of the sources for the SDK's glibc 2.12 (`pthread_clockjoin_np` ->
+`pthread_timedjoin_np`, `aligned_alloc` -> `posix_memalign`). `build.sh` links the staging when
+it exists, statically, so the binary needs no `libssl`/`libcrypto`/`libcurl`. **Nothing has
+been exercised against a real console yet** (the TV is offline); PSN/holepunch TLS would need
+`SSL_CERT_FILE`/`SSL_CERT_DIR` if the TV has no CA bundle.
 
 ## Config file
 
@@ -201,12 +218,13 @@ registration/forget/PSN changes immediately.
   library are not in this SDK's sysroot; chiaki-lg reaches NDL through
   `mariotaku/ss4s`. How the hardware video plane composes with the LVGL layer is
   unverified.
-- **Protocol** (`chiaki/session.[ch]`): libchiaki not built here. The reference recipe
-  is `scripts/chiaki-lg-build-webos.sh` (from chiaki-lg, not run in this repo). Sessions
-  and registration are simulated (see Session / Registration).
-- **HTTP**: no client yet; the PSN token exchange is a `TODO(http)`.
-- **Wake-up / discovery**: `session_wakeup` is simulated (it needs discovery, or holepunch
-  for a PSN console); console state is unknown, and the pad is not yet forwarded to a session.
+- **Protocol** (`chiaki/session.[ch]`): libchiaki **is** cross-built (`scripts/chiaki-lib-build-webos.sh`)
+  and statically linked when the staging exists; the simulated backend (`session.c`) is used
+  otherwise (host tests, simulator). The real handshake has never run against a console.
+- **HTTP**: no client yet; the PSN token exchange is a `TODO(http)` (the staged `libcurl.a` is
+  available for it), PSN registration is `TODO(libchiaki)` (holepunch).
+- **Wake-up / discovery**: `session_wakeup` is real but has no discovery yet; console state is
+  unknown, and the pad is not yet forwarded to a session (`session_set_pad` exists, unused).
 
 ## Constraints
 

@@ -31,13 +31,15 @@ src/
                     "Add a console" overlay, qr.[ch] QR widget, ui.[ch] screen assembly,
                     page_<name>.c one per tab (pages.h)
   config/           settings, consoles, PSN account, device UID; one key=value file (config.h)
-  chiaki/           session.[ch]: libchiaki wrapper (stub; session + registration simulated)
+  chiaki/           session.[ch]: libchiaki wrapper API; session_real.c is the real backend
+                    (CHIAKI_HAVE_LIBCHIAKI), session.c the simulated one
   media/            ndl.[ch]: NDL hardware video/audio (stub)
   vendor/           qrcodegen.[ch]: Nayuki's QR encoder (MIT), vendored unmodified
 docs/               STATUS.md, raw hardware evidence (DS4 map, network probe)
 tests/host/         macOS behaviour tests (see Testing)
 sim/                macOS TV simulator: the real app in a window (see Testing)
-scripts/            chiaki-lg cross-build recipe for libchiaki + deps (reference, not wired in)
+scripts/            chiaki-lib-build-webos.sh: cross-build libchiaki + static deps for the TV;
+                    chiaki-lg-*: the original reference recipe (not run in this repo)
 assets/             the app icon PNGs (icon.png 80, largeIcon.png 130, icon-400.png 400)
 ```
 
@@ -67,7 +69,11 @@ assets/             the app icon PNGs (icon.png 80, largeIcon.png 130, icon-400.
 ## Build, Deploy, Logs
 
 ```sh
-./build.sh   # -> dist/org.homebrew.chiakiwebos_<ver>_arm.ipk (fetches LVGL v8.3.11 into third_party/ on first run)
+# libchiaki is optional: cross-build it once (static, for the TV), then build.sh picks it up
+scripts/chiaki-lib-build-webos.sh          # -> out/chiaki-lib-staging/ (include/, lib/, link.txt)
+
+./build.sh   # -> dist/org.homebrew.chiakiwebos_<ver>_arm.ipk (fetches LVGL v8.3.11 on first run)
+             #    links libchiaki when out/chiaki-lib-staging exists, else the simulated backend
 
 SKILL=~/dietpi/.opencode/skills/webos-tv-sideload
 WEBOS_HOST=10.10.10.12 $SKILL/webos-install.sh terminate org.homebrew.chiakiwebos
@@ -151,6 +157,15 @@ the log must show `UI created`, `gamepad ... grabbed` (if the pad is on) and `in
 - **Config file**: `$CHIAKI_CONFIG_DIR/chiaki.conf`, else `$HOME/conf/chiaki.conf` on the TV
   (HOME is the app dir; survives reboots, surviving a reinstall is unconfirmed: `TODO(path)`),
   else `/tmp/chiaki-webos`. It holds registration keys and PSN tokens (mode 0600)
+- **libchiaki is statically linked** into `chiaki` (no `libssl`/`libcrypto`/`libcurl` at
+  runtime): cross-build it with `scripts/chiaki-lib-build-webos.sh` into `out/chiaki-lib-staging/`,
+  and `build.sh` picks it up via `CHIAKI_LIB_STAGING` (grouped archives + `-lrt` for glibc 2.12).
+  Do not define `CHIAKI_LIB_ENABLE_MBEDTLS` (it changes `ecdh.h`).
+- **Our headers must use `CHIAKI_WEBOS_*_H` guards**: libchiaki's public headers use
+  `CHIAKI_LOG_H`, `CHIAKI_SESSION_H`, `CHIAKI_CONFIG_H`, ... - an identical guard makes one
+  side silently skip the other once both are included in a TU (`session_real.c`)
+- **Static libchiaki is the only backend that links**: `chiaki/session_real.c` is empty unless
+  `CHIAKI_HAVE_LIBCHIAKI` is set, so the host tests and the simulator keep using `session.c`
 
 ## Code Style
 

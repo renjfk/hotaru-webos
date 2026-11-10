@@ -31,8 +31,8 @@
  *   host.0.nickname=PS5-123
  *   host.0.rp_key=<32 hex>
  */
-#ifndef CHIAKI_CONFIG_H
-#define CHIAKI_CONFIG_H
+#ifndef CHIAKI_WEBOS_CONFIG_H
+#define CHIAKI_WEBOS_CONFIG_H
 
 #include <stdbool.h>
 #include <stdint.h>
