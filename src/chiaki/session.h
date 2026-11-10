@@ -1,7 +1,9 @@
 /* chiaki/session.h - a PS Remote Play session and console registration, wrapping chiaki-ng's libchiaki.
  *
- * STUB: libchiaki is not linked yet. session_available() returns false and
- * app.c simulates a connection instead. Implement this file against
+ * STUB: libchiaki is not linked yet. session_available() returns false; while
+ * it does, session_start()/session_poll() run a simulated session on the main
+ * thread (~3 s of progress, then connected) so app.c, the simulator and the
+ * host tests exercise the real event mapping. Implement this file against
  * chiaki-ng/lib (chiaki_session_*, chiaki_regist_*, chiaki_discovery_wakeup);
  * scripts/chiaki-lg-build-webos.sh is the proven cross-build recipe.
  *
@@ -68,6 +70,7 @@ bool session_available(void);       /* false until libchiaki is linked */
 bool session_start(const config_host_t *host, const stream_settings_t *stream);
 void session_stop(void);
 bool session_poll(session_event_t *out);   /* main thread: next queued event, if any */
+const config_host_t *session_active_host(void);   /* the console of the running (or last) session, or NULL */
 
 void session_set_pad(const session_pad_t *pad);
 void session_set_login_pin(const char *pin);

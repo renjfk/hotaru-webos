@@ -31,7 +31,7 @@ src/
                     "Add a console" overlay, qr.[ch] QR widget, ui.[ch] screen assembly,
                     page_<name>.c one per tab (pages.h)
   config/           settings, consoles, PSN account, device UID; one key=value file (config.h)
-  chiaki/           session.[ch]: libchiaki wrapper (stub; registration simulated)
+  chiaki/           session.[ch]: libchiaki wrapper (stub; session + registration simulated)
   media/            ndl.[ch]: NDL hardware video/audio (stub)
   vendor/           qrcodegen.[ch]: Nayuki's QR encoder (MIT), vendored unmodified
 docs/               STATUS.md, raw hardware evidence (DS4 map, network probe)
@@ -48,7 +48,9 @@ assets/             the app icon PNGs (icon.png 80, largeIcon.png 130, icon-400.
   LVGL (the UI is told about changes through `app_listener_t`); pages talk to `app`/`config`,
   never to each other
 - LVGL is single-threaded: only the main loop touches it. libchiaki calls back on its own
-  threads, so `session.c` must queue events for `session_poll()` (drained in `app_tick()`)
+  threads, so `session.c` must queue events for `session_poll()` (drained in `app_tick()`);
+  the same applies to `session_reg_poll()`. Until libchiaki is linked, `session.c` runs the
+  session and the registration on the main thread, so the UI can walk the whole flow
 - Public functions carry their module prefix (`input_`, `ui_`, `tabs_`, `page_<name>_`, `app_`,
   `config_`, `session_`, `ndl_`, `log_`); everything else is `static`; file globals are `g_*`;
   shared styles are `st_*` from `ui/theme.h`
@@ -56,7 +58,8 @@ assets/             the app icon PNGs (icon.png 80, largeIcon.png 130, icon-400.
   `main.c`. New tab page: follow the note in `ui/pages.h`. Build screens from `ui/widgets.h`
 - Stubs return false/"not available" honestly; keep the `DEMO`/`TODO(session)` markers in
   `app.c` and the `TODO(libchiaki)`/`TODO(http)` call sites in `session.c` until the real
-  path replaces them
+  path replaces them. `session_start`/`session_wakeup` already run against the stored
+  console; only the calls into libchiaki are missing
 - Config mutators only change memory: save afterwards (`config_save()`, or
   `app_settings_changed()` for debounced settings edits); `app_*` re-reads the host list
   itself after its own changes
@@ -164,10 +167,10 @@ the log must show `UI created`, `gamepad ... grabbed` (if the pad is on) and `in
 
 ## Roadmap
 
-1. NDL media: hardware decode of H.264/H.265 + Opus via `media/ndl.h`, measure latency
-2. Build libchiaki for the TV (reuse `scripts/chiaki-lg-build-webos.sh`) and do a real PS5
-   handshake in `chiaki/session.c`
-3. Wire the session into the UI (`app.c` replaces the simulated connection; pad -> session)
-4. Real registration: `chiaki_regist_start` for the PIN path, the PSN token exchange over HTTP
+1. Build libchiaki for the TV (reuse `scripts/chiaki-lg-build-webos.sh`) and replace the
+   simulated session in `chiaki/session.c`: `chiaki_session_start`/`_stop`, the pad -> session
+   and discovery (the `TODO(libchiaki)` sites)
+2. Media: feed the decoded H.264/H.265 + Opus frames to `media/ndl.h` (NDL hardware decode)
+3. Real registration: `chiaki_regist_start` for the PIN path, the PSN token exchange over HTTP
    and PSN registration (the `TODO(libchiaki)`/`TODO(http)` sites in `chiaki/session.c`),
    discovery for console state, wake-up from standby

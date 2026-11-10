@@ -27,28 +27,112 @@
 
 bool session_available(void) { return false; }
 
-bool session_start(const config_host_t *host, const stream_settings_t *stream) {
-    (void)host;
-    (void)stream;
-    return false;
-}
-void session_stop(void) {}
-bool session_poll(session_event_t *out) { (void)out; return false; }
-
+/* TODO(libchiaki): chiaki_session_set_controller_state(&g_session, &state) every frame;
+ * app.c/input will call this with the DS4 state once the pad is wired to the session */
 void session_set_pad(const session_pad_t *pad) { (void)pad; }
 void session_set_login_pin(const char *pin) { (void)pin; }
 
-bool session_wakeup(const config_host_t *host) { (void)host; return false; }
+/* ---------- session event queue + the simulated session (see session.h) ---------- */
+
+#define SIM_SESSION_MS 3000   /* simulated handshake length while libchiaki is missing */
+#define SESS_QUEUE     16
+
+static SDL_mutex *g_lock;
+static session_event_t g_sessq[SESS_QUEUE];
+static unsigned g_sess_head, g_sess_tail;
+
+static struct {
+    bool active, connected_sent;
+    Uint32 start;
+    int progress;
+    config_host_t host;
+    stream_settings_t stream;
+} g_session;
+
+static void lock_init(void) {   /* main thread, before any libchiaki thread can exist */
+    if (!g_lock) g_lock = SDL_CreateMutex();
+}
+
+static void sess_push(const session_event_t *ev) {
+    if (g_lock) SDL_LockMutex(g_lock);
+    if (g_sess_tail - g_sess_head < SESS_QUEUE) g_sessq[g_sess_tail++ % SESS_QUEUE] = *ev;
+    if (g_lock) SDL_UnlockMutex(g_lock);
+}
+
+/* TODO(libchiaki): the session callback, called on libchiaki's threads. Only queue, then
+ * session_poll() drains it on the main thread:
+ *   CHIAKI_EVENT_CONNECTED / _LOGIN_PIN_REQUEST / _RUMBLE / _QUIT -> the matching SESSION_EV_*,
+ *   and the connect progress -> SESSION_EV_PROGRESS; chiaki_session_fini() when QUIT is polled. */
+static void sim_session_step(void) {
+    if (!g_session.active || session_available()) return;
+    Uint32 elapsed = SDL_GetTicks() - g_session.start;
+    if (elapsed >= SIM_SESSION_MS) {
+        if (g_session.connected_sent) return;
+        g_session.connected_sent = true;
+        session_event_t ev = { .type = SESSION_EV_CONNECTED, .progress = 100 };
+        sess_push(&ev);
+        return;
+    }
+    int p = (int)(elapsed * 100 / SIM_SESSION_MS);
+    if (p == g_session.progress) return;
+    g_session.progress = p;
+    session_event_t ev = { .type = SESSION_EV_PROGRESS, .progress = p };
+    sess_push(&ev);
+}
+
+bool session_start(const config_host_t *host, const stream_settings_t *stream) {
+    lock_init();
+    if (g_session.active || !host || !stream) return false;
+    /* TODO(libchiaki): chiaki_session_start with ChiakiConnectInfo built from the stored console:
+     *   info.host = host->addr; info.ps5 = host->is_ps5; memcpy(info.regist_key, host->rp_regist_key, 16);
+     *   memcpy(info.rp_key, host->rp_key, 16); info.video_profile = { .width, .height, .max_fps, .bitrate };
+     *   chiaki_session_start(&g_session, &g_log, &info, session_cb, NULL); */
+    log_msg("session: simulated start with %s (%s) %dx%d@%d", host->nickname, host->addr, stream->width, stream->height,
+            stream->fps);
+    g_session.active = true;
+    g_session.connected_sent = false;
+    g_session.progress = -1;
+    g_session.start = SDL_GetTicks();
+    g_session.host = *host;
+    g_session.stream = *stream;
+    return true;
+}
+
+void session_stop(void) {
+    if (!g_session.active) return;
+    /* TODO(libchiaki): chiaki_session_stop(&g_session); chiaki_session_fini(&g_session); */
+    log_msg("session: simulated stop with %s", g_session.host.nickname);
+    g_session.active = false;
+}
+
+bool session_poll(session_event_t *out) {
+    lock_init();
+    sim_session_step();
+    bool got = false;
+    if (g_lock) SDL_LockMutex(g_lock);
+    if (g_sess_head != g_sess_tail) {
+        *out = g_sessq[g_sess_head++ % SESS_QUEUE];
+        got = true;
+    }
+    if (g_lock) SDL_UnlockMutex(g_lock);
+    return got;
+}
+
+const config_host_t *session_active_host(void) { return g_session.active ? &g_session.host : NULL; }
+
+/* a console in standby is woken with a UDP broadcast; needs a known address */
+bool session_wakeup(const config_host_t *host) {
+    if (!host || !host->addr[0]) return false;
+    /* TODO(libchiaki): chiaki_discovery_wakeup(&discovery, &log, host->addr);
+     * TODO(libchiaki): or the holepunch path for a PSN-registered console (no local address) */
+    log_msg("session: simulated wake-up packet to %s", host->addr);
+    return true;
+}
 
 /* ---------- registration: event queue (any thread pushes, the main loop polls) ---------- */
 
-static SDL_mutex *g_lock;
 static session_reg_event_t g_queue[REG_QUEUE];
 static unsigned g_head, g_tail;
-
-static void reg_init(void) {   /* main thread, before any libchiaki thread can exist */
-    if (!g_lock) g_lock = SDL_CreateMutex();
-}
 
 static void reg_push(const session_reg_event_t *ev) {
     if (g_lock) SDL_LockMutex(g_lock);
@@ -137,7 +221,7 @@ bool session_reg_available(void) { return false; }
 bool session_reg_running(void) { return g_sim.op != OP_NONE; }
 
 bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5) {
-    reg_init();
+    lock_init();
     if (session_reg_running() || !addr || !*addr || !pin_valid(pin)) return false;
     /* TODO(libchiaki): local registration with the console's PIN:
      *   ChiakiRegistInfo info = { .target = ps5 ? CHIAKI_TARGET_PS5_1 : CHIAKI_TARGET_PS4_10, .host = addr,
@@ -157,7 +241,7 @@ bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5) {
 }
 
 bool session_reg_submit_code(const char *code) {
-    reg_init();
+    lock_init();
     if (session_reg_running() || !code || !*code) return false;
     /* TODO(http): exchange the code for tokens, off the main thread, then reg_push() the result:
      *   POST https://auth.api.sonyentertainmentnetwork.com/2.0/oauth/token, Basic auth with PSN_CLIENT_ID and the
@@ -185,7 +269,7 @@ bool session_reg_submit_code(const char *code) {
 }
 
 bool session_reg_begin_psn(const uint8_t account_id[8], bool ps5) {
-    reg_init();
+    lock_init();
     if (session_reg_running() || !account_id) return false;
     /* TODO(libchiaki): registration over PSN. chiaki-ng does it through the holepunch connection: the PSN
      * device list (TODO(http): QmlBackend::updatePsnHosts, needs config_psn()->access_token) names the
@@ -208,7 +292,7 @@ void session_reg_stop(void) {
 }
 
 bool session_reg_poll(session_reg_event_t *out) {
-    reg_init();
+    lock_init();
     sim_step();
     bool got = false;
     if (g_lock) SDL_LockMutex(g_lock);

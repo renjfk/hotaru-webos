@@ -28,7 +28,8 @@ Evidence comes from three places:
 | TV remote keypad | done | TV (earlier builds) + host |
 | Network transport (UDP/bcast, DNS, TCP, TLS 1.3, listen) | proven, not used by the app yet | probe (17/17) |
 | Video/audio (NDL) | not started | - |
-| libchiaki build + PS5 session | not started | - |
+| Session wiring (console -> Start Remote Play, events) | done; simulated backend | host + sim |
+| libchiaki build + real PS5 session | not started | - |
 | Settings, consoles, PSN account persistence | done (`key=value` file) | host; TV path unconfirmed |
 | Registration (PIN + PSN QR/code) | UI + simulated backend; libchiaki/http pending | host + sim |
 | Wake-up, discovery | not started | - |
@@ -120,7 +121,8 @@ and that the splash shows on the top layer and auto-dismisses.
 The Hosts list is the registered consoles from the config (no demo consoles any more);
 with none it shows an empty state pointing at "Add host". A console's state, firmware
 and address come from discovery, which does not exist yet: they show as "Unknown"/"-".
-Connecting is still a simulated 3 s handshake.
+Connecting goes through `chiaki/session.c` (see Session), which simulates the 3 s handshake
+until libchiaki is linked.
 
 The **startup splash** (`ui/splash.c`) is a full-screen overlay on `lv_layer_top()`
 shown once after `ui_create()`: the app mark (`ui_logo()`, the icon's play-waves glyph
@@ -148,6 +150,20 @@ then an obviously fake "Simulated PS5" (MAC `02:00:..`); PIN `00000000` and the 
 (`chiaki_regist_start` + the `ChiakiRegistEvent` callback, PSN registration via holepunch)
 and `TODO(http)` (the code -> token exchange and the account id lookup).
 
+## Session
+
+`app_connect()` starts `session_start(config_host(app_selected()), &config_get()->stream)`;
+`app_tick()` drains `session_poll()` and maps the events to app state: progress while connecting,
+connected -> Streaming, quit -> Idle; a login-PIN request and rumble are logged (the PIN prompt
+and the pad -> session forwarding are `TODO`). `app_disconnect()` calls `session_stop()`. **The
+backend is simulated** in `chiaki/session.c` (the only stub layer): ~3 s of progress, then
+connected, using the console's stored registration keys; the real `chiaki_session_start`/`_stop`
+calls are marked `TODO(libchiaki)`, as is `session_wakeup` (needs discovery, a PSN console has no
+local address).
+
+The host tests walk the whole path: add a console (PIN and PSN), then Start Remote Play and assert
+the session runs with that console, reaches Streaming, and that Disconnect stops it.
+
 ## Config file
 
 One `key=value` text file (format in `config/config.h`): stream + input settings, the
@@ -168,7 +184,7 @@ registration/forget/PSN changes immediately.
 ## Development tooling (macOS)
 
 - `tests/host/run.sh`: behaviour tests, real modules rendered offscreen against a fake
-  evdev pad (`brew install sdl2`). 46 checks, screenshots to `out/host-tests/shots/`; the
+  evdev pad (`brew install sdl2`). 48 checks, screenshots to `out/host-tests/shots/`; the
   config lives in `out/host-tests/config`, wiped per run, and the test seeds its own consoles.
   The registration overlay is driven end to end through its own fields and buttons (both the
   PIN and the PSN code path, success and the simulated failure).
@@ -186,10 +202,11 @@ registration/forget/PSN changes immediately.
   `mariotaku/ss4s`. How the hardware video plane composes with the LVGL layer is
   unverified.
 - **Protocol** (`chiaki/session.[ch]`): libchiaki not built here. The reference recipe
-  is `scripts/chiaki-lg-build-webos.sh` (from chiaki-lg, not run in this repo).
-  Registration is simulated (see Registration).
+  is `scripts/chiaki-lg-build-webos.sh` (from chiaki-lg, not run in this repo). Sessions
+  and registration are simulated (see Session / Registration).
 - **HTTP**: no client yet; the PSN token exchange is a `TODO(http)`.
-- **Wake-up / discovery**: the Wake button logs a placeholder; console state is unknown.
+- **Wake-up / discovery**: `session_wakeup` is simulated (it needs discovery, or holepunch
+  for a PSN console); console state is unknown, and the pad is not yet forwarded to a session.
 
 ## Constraints
 

@@ -3,9 +3,10 @@
  * The UI only displays this state and calls these functions; connection logic
  * never lives in widgets. Changes are announced through one listener.
  * The host list is the registered consoles in config (config_host()), in
- * registration order; it may be empty (app_selected() is then -1). Until
- * chiaki/session.h is implemented connecting is simulated and a console's
- * reachability is unknown (both marked in app.c).
+ * registration order; it may be empty (app_selected() is then -1). Connecting
+ * goes through chiaki/session.h (session_start + the session_poll events),
+ * which simulates the handshake until libchiaki is linked; a console's
+ * reachability stays unknown until discovery exists.
  *
  * Registration: app_reg_submit_*() start pairing (PIN, or PSN account via the
  * QR + code flow), app_tick() drives it from session_reg_poll(), and every

@@ -14,7 +14,6 @@
 #include "config/config.h"
 #include "log.h"
 
-#define DEMO_CONNECT_MS  3000   /* simulated handshake length while libchiaki is missing */
 #define SETTINGS_SAVE_MS 800    /* quiet time after the last settings edit before it is written */
 #define PSN_CODE_SHARE   40     /* PSN path: the code exchange is the first 40% of the progress */
 
@@ -25,7 +24,6 @@ static int g_host_count;
 static int g_selected = -1;
 static conn_state_t g_conn = CONN_IDLE;
 static int g_progress;
-static Uint32 g_connect_at;
 static Uint32 g_save_at;   /* 0 = no settings edit pending */
 
 static struct {
@@ -112,28 +110,33 @@ static void set_conn(conn_state_t s) {
 void app_connect(void) {
     if (g_conn != CONN_IDLE) return;
     const app_host_t *h = app_host(g_selected);
-    if (!h) {
+    const config_host_t *ch = config_host(g_selected);
+    if (!h || !ch) {
         log_event(LOG_WARN, "HOST", "No console yet: pair one with Add host");
         return;
     }
     log_event(LOG_INFO, "NET", "Connecting to %s (%s)", h->name, h->addr);
-    /* TODO(session): session_start(config_host(g_selected), &config_get()->stream) once libchiaki is linked */
+    if (!session_start(ch, &config_get()->stream)) {
+        log_event(LOG_ERR, "NET", "Could not start the session with %s", h->name);
+        return;
+    }
     g_progress = 0;
-    g_connect_at = SDL_GetTicks();
     set_conn(CONN_CONNECTING);
 }
 
 void app_disconnect(void) {
     if (g_conn == CONN_IDLE) return;
-    if (session_available()) session_stop();
+    session_stop();
     set_conn(CONN_IDLE);
     log_event(LOG_WARN, "NET", "Session closed");
 }
 
 void app_wake(void) {
     const app_host_t *h = app_host(g_selected);
-    if (!h) return;
-    log_event(LOG_INFO, "HOST", "Wake-up packet sent to %s", h->name);   /* DEMO: session_wakeup(config_host()) */
+    const config_host_t *ch = config_host(g_selected);
+    if (!h || !ch) return;
+    if (session_wakeup(ch)) log_event(LOG_INFO, "HOST", "Wake-up packet sent to %s", h->name);
+    else log_event(LOG_WARN, "HOST", "Could not wake %s (no address; PSN console needs discovery)", h->name);
 }
 
 /* TODO(ui): ask for confirmation first; forgetting drops the keys and needs a new registration */
@@ -309,25 +312,41 @@ void app_reg_cancel(void) {
 
 /* ---------- main loop ---------- */
 
+/* one queued session event -> app state; the same mapping the real libchiaki backend feeds */
+static void session_ev(const session_event_t *ev) {
+    switch (ev->type) {
+        case SESSION_EV_PROGRESS:
+            if (g_conn == CONN_CONNECTING && ev->progress != g_progress) {
+                g_progress = ev->progress;
+                notify(APP_CHANGED_PROGRESS);
+            }
+            break;
+        case SESSION_EV_CONNECTED:
+            g_progress = 100;
+            if (g_conn == CONN_CONNECTING) set_conn(CONN_STREAMING);
+            break;
+        case SESSION_EV_LOGIN_PIN:
+            /* TODO(session): prompt for the Remote Play link PIN, then session_set_login_pin() */
+            log_event(LOG_WARN, "NET", "The console asks for the login PIN");
+            break;
+        case SESSION_EV_RUMBLE:
+            /* TODO(input): forward to the pad (evdev FF_RUMBLE works on this TV) */
+            break;
+        case SESSION_EV_QUIT:
+            if (g_conn != CONN_IDLE) {
+                set_conn(CONN_IDLE);
+                log_event(LOG_WARN, "NET", "Session ended%s%s", ev->reason[0] ? ": " : "", ev->reason);
+            }
+            break;
+    }
+}
+
 void app_tick(void) {
     session_event_t ev;
-    while (session_poll(&ev)) {
-        /* TODO(session): map SESSION_EV_* to set_conn()/progress, LOGIN_PIN prompt, RUMBLE -> pad */
-    }
+    while (session_poll(&ev)) session_ev(&ev);
     session_reg_event_t rev;
     while (session_reg_poll(&rev)) reg_event(&rev);
     if (g_save_at && (Sint32)(SDL_GetTicks() - g_save_at) >= 0) save_pending();
-
-    if (g_conn != CONN_CONNECTING || session_available()) return;
-    /* DEMO: simulated connection progress */
-    int p = (int)((SDL_GetTicks() - g_connect_at) * 100 / DEMO_CONNECT_MS);
-    if (p >= 100) {
-        g_progress = 100;
-        set_conn(CONN_STREAMING);
-    } else if (p != g_progress) {
-        g_progress = p;
-        notify(APP_CHANGED_PROGRESS);
-    }
 }
 
 /* first non-loopback IPv4 interface (the TV: wlan0) */

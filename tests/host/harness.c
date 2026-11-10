@@ -15,6 +15,7 @@
 #include <lvgl.h>
 
 #include "app.h"
+#include "chiaki/session.h"
 #include "config/config.h"
 #include "input/input_internal.h"
 #include "log.h"
@@ -436,6 +437,18 @@ int main(void) {
     expect(config_host_count() == hosts0 + 1 && !strcmp(config_host(hosts0)->addr, "10.10.10.60"),
            "the registered console is in the saved config");
     app_reg_cancel();
+
+    /* Start Remote Play on the console just registered: the session runs with that console */
+    app_select(hosts0);
+    app_connect();
+    expect(app_conn_state() == CONN_CONNECTING && session_active_host() &&
+           !strcmp(session_active_host()->addr, "10.10.10.60"),
+           "Start Remote Play runs a session with the registered console");
+    pump(3300);
+    expect(app_conn_state() == CONN_STREAMING && app_conn_progress() == 100, "the session reaches Streaming");
+    app_disconnect();
+    pump(100);
+    expect(app_conn_state() == CONN_IDLE && !session_active_host(), "Disconnect stops the session");
 
     /* forgetting every console leaves the empty state: nothing selected, nothing to dereference */
     while (app_host_count()) app_forget();
