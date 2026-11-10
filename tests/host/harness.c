@@ -17,6 +17,7 @@
 #include "input/input_internal.h"
 #include "log.h"
 #include "ui/pages.h"
+#include "ui/splash.h"
 #include "ui/tabs.h"
 #include "ui/theme.h"
 #include "ui/ui.h"
@@ -231,6 +232,14 @@ int main(void) {
     shot("pad-offline");
     pad_plug("event12"); pump(1800);
     expect(input_pad_state() == PAD_ONLINE, "replug on a new node -> reconnected");
+
+    /* startup splash: shows on the top layer, then dismisses itself */
+    splash_show();
+    pump(250);
+    expect(splash_active(), "splash is shown");
+    shot("splash");
+    pump(1800);
+    expect(!splash_active(), "splash auto-dismisses");
 
     printf("== %d failure(s)\n", g_fail);
     return g_fail ? 1 : 0;

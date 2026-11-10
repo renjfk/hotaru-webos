@@ -27,12 +27,14 @@ src/
   platform/         display.[ch]: SDL window + streaming texture + LVGL display driver
   input/            remote + DualShock 4 -> LVGL indevs: input.h API, keypad.c, gamepad.c, pointer.c
   ui/               theme.[ch] tokens+styles, widgets.[ch] components, tabs.[ch], log_view.[ch],
-                    ui.[ch] screen assembly, page_<name>.c one per tab (pages.h)
+                    splash.[ch] startup overlay, ui.[ch] screen assembly, page_<name>.c one per
+                    tab (pages.h)
   config/           settings + registered consoles (persistence is a stub)
   chiaki/           session.[ch]: libchiaki wrapper (stub)
   media/            ndl.[ch]: NDL hardware video/audio (stub)
 docs/               STATUS.md, raw hardware evidence (DS4 map, network probe)
 tests/host/         macOS behaviour tests (see Testing)
+sim/                macOS TV simulator: the real app in a window (see Testing)
 scripts/            chiaki-lg cross-build recipe for libchiaki + deps (reference, not wired in)
 assets/             make-icon.sh renders icon.png / largeIcon.png / icon-400.png
 ```
@@ -65,6 +67,8 @@ WEBOS_HOST=10.10.10.12 $SKILL/webos-install.sh launch org.homebrew.chiakiwebos
 
 ssh -i ~/.ssh/webos_rsa -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
   -p 9922 prisoner@10.10.10.12 'tail -30 /tmp/chiaki.log'
+
+sim/run.sh   # macOS: build the real app and run it in a window (see Testing)
 ```
 
 - Toolchain: `~/webos-sdk/arm-webos-linux-gnueabi_sdk-buildroot` (webosbrew native toolchain),
@@ -82,10 +86,15 @@ the log must show `UI created`, `gamepad ... grabbed` (if the pad is on) and `in
 - `tests/host/run.sh` (macOS, `brew install sdl2`): builds every module except `main.c` and the
   SDL display, renders offscreen and drives the real `gamepad.c` through a fake evdev FIFO. It
   asserts layout (no overflow, no clipped focus rings), tabs, D-pad/dropdown, press-cancel,
-  the session flow, scrolling and hotplug, and writes per-tab screenshots to
+  the session flow, scrolling, hotplug and the startup splash, and writes per-tab screenshots to
   `out/host-tests/shots/`. Run it after UI/input changes; add an assertion for new behaviour
-- The host tests do not replace the TV check: rendering speed, the real DS4 and webOS are only
-  proven on the device
+- `sim/run.sh` (macOS) builds the **whole** app (incl. `main.c`, `display.c`) and runs it in a
+  window for fast iteration: the mouse drives the pointer path (hover/click), the keyboard is
+  the TV remote, `CHIAKI_NO_SPLASH=1` skips the splash. It compiles `gamepad.c` against
+  `tests/host/shim`, so no `/dev/input` is needed. The LVGL display is still 1920x1080; only
+  the window is scaled, so the layout matches the device
+- The host tests and the simulator do not replace the TV check: rendering speed, the real DS4
+  and webOS are only proven on the device
 
 ## Gotchas
 
@@ -113,6 +122,10 @@ the log must show `UI created`, `gamepad ... grabbed` (if the pad is on) and `in
   `OVERFLOW_VISIBLE`); cards are the clip boundary, padded for focus rings and button shadows
   (static assert in `theme.c`). Raw `lv_obj_create` containers will cut focus rings
 - **Icons**: ImageMagick's SVG renderer ignores gradients; regenerate with `assets/make-icon.sh`
+- **Startup splash**: `ui/splash.c` draws the mark procedurally (rounded gradient tile from the
+  theme + a white triangle/arcs on an `lv_canvas`); there is no embedded image. It lives on
+  `lv_layer_top()`, swallows input, and deletes itself after `SPLASH_MS`; `CHIAKI_NO_SPLASH=1`
+  skips it (handy in the simulator)
 
 ## Code Style
 

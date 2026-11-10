@@ -38,4 +38,13 @@ bool input_keypad_mode(void);             /* focus ring rather than cursor is in
 void input_set_cursor_speed(int percent);
 pad_state_t input_pad_state(void);
 
+#ifdef CHIAKI_SIM
+/* Simulator only: feed the desktop mouse into the same pointer path the stick
+ * drives, so hover/press-cancel behave exactly as on the TV. Coordinates are in
+ * LVGL display space (display.c maps the window). */
+void input_pointer_set(float x, float y, bool pressed);
+void input_pointer_scroll(float wheel_y);   /* one notch = ~+/-1 */
+void input_sim_tick(void);                  /* refresh the cursor + hover each frame */
+#endif
+
 #endif

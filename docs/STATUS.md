@@ -17,6 +17,8 @@ Evidence comes from three places:
 | Native app, packaging, sideload | done | TV |
 | Display (LVGL -> streaming SDL texture, 1080p) | done | TV |
 | UI shell (theme, tabs, pages, keyboard) | done | TV + host |
+| Startup splash | done | host + sim (not yet observed on the TV) |
+| macOS simulator (real app in a window) | done | sim |
 | DS4 input in the UI (cursor, D-pad, L1/R1, scroll) | done | TV + host |
 | DS4 hotplug (offline -> reconnect) | done | host; not yet observed on the TV |
 | DS4 full map, touchpad, rumble | proven, not used by the app yet | probe |
@@ -107,9 +109,27 @@ interface address so far (`ui: [NET] wlan0 10.10.10.12`).
 LVGL theme (PlayStation-blue on dark navy, 40/32/28/24/20/16 px type scale), four tabs
 (Hosts, Video, Input, Log) with a sliding pill and no swipe, settings rows, dropdowns,
 sliders, switches, on-screen keyboard, log console, status lights, controller hints,
-focus rings that are never clipped, hover highlight under the cursor, app icon. Host
-tests assert no overflow on any tab and no clipped focus ring (22 controls).
+focus rings that are never clipped, hover highlight under the cursor, app icon,
+startup splash. Host tests assert no overflow on any tab and no clipped focus ring
+(22 controls), and that the splash shows on the top layer and auto-dismisses.
 Content is demo data: three fake consoles, a simulated 3 s connection.
+
+The **startup splash** (`ui/splash.c`) is a full-screen overlay on `lv_layer_top()`
+shown once after `ui_create()`: the app mark (the icon's play-waves glyph, drawn
+procedurally on an `lv_canvas` - a rounded gradient tile plus a white triangle and two
+signal arcs) over "Chiaki" and a spinner, fading in and dismissing itself after 1.5 s.
+`CHIAKI_NO_SPLASH=1` skips it.
+
+## Development tooling (macOS)
+
+- `tests/host/run.sh`: behaviour tests, real modules rendered offscreen against a fake
+  evdev pad (`brew install sdl2`). 22 checks, screenshots to `out/host-tests/shots/`.
+- `sim/run.sh`: the **whole** app - including `main.c` and the SDL display - built and run
+  in a resizable window for fast iteration. The LVGL display stays 1920x1080 and only the
+  window is scaled, so the layout matches the TV; the mouse drives the cursor path and the
+  keyboard is the TV remote. `gamepad.c` compiles against `tests/host/shim`, so no
+  `/dev/input` is required. Verified running: SDL `metal` renderer, `/tmp/chiaki.log`
+  shows the full startup including `ui: [APP] splash shown` / `splash dismissed`.
 
 ## Not started / stubs
 

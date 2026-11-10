@@ -11,6 +11,7 @@ Play) to LG **webOS** TVs - a native app.
 - `docs/` - [`STATUS.md`](docs/STATUS.md) (what works and how it was proven) plus raw
   hardware evidence (DS4 map, network probe).
 - `tests/host/` - macOS behaviour tests (`tests/host/run.sh`).
+- `sim/` - macOS LG-TV simulator: the real app in a window (`sim/run.sh`).
 - `scripts/` - cross-build reference (dependency build recipe).
 - `assets/make-icon.sh` - source of the app icon (see below).
 - `build.sh` - cross-compile for webOS and package an `.ipk`.
@@ -35,10 +36,10 @@ tar xzf ares-cli-rs-v0.7.0-macos-aarch64.tar.gz
 
 ## App icon
 
-A TV screen with a PlayStation-blue Play triangle under two Remote Play signal
-arcs, on the app's dark navy tile. `icon.png` (80x80, launcher), `largeIcon.png`
-(130x130) and `icon-400.png` (400x400, store/preview) are generated from one
-vector description by `assets/make-icon.sh` (ImageMagick 7, no other tools):
+A white Play triangle sending two Remote Play signal waves, on a bright
+PlayStation-blue tile. `icon.png` (80x80, launcher), `largeIcon.png` (130x130) and
+`icon-400.png` (400x400, store/preview) are generated from one vector description by
+`assets/make-icon.sh` (ImageMagick 7, no other tools):
 
 ```sh
 assets/make-icon.sh   # rewrites icon.png, largeIcon.png, icon-400.png
@@ -47,6 +48,28 @@ assets/make-icon.sh   # rewrites icon.png, largeIcon.png, icon-400.png
 Each size is rendered from the vector shapes at 4x and downsampled, so none is an
 upscale. The script composes ImageMagick draw primitives and gradient images
 rather than an SVG because ImageMagick's built-in SVG renderer drops gradients.
+The `08-play-waves` concept that this came from stays in `assets/gallery/`; the
+other candidates are in git history.
+
+## Simulator (macOS)
+
+`sim/run.sh` builds the real app (including `main.c` and the SDL display) natively
+and runs it in a resizable window, so UI and input work can be iterated in seconds
+without touching the TV. The LVGL display stays 1920x1080 and the window is scaled,
+so the layout is identical to the device.
+
+- **Mouse** = the cursor (right stick path): move to hover, click to press.
+- **Keyboard** = the TV remote: arrows are the D-pad, Enter selects, Backspace/Esc
+  is back/quit.
+- `CHIAKI_NO_SPLASH=1 sim/run.sh` skips the startup overlay while iterating.
+
+```sh
+brew install sdl2     # one-time
+sim/run.sh            # -> window; logs to /tmp/chiaki.log
+```
+
+The simulator does not replace the device: rendering speed, the real DualShock and
+webOS itself are only proven on the TV.
 
 ## Install / run
 
@@ -64,8 +87,8 @@ ssh -i ~/.ssh/webos_rsa -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithm
 ## Status
 
 UI shell + input are in place (LVGL theme, stick-cursor + remote + D-pad nav,
-gamepad hotplug). The NDL media path and the chiaki protocol library are the
-next milestones - see [`docs/STATUS.md`](docs/STATUS.md).
+gamepad hotplug, startup splash). The NDL media path and the chiaki protocol
+library are the next milestones - see [`docs/STATUS.md`](docs/STATUS.md).
 
 ## Notes
 

@@ -27,11 +27,21 @@ static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *px) 
 bool display_init(void) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { log_msg("SDL_Init: %s", SDL_GetError()); return false; }
 
+    /* LVGL always renders at the TV's 1920x1080 so the UI layout is identical
+     * in the simulator; the sim just presents that texture into a window. */
     int w = 1920, h = 1080;
+#ifdef CHIAKI_SIM
+    int ww = w / 2, wh = h / 2;   /* a desktop-sized window; keeps 16:9 */
+    g_win = SDL_CreateWindow("chiaki (webOS sim)", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                             ww, wh, SDL_WINDOW_RESIZABLE);
+    if (g_win) SDL_ShowCursor(SDL_DISABLE);   /* the app draws its own cursor, like the TV */
+    log_msg("simulator window %dx%d (display %dx%d)", ww, wh, w, h);
+#else
     SDL_DisplayMode mode;
     if (SDL_GetCurrentDisplayMode(0, &mode) == 0 && mode.w > 0) { w = mode.w; h = mode.h; }
     log_msg("display mode %dx%d", w, h);
     g_win = SDL_CreateWindow("chiaki", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h, SDL_WINDOW_FULLSCREEN);
+#endif
     if (!g_win) { log_msg("window: %s", SDL_GetError()); return false; }
 
     SDL_RendererInfo info;
@@ -40,8 +50,10 @@ bool display_init(void) {
     if (!g_ren) g_ren = SDL_CreateRenderer(g_win, -1, SDL_RENDERER_SOFTWARE);
     if (!g_ren) { log_msg("no renderer: %s", SDL_GetError()); return false; }
 
+#ifndef CHIAKI_SIM
     int ow = 0, oh = 0;
     if (SDL_GetRendererOutputSize(g_ren, &ow, &oh) == 0 && ow > 0 && oh > 0) { w = ow; h = oh; }
+#endif
     g_tex = SDL_CreateTexture(g_ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
     if (!g_tex) { log_msg("no texture: %s", SDL_GetError()); return false; }
 
@@ -69,3 +81,11 @@ void display_shutdown(void) {
 }
 
 lv_disp_t *display_get(void) { return g_disp; }
+
+#ifdef CHIAKI_SIM
+bool display_window_size(int *w, int *h) {
+    if (!g_win) return false;
+    SDL_GetWindowSize(g_win, w, h);
+    return *w > 0 && *h > 0;
+}
+#endif

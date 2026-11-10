@@ -16,4 +16,10 @@ bool display_init(void);
 void display_shutdown(void);
 lv_disp_t *display_get(void);
 
+#ifdef CHIAKI_SIM
+/* Simulator only: current window size in window pixels (the LVGL display stays
+ * 1920x1080; main.c scales mouse coordinates by this). */
+bool display_window_size(int *w, int *h);
+#endif
+
 #endif

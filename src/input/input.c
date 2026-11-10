@@ -31,3 +31,17 @@ bool input_keypad_mode(void) { return !g_in.cursor_on; }
 void input_set_cursor_speed(int percent) { g_in.cursor_speed = percent; }
 
 pad_state_t input_pad_state(void) { return gamepad_state(); }
+
+#ifdef CHIAKI_SIM
+/* Desktop mouse -> the stick pointer path, so the sim behaves like the TV. */
+void input_pointer_set(float x, float y, bool pressed) {
+    g_in.cx = x;
+    g_in.cy = y;
+    g_in.click = pressed;
+    pointer_show(true);
+}
+
+void input_pointer_scroll(float wheel_y) { pointer_scroll(0.0f, wheel_y, 0.06f); }
+
+void input_sim_tick(void) { pointer_tick(0.0f, 0.0f, 0.0f); }
+#endif
