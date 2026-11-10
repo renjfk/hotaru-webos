@@ -36,7 +36,7 @@ docs/               STATUS.md, raw hardware evidence (DS4 map, network probe)
 tests/host/         macOS behaviour tests (see Testing)
 sim/                macOS TV simulator: the real app in a window (see Testing)
 scripts/            chiaki-lg cross-build recipe for libchiaki + deps (reference, not wired in)
-assets/             make-icon.sh renders icon.png / largeIcon.png / icon-400.png
+assets/             the app icon PNGs (icon.png 80, largeIcon.png 130, icon-400.png 400)
 ```
 
 ### Key Invariants
@@ -121,7 +121,9 @@ the log must show `UI created`, `gamepad ... grabbed` (if the pad is on) and `in
 - **Clipping**: layout containers must not clip (`ui_box()`/`ui_no_clip()` set
   `OVERFLOW_VISIBLE`); cards are the clip boundary, padded for focus rings and button shadows
   (static assert in `theme.c`). Raw `lv_obj_create` containers will cut focus rings
-- **Icons**: ImageMagick's SVG renderer ignores gradients; regenerate with `assets/make-icon.sh`
+- **Icon**: the app icon lives in `assets/` (icon.png 80 for the launcher, largeIcon.png
+  130, icon-400.png for preview); `CMakeLists.txt` installs the first two to the app root.
+  It is a checked-in asset with no generator script - redraw it externally if it changes
 - **Startup splash**: `ui/splash.c` draws the mark procedurally (rounded gradient tile from the
   theme + a white triangle/arcs on an `lv_canvas`); there is no embedded image. It lives on
   `lv_layer_top()`, swallows input, and deletes itself after `SPLASH_MS`; `CHIAKI_NO_SPLASH=1`

@@ -13,7 +13,7 @@ Play) to LG **webOS** TVs - a native app.
 - `tests/host/` - macOS behaviour tests (`tests/host/run.sh`).
 - `sim/` - macOS LG-TV simulator: the real app in a window (`sim/run.sh`).
 - `scripts/` - cross-build reference (dependency build recipe).
-- `assets/make-icon.sh` - source of the app icon (see below).
+- `assets/` - the app icon PNGs (see below).
 - `build.sh` - cross-compile for webOS and package an `.ipk`.
 
 ## Build
@@ -37,19 +37,15 @@ tar xzf ares-cli-rs-v0.7.0-macos-aarch64.tar.gz
 ## App icon
 
 A white Play triangle sending two Remote Play signal waves, on a bright
-PlayStation-blue tile. `icon.png` (80x80, launcher), `largeIcon.png` (130x130) and
-`icon-400.png` (400x400, store/preview) are generated from one vector description by
-`assets/make-icon.sh` (ImageMagick 7, no other tools):
+PlayStation-blue tile. Checked in as three PNGs under `assets/`:
 
-```sh
-assets/make-icon.sh   # rewrites icon.png, largeIcon.png, icon-400.png
-```
+- `assets/icon.png` (80x80) - launcher icon (`appinfo.json` `icon`)
+- `assets/largeIcon.png` (130x130) - store listing (`largeIcon`)
+- `assets/icon-400.png` (400x400) - preview / store artwork (not packaged)
 
-Each size is rendered from the vector shapes at 4x and downsampled, so none is an
-upscale. The script composes ImageMagick draw primitives and gradient images
-rather than an SVG because ImageMagick's built-in SVG renderer drops gradients.
-The `08-play-waves` concept that this came from stays in `assets/gallery/`; the
-other candidates are in git history.
+`CMakeLists.txt` installs the first two to the app root inside the ipk. The icon is
+final, so there is no generator script; the play-waves concept came from the icon
+gallery, which is in git history.
 
 ## Simulator (macOS)
 

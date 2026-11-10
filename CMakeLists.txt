@@ -23,7 +23,7 @@ target_link_libraries(chiaki PRIVATE lvgl)
 
 if(CMAKE_CROSSCOMPILING)
     install(TARGETS chiaki RUNTIME DESTINATION .)
-    install(FILES appinfo.json icon.png largeIcon.png DESTINATION .)
+    install(FILES appinfo.json assets/icon.png assets/largeIcon.png DESTINATION .)
 
     set(CPACK_GENERATOR "External")
     set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_SOURCE_DIR}/AresPackage.cmake")
