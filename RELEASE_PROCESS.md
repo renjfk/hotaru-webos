@@ -98,10 +98,25 @@ opencode will:
    (`scripts/webos-sdk.sh`), **cross-builds libchiaki** and its static dependencies
    (`scripts/chiaki-lib-build-webos.sh`, cached per chiaki-ng commit), writes the version into `appinfo.json`
    (`v0.2` is `0.2.0`: webOS wants three numbers), **builds and packages** the app (`./build.sh`) and publishes the
-   GitHub Release with `com.renjfk.chiakiwebos_<version>_arm.ipk` and its `.sha256`
+   GitHub Release with `com.renjfk.chiakiwebos_<version>_arm.ipk`, its `.sha256` and `com.renjfk.chiakiwebos.manifest.json`
 
 The released `.ipk` is built from the tag, so its Corresponding Source (AGPL-3.0) is this repository at that tag;
 the app's About panel points here.
+
+### Listing in Dev Manager and the Homebrew Channel
+
+`repo.webosbrew.org` is what Dev Manager's installable apps and the Homebrew Channel read, and it is generated from
+[webosbrew/apps-repo](https://github.com/webosbrew/apps-repo). A release carries the manifest that index fetches:
+
+```json
+{ "id": "com.renjfk.chiakiwebos", "version": "0.1.0", "ipkUrl": "com.renjfk.chiakiwebos_0.1.0_arm.ipk", ... }
+```
+
+so the entry in apps-repo points at a URL that always serves the newest one:
+`https://github.com/renjfk/chiaki-webos/releases/latest/download/com.renjfk.chiakiwebos.manifest.json`. That
+`latest` URL only starts working with the first release that is not a pre-release, so check a candidate through its
+own tag (`/releases/download/v0.1.0-rc2/...`). Installing an `.ipk` by hand (Dev Manager's install button or
+`scripts/tv.sh install`) needs none of this: installed apps are listed from the TV itself.
 
 ### Release candidates
 

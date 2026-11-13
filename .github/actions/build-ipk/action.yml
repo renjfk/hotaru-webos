@@ -13,6 +13,9 @@ outputs:
   ipk:
     description: Path of the built .ipk
     value: ${{ steps.package.outputs.ipk }}
+  manifest:
+    description: Path of the package manifest the webOS Homebrew repo (Dev Manager, Homebrew Channel) reads
+    value: ${{ steps.manifest.outputs.manifest }}
 
 runs:
   using: composite
@@ -68,3 +71,32 @@ runs:
         test -f "$ipk"
         (cd dist && shasum -a 256 "$(basename "$ipk")" > "$(basename "$ipk").sha256")
         echo "ipk=$ipk" >> "$GITHUB_OUTPUT"
+
+    # repo.webosbrew.org serves these: Dev Manager and the Homebrew Channel read the manifest a
+    # release's `latest/download` URL points at. ipkUrl is relative, resolved against it.
+    - name: Write the package manifest (webOS Homebrew repo)
+      id: manifest
+      shell: bash
+      env:
+        IPK: ${{ steps.package.outputs.ipk }}
+      run: |
+        appid=$(jq -r .id appinfo.json)
+        sha=$(cut -d' ' -f1 "${IPK}.sha256")
+        size=$(wc -c <"$IPK" | tr -d ' ')
+        manifest="dist/${appid}.manifest.json"
+        jq -n \
+          --arg id "$appid" \
+          --arg version "$(jq -r .version appinfo.json)" \
+          --arg type "$(jq -r .type appinfo.json)" \
+          --arg title "$(jq -r .title appinfo.json)" \
+          --arg description "$(jq -r .appDescription appinfo.json)" \
+          --arg icon "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/assets/icon-400.png" \
+          --arg source "https://github.com/${GITHUB_REPOSITORY}" \
+          --arg ipk "$(basename "$IPK")" \
+          --arg sha "$sha" \
+          --argjson size "$size" \
+          '{id: $id, version: $version, type: $type, title: $title, appDescription: $description,
+            iconUri: $icon, sourceUrl: $source, rootRequired: false,
+            ipkUrl: $ipk, ipkHash: {sha256: $sha}, ipkSize: $size}' >"$manifest"
+        jq . "$manifest"
+        echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
