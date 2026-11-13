@@ -15,8 +15,8 @@ TV remote or the controller.
 
 > [!NOTE]
 > This is an early beta, built and tested on one TV (an LG 50UP75003LF on webOS 6). Things may break and other
-> TVs are untested. If you run into problems, a [Discussion](https://github.com/renjfk/chiaki-webos/discussions)
-> or [issue](https://github.com/renjfk/chiaki-webos/issues) is always welcome.
+> TVs are untested. If you run into problems, an [issue](https://github.com/renjfk/chiaki-webos/issues) is always
+> welcome.
 
 > [!IMPORTANT]
 > Chiaki webOS is not on the LG Content Store: it installs on a TV in Developer Mode (or one rooted with the
