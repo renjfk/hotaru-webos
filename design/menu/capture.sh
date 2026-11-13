@@ -4,6 +4,7 @@
 # main menu study also gets art.png (every device drawing at the sizes the concepts use).
 #   design/menu/capture.sh                  # the main menu study  -> out/menu-gallery/
 #   design/menu/capture.sh --study add      # "Add a console"      -> out/add-gallery/
+#   design/menu/capture.sh --study update   # the update notice    -> out/update-gallery/
 #   design/menu/capture.sh orbit            # one concept only (an id fragment)
 #
 # Needs `brew install sdl2 ffmpeg imagemagick`; LVGL is fetched into third_party/ by ./build.sh.

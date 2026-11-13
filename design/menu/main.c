@@ -1,6 +1,6 @@
 /* design/menu/main.c - the concept gallery: runs a study's concepts live in a window, or
- * records their scripts into clips, screenshots and an HTML page. Two studies: the main menu
- * (the default) and "Add a console" (--study add).
+ * records their scripts into clips, screenshots and an HTML page. Three studies: the main menu
+ * (the default), "Add a console" (--study add) and the update notice (--study update).
  *
  * The UI is composed over a stand-in game frame exactly like the TV does it: while "streaming"
  * LVGL renders with screen_transp on a transparent screen and the result is alpha-blended over
@@ -36,6 +36,9 @@ typedef struct {
 static const concept_t *const g_menu[] = { &concept_home, &concept_orbit, &concept_rail };
 static const concept_t *const g_add[] = { &concept_add_setup, &concept_add_inline, &concept_add_sheet,
                                           &concept_add_dialogs };
+static const concept_t *const g_update[] = { &concept_update_toast, &concept_update_card,      &concept_update_chip,
+                                             &concept_update_sheet, &concept_update_toast_key, &concept_update_qr_key,
+                                             &concept_update_mini,  &concept_update_mini_low };
 static const study_t g_studies[] = {
     { "menu",
       "Chiaki webOS: main menu concepts",
@@ -61,6 +64,18 @@ static const study_t g_studies[] = {
       g_add,
       4,
       { "method", "pin", "psn-keyboard" },
+      false },
+    { "update",
+      "Chiaki webOS: update notice",
+      "Ways to say that a newer release is out, each over Home as the app shows it once the splash is gone. "
+      "The check is the same for all of them: once per launch, GitHub's latest release against this build "
+      "(<code>src/net/update.c</code>). A TV cannot follow a link, so a notice either names the address or carries "
+      "a QR code for a phone. Mock version numbers, nothing wired. Live: "
+      "<code>design/menu/run.sh --study update</code>.",
+      "when it arrives   /   a moment later",
+      g_update,
+      8,
+      { "shown", "later", "" },
       false },
 };
 static const study_t *g_study = &g_studies[0];

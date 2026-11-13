@@ -3,7 +3,7 @@
  * A concept builds its view into the root it is handed and reacts to directional keys; a main
  * menu concept also has an in-stream menu for when the stand-in video is running. Its script is
  * what the recorder plays to produce the gallery clips and screenshots. Concepts are grouped in
- * studies (main.c): the main menu, and the "Add a console" flow.
+ * studies (main.c): the main menu, the "Add a console" flow and the update notice.
  */
 #ifndef CHIAKI_WEBOS_CONCEPT_H
 #define CHIAKI_WEBOS_CONCEPT_H
@@ -42,5 +42,7 @@ typedef struct {
 
 extern const concept_t concept_home, concept_orbit, concept_rail;
 extern const concept_t concept_add_setup, concept_add_inline, concept_add_sheet, concept_add_dialogs;
+extern const concept_t concept_update_toast, concept_update_card, concept_update_chip, concept_update_sheet,
+    concept_update_toast_key, concept_update_qr_key, concept_update_mini, concept_update_mini_low;
 
 #endif
