@@ -41,4 +41,4 @@ cmake --build "$BUILD" --target chiaki-package
 echo
 echo "== built =="
 # shellcheck disable=SC2012 # only shows the package and its size
-ls -lh "$SCRIPT_DIR"/dist/*.ipk 2>/dev/null | tail -1
+ls -lht "$SCRIPT_DIR"/dist/*.ipk 2>/dev/null | head -1
