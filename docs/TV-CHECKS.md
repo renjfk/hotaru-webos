@@ -135,12 +135,15 @@ Install a newer build over the installed one (same app id).
 
 ### 13. The update notice
 
-Launch a build older than the latest release (the repository must be public): a local build is `appinfo.json`'s
-version, below every release.
+Launch a build older than the latest release: a local build is `appinfo.json`'s version, below every release. The
+release must not be a prerelease: GitHub's `releases/latest` skips drafts and prereleases, so a repository with only
+those answers like one with no release at all.
 
 - **Look for** `ui: [UPDATE] Hotaru <version> is out` and, once the splash is gone, the notice over the top
-  bar's right end for 9 s; Settings > About names the version too. An `update: GitHub not reached` line means the TV
-  was not on its network yet: the check tries 4 times, 15 s apart.
+  bar's right end for 9 s; Settings > About names the version too. `update: GitHub answered HTTP 404` means there is
+  no release to see yet, not a certificate or network problem: the request reached GitHub and TLS verified.
+  `update: GitHub not reached: <curl error>` is DNS, TLS or a timeout; the check tries 4 times, 15 s apart (a TV just
+  switched on may not be on its network yet).
 - **It decides** whether GitHub's API is reachable over the TV's CA bundle like PSN is (`src/net/update.c`).
 
 ## Recording the results
