@@ -20,7 +20,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_ID="org.homebrew.chiakiwebos"
+APP_ID="com.renjfk.chiakiwebos"
 WEBOS_HOST="${WEBOS_HOST:-LGwebOSTV.local}"
 WEBOS_PORT="${WEBOS_PORT:-9922}"
 WEBOS_USER="${WEBOS_USER:-prisoner}"

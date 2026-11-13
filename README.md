@@ -96,7 +96,7 @@ What is proven on the TV and what only in the tests is tracked in [docs/STATUS.m
 
 ### Quick Start
 
-1. Download `org.homebrew.chiakiwebos_<version>_arm.ipk` from the
+1. Download `com.renjfk.chiakiwebos_<version>_arm.ipk` from the
    [latest release](https://github.com/renjfk/chiaki-webos/releases/latest)
 2. Install it with [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop), or from this repository:
    `scripts/tv.sh key <passphrase>` once, then `scripts/tv.sh install <file.ipk>`
@@ -115,7 +115,7 @@ On macOS with Apple silicon (the webOS toolchain build used here is for it):
 git clone --recursive https://github.com/renjfk/chiaki-webos.git && cd chiaki-webos
 scripts/webos-sdk.sh                 # webosbrew's toolchain and ares-cli-rs into ~/webos-sdk
 scripts/chiaki-lib-build-webos.sh    # libchiaki and its static dependencies (once)
-./build.sh                           # dist/org.homebrew.chiakiwebos_<version>_arm.ipk
+./build.sh                           # dist/com.renjfk.chiakiwebos_<version>_arm.ipk
 ```
 
 Without the libchiaki step the app builds with a simulated session backend, which is handy for UI work.

@@ -1,5 +1,5 @@
 {
-  "id": "org.homebrew.chiakiwebos",
+  "id": "com.renjfk.chiakiwebos",
   "type": "native",
   "main": "chiaki",
   "icon": "icon.png",

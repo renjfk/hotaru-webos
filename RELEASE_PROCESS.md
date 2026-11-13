@@ -98,7 +98,7 @@ opencode will:
    (`scripts/webos-sdk.sh`), **cross-builds libchiaki** and its static dependencies
    (`scripts/chiaki-lib-build-webos.sh`, cached per chiaki-ng commit), writes the version into `appinfo.json`
    (`v0.2` is `0.2.0`: webOS wants three numbers), **builds and packages** the app (`./build.sh`) and publishes the
-   GitHub Release with `org.homebrew.chiakiwebos_<version>_arm.ipk` and its `.sha256`
+   GitHub Release with `com.renjfk.chiakiwebos_<version>_arm.ipk` and its `.sha256`
 
 The released `.ipk` is built from the tag, so its Corresponding Source (AGPL-3.0) is this repository at that tag;
 the app's About panel points here.

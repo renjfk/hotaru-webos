@@ -27,7 +27,7 @@ game itself.
 
 ## Installing
 
-Download `org.homebrew.chiakiwebos_<version>_arm.ipk` from the
+Download `com.renjfk.chiakiwebos_<version>_arm.ipk` from the
 [latest release](https://github.com/renjfk/chiaki-webos/releases/latest), then either:
 
 - **webOS Dev Manager**: install [Dev Manager](https://github.com/webosbrew/dev-manager-desktop) on a computer, add
@@ -36,7 +36,7 @@ Download `org.homebrew.chiakiwebos_<version>_arm.ipk` from the
 
   ```bash
   WEBOS_HOST=<the TV's address> scripts/tv.sh key <passphrase>
-  WEBOS_HOST=<the TV's address> scripts/tv.sh install org.homebrew.chiakiwebos_<version>_arm.ipk
+  WEBOS_HOST=<the TV's address> scripts/tv.sh install com.renjfk.chiakiwebos_<version>_arm.ipk
   ```
 
 Chiaki webOS then shows up among the TV's apps. Installing a newer `.ipk` the same way updates it.

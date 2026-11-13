@@ -57,7 +57,7 @@ bool ndl_open(const stream_settings_t *stream) {
     if (!stream) return false;
     if (!g.initialized) {
         const char *appid = getenv("APPID");
-        if (!appid || !*appid) appid = "org.homebrew.chiakiwebos";
+        if (!appid || !*appid) appid = "com.renjfk.chiakiwebos";
         int r = NDL_DirectMediaInit(appid, NULL);
         if (r != 0) {
             log_event(LOG_ERR, "NDL", "DirectMediaInit failed: %s", NDL_DirectMediaGetError());

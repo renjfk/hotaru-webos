@@ -10,7 +10,7 @@ and where it was proven: [docs/STATUS.md](docs/STATUS.md); what only the TV can 
 [chiaki-ng](https://github.com/streetpea/chiaki-ng)'s libchiaki. C11, SDL2 + LVGL 8.3.11 (software rendered), no
 web stack. AGPL-3.0 with an OpenSSL exception, like chiaki-ng.
 
-- **App:** id `org.homebrew.chiakiwebos`, title "Chiaki webOS", binary `chiaki`, version in `appinfo.json` (three
+- **App:** id `com.renjfk.chiakiwebos`, title "Chiaki webOS", binary `chiaki`, version in `appinfo.json` (three
   numbers; releases write the tag into it)
 - **Target TV:** LG 50UP75003LF, webOS TV Lite 6.5.3, 1920x1080, armv7l, 4 cores, ~340 MB free RAM, on Wi-Fi that
   goes quiet ~115 ms twice a second ("Smooth playback" hides it)
@@ -87,7 +87,7 @@ assets/             app icons; devices/ the console and pad art the app loads at
 ```bash
 scripts/webos-sdk.sh                 # once: toolchain + ares-cli-rs into ~/webos-sdk (macOS arm64)
 scripts/chiaki-lib-build-webos.sh    # once: libchiaki + static deps -> out/chiaki-lib-staging
-./build.sh                           # dist/org.homebrew.chiakiwebos_<version>_arm.ipk (fetches LVGL on first run)
+./build.sh                           # dist/com.renjfk.chiakiwebos_<version>_arm.ipk (fetches LVGL on first run)
 tests/host/run.sh                    # host tests (brew install sdl2); exit status = failures
 sim/run.sh                           # the app in a window
 scripts/chiaki-lib-update.sh [REF]   # chiaki-ng to its newest commit (or REF), notices updated; then rebuild
