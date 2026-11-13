@@ -100,6 +100,7 @@ jobs:
           TAG: ${{ needs.resolve.outputs.release_tag }}
           PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
           IPK: ${{ steps.build.outputs.ipk }}
+          MANIFEST: ${{ steps.build.outputs.manifest }}
         run: |
           if [ -n "$PR_NUMBER" ]; then
             NOTES="Pre-release build from PR #$PR_NUMBER."
@@ -107,7 +108,7 @@ jobs:
             NOTES="Pre-release build from $GITHUB_REF_NAME."
           fi
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease \
-            --title "Prerelease $TAG" --notes "$NOTES" "$IPK" "$IPK.sha256"
+            --title "Prerelease $TAG" --notes "$NOTES" "$IPK" "$IPK.sha256" "$MANIFEST"
 
       - name: Comment on the PR
         if: needs.resolve.outputs.pr_number != '' && inputs.comment_id != ''

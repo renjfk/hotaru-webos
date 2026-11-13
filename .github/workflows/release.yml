@@ -111,6 +111,7 @@ jobs:
           path: |
             dist/*.ipk
             dist/*.ipk.sha256
+            dist/*.manifest.json
 
   release:
     name: Publish Release
@@ -141,3 +142,4 @@ jobs:
           files: |
             dist/*.ipk
             dist/*.ipk.sha256
+            dist/*.manifest.json
