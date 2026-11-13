@@ -290,6 +290,11 @@ static bool wait_passcode(const char *want) {
     for (int i = 0; i < 300 && strcmp(ui_passcode_text(), want) != 0; i++) pump(20);
     return strcmp(ui_passcode_text(), want) == 0;
 }
+/* the keyboard coming up or going away: a pad press takes its own frames to land */
+static bool wait_typing(bool typing) {
+    for (int i = 0; i < 300 && ui_register_typing() != typing; i++) pump(20);
+    return ui_register_typing() == typing;
+}
 /* Add a console's step: it fits 1080p and its focus rings are not clipped */
 static void reg_check(const char *name) {
     pump(500);
@@ -824,8 +829,9 @@ int main(void) {
     expect(ui_register_focus() == 2, "Type the account ID shows its field and moves onto it");
     key(SDLK_RETURN);
     lv_obj_t *kb = find_type(reg, &lv_keyboard_class);
-    pump(300);
-    expect(ui_register_typing() && kb && visible(kb) && kb->coords.y2 >= H - 1,
+    bool kb_up = wait_typing(true);
+    pump(300); /* it slides up from the bottom */
+    expect(kb_up && kb && visible(kb) && kb->coords.y2 >= H - 1,
            "Cross on the field brings the keyboard up from the bottom");
     key(SDLK_RETURN);        /* the highlighted key, q */
     input_remote_text("x!"); /* a USB keyboard types on meanwhile */
@@ -851,8 +857,8 @@ int main(void) {
     key(SDLK_UP);
     key(SDLK_UP);
     pad_btn(0x132);
-    expect(!ui_register_typing() && ui_register_active() && ui_register_focus() == 2 &&
-               !strcmp(ui_register_text(), "qx!"),
+    bool kb_away = wait_typing(false);
+    expect(kb_away && ui_register_active() && ui_register_focus() == 2 && !strcmp(ui_register_text(), "qx!"),
            "Circle puts the keyboard away and types nothing");
     key(SDLK_RIGHT);
     key(SDLK_RETURN);
@@ -998,9 +1004,13 @@ int main(void) {
     key(SDLK_RETURN);
     key(SDLK_RETURN); /* q */
     pad_btn(0x132);
-    pump(300);
-    expect(psn_typed && wait_text("xX1ZwPq") && !ui_register_typing() && ui_register_active(),
-           "the code types from a USB keyboard and the on-screen keys; Circle types nothing");
+    bool kb_closed = wait_typing(false);
+    bool psn_code = wait_text("xX1ZwPq");
+    bool psn_ok = psn_typed && kb_closed && psn_code && !ui_register_typing() && ui_register_active();
+    if (!psn_ok)
+        printf("  [psn code] typed=%d closed=%d code=%d active=%d step=%d text='%s'\n", psn_typed, kb_closed, psn_code,
+               ui_register_active(), (int)ui_register_step(), ui_register_text());
+    expect(psn_ok, "the code types from a USB keyboard and the on-screen keys; Circle types nothing");
     shot("add-psn-typed");
     key(SDLK_RIGHT);
     key(SDLK_RETURN);
