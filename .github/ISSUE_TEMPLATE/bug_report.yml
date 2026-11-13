@@ -1,5 +1,5 @@
 name: Bug Report
-description: "Report a bug or unexpected behavior. For setup help or questions, please start a Discussion first."
+description: "Report a bug or unexpected behavior. For setup help or questions, please open an issue first."
 title: "fix: "
 labels: ["bug"]
 body:

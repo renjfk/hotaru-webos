@@ -128,7 +128,7 @@ Hotaru is open to contributions and ideas! The most useful ones are trying it on
 controllers (turn on Diagnostics and attach the log), filing clear bug reports, and opening PRs.
 
 > [!IMPORTANT]
-> For larger changes, please open an issue or Discussion first, so the approach can be agreed before the work.
+> For larger changes, please open an issue first, so the approach can be agreed before the work.
 
 ### Issue Conventions
 
