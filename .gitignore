@@ -1,3 +1,12 @@
+# Build outputs: the app, the libchiaki staging, the host tests, the simulator, the design gallery
 out/
 dist/
+
+# LVGL is fetched by ./build.sh (and CI) at the pinned tag
 third_party/
+
+# macOS
+.DS_Store
+
+# Python bytecode from the lint scripts
+__pycache__/

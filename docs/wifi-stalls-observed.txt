@@ -1,0 +1,72 @@
+Wi-Fi stalls on the TV - raw observations (2026-11-11, LG 50UP75003LF, webOS TV Lite 6.5.3)
+
+Symptom: streaming at 60 fps was smooth except a very short freeze about every half second.
+
+Setup
+- TV on Wi-Fi: 5 GHz channel 52 (DFS), connman reports state connected, wake-on-Wi-Fi off,
+  wifiDirect "disconnected". The radio is a MediaTek USB Wi-Fi/BT combo (btmtk_fifo_thread);
+  interfaces: wlan0, p2p0, eth0 (Ethernet port present, unused), sit0, lo.
+- PS5 is wired: Senkusha RTT ~0.8 ms; UDP probes TV -> PS5 median 0-1 ms.
+- Services running: wpa_supplicant (-u -s), connmand, miracast, airplay, mdnsd,
+  webos-bluetooth, bthidmanager, btaudiosrc/btaudiosnk.
+
+Measurements (all while a stream was running)
+1. wlan0 rx_packets (/proc/net/dev) sampled every 2 ms for 10 s, 40 s and 60 s:
+   no packet for 109-136 ms, exactly twice per second (period ~500 ms), continuously:
+     gaps>40ms per s: [1, 2, 2, 2, 2, 2, 2, ...]  max gap per s: 109..136 ms
+   Same at 0.3 Mbps (static scene) and 12 Mbps: not load related.
+2. App stats (stats: lines): "frame gap max" 120-142 ms in every 10 s window, socket drops 0,
+   FEC failures 0, NDL video push <= 2 ms: the app keeps up, frames arrive in bursts.
+3. Stream socket rx_queue (/proc/net/udp, 2 ms samples): backlog runs <= 27 ms, so the app
+   reads promptly; the gaps are before the socket.
+4. UDP probes TV -> PS5 (connected UDP to a closed port, ECONNREFUSED = reply), every 10 ms:
+   median 0 ms, max 114 ms, ~2 per second over 50 ms: the TV <-> AP link stalls both ways.
+5. Same probe from a Mac on the same AP and channel (52, 40 MHz): max 8.9 ms, no stalls.
+   -> not the AP, not the PS5.
+6. Controller (DS4) off for the whole 60 s run: stalls unchanged. -> not the controller link.
+7. 100 Hz uplink keep-alive (UDP to the PS5, port 9) for 30 s: stalls unchanged.
+   -> not Wi-Fi power save.
+8. User turned off AirPlay, "TV On With Mobile" (Wi-Fi/BT), Screen Share related options,
+   Quick Start+ (no reboot yet): stalls unchanged. The menus have no Wi-Fi Direct switch.
+
+Conclusion: the TV's own Wi-Fi leaves the channel ~115 ms every 500 ms. Most likely firmware
+level (Wi-Fi Direct/Miracast listen on p2p0, or Bluetooth activity on the shared MediaTek
+chip); not provable without root. Work-arounds: Ethernet, or the app's "Smooth playback"
+(Video tab, 150 ms fixed it for the user; media/pacer.c).
+
+Probes (run on the TV over SSH; /usr/bin/python, node and nc exist; ping is not permitted
+for prisoner, iw/ip are missing):
+
+  # gaps in the Wi-Fi receive counter
+  python -c "
+  import time
+  def rx():
+      for l in open('/proc/net/dev'):
+          if 'wlan0:' in l: return int(l.split(':')[1].split()[1])
+  t0=time.time(); last=rx(); lastt=t0; gaps=[]
+  while time.time()-t0 < 10:
+      v=rx(); now=time.time()
+      if v!=last:
+          g=(now-lastt)*1000
+          if g>40: gaps.append((round(now-t0,3), int(g)))
+          last=v; lastt=now
+      time.sleep(0.002)
+  print(len(gaps), gaps)"
+
+  # round trip to the PS5 without ping: a connected UDP socket gets ECONNREFUSED back
+  python -c "
+  import socket, time, errno
+  s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('192.168.1.30', 33434)); s.settimeout(0.3)
+  r=[]; t0=time.time()
+  while time.time()-t0 < 4:
+      a=time.time()
+      try: s.send(b'x'); s.recv(10)
+      except socket.timeout: continue
+      except socket.error as e:
+          if e.errno != errno.ECONNREFUSED: continue
+      r.append(int((time.time()-a)*1000)); time.sleep(0.01)
+  r.sort(); print(len(r), r[len(r)//2], r[-1], sum(1 for x in r if x > 50))"
+
+  # the stream socket's receive backlog and kernel drops (remote port 9296 = 0x2450)
+  grep ':2450' /proc/net/udp      # columns: tx_queue:rx_queue ... drops (last)
+  grep '^Udp:' /proc/net/snmp     # RcvbufErrors

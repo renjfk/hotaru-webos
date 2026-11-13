@@ -6,6 +6,7 @@
 #   out/chiaki-lib-staging/include   chiaki/*.h (+ the generated chiaki/config.h), curl/, openssl/, ...
 #   out/chiaki-lib-staging/lib       libchiaki.a and every static archive it needs
 #   out/chiaki-lib-staging/link.txt  the ordered link line (archives, then system libs)
+#   out/chiaki-lib-staging/licenses  every bundled component's license, shipped in the .ipk
 # Sources, build trees and the host Python venv (nanopb generator) live in out/chiaki-lib-build.
 #
 #   scripts/chiaki-lib-build-webos.sh
@@ -14,9 +15,9 @@
 # Steps: openssl opus jsonc miniupnpc libevent chiaki. A dependency is skipped while its archive is in
 # staging; chiaki (with chiaki-ng's own curl, jerasure, gf-complete and nanopb) is an incremental build.
 #
-# Derived from scripts/chiaki-lg-build-webos.sh (same OpenSSL, Opus, json-c, miniupnpc and libevent
-# versions, same old-glibc patches), adapted for a darwin host and limited to libchiaki: no ss4s, NDL,
-# FFmpeg, GUI or CLI. curl, jerasure, gf-complete and nanopb come from chiaki-ng's own submodules.
+# OpenSSL, Opus, json-c, miniupnpc and libevent are cross-built from their release tarballs, with workarounds for
+# the TV's old glibc; curl, jerasure, gf-complete and nanopb come from chiaki-ng's own submodules. Only libchiaki
+# is built: no GUI or CLI.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -28,7 +29,7 @@ CHIAKI_NG="$ROOT/chiaki-ng"
 STAGING="$ROOT/out/chiaki-lib-staging"
 WORK="$ROOT/out/chiaki-lib-build"
 REBUILD="${REBUILD:-0}"
-JOBS="$(sysctl -n hw.ncpu)"
+JOBS="$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
 
 log() { printf '\n== %s\n' "$*"; }
 die() { echo "error: $*" >&2; exit 1; }
@@ -295,8 +296,9 @@ build_chiaki() {
         rm -rf "$CHIAKI_BUILD"
     fi
     # curl: chiaki-ng builds it HTTP(S)/WS(S)-only with WebSockets (holepunch.c uses curl_ws_*); every
-    # optional dependency is off so nothing is picked up from the sysroot. No compiled-in CA bundle (the
-    # TV's location is unknown): CURL_CA_FALLBACK uses OpenSSL's default paths under /etc/ssl.
+    # optional dependency is off so nothing is picked up from the sysroot. The TV's CA bundle/path are
+    # compiled in (CURLINFO_CAINFO/CAPATH): libchiaki's AIA chain recovery loads the trust store from
+    # CURLINFO_CAINFO, so an empty default fails the PSN push-notification websocket closed.
     cmake -S "$CHIAKI_SRC" -B "$CHIAKI_BUILD" "${CMAKE_COMMON[@]}" \
         -DCMAKE_FIND_ROOT_PATH="$STAGING;$SYSROOT" \
         -DCMAKE_PREFIX_PATH="$STAGING" \
@@ -318,7 +320,7 @@ build_chiaki() {
         -DCURL_ZLIB=OFF -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF -DUSE_NGHTTP2=OFF -DUSE_LIBIDN2=OFF \
         -DCURL_USE_LIBPSL=OFF -DCURL_USE_LIBSSH2=OFF -DCURL_USE_LIBSSH=OFF -DCURL_USE_GSSAPI=OFF \
         -DENABLE_ARES=OFF -DCURL_DISABLE_LDAP=ON -DCURL_USE_PKGCONFIG=OFF \
-        -DCURL_CA_BUNDLE=none -DCURL_CA_PATH=none -DCURL_CA_FALLBACK=ON \
+        -DCURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt -DCURL_CA_PATH=/etc/ssl/certs -DCURL_CA_FALLBACK=ON \
         -DBUILD_LIBCURL_DOCS=OFF -DBUILD_MISC_DOCS=OFF -DENABLE_CURL_MANUAL=OFF -DPICKY_COMPILER=OFF
     cmake --build "$CHIAKI_BUILD" -j"$JOBS" --target chiaki-lib jerasure gf_complete protobuf-nanopb-static libcurl_static
 }
@@ -398,6 +400,31 @@ EOF
     echo "-- newest glibc symbol version: $("${CROSS}objdump" -T "$t/linktest-whole" | grep -o 'GLIBC_[0-9.]*' | sort -t. -k2,2n -k3,3n -u | tail -1)"
 }
 
+# every statically linked component's license, for the .ipk (CMakeLists.txt installs licenses/)
+stage_licenses() {
+    local dir="$STAGING/licenses"
+    mkdir -p "$dir"
+    lic() { # name candidate-files...
+        local name="$1" f
+        shift
+        for f in "$@"; do
+            if [ -f "$f" ]; then cp "$f" "$dir/$name.txt"; return 0; fi
+        done
+        die "no license file for $name"
+    }
+    lic chiaki-ng "$CHIAKI_NG/COPYING"
+    lic openssl "$WORK"/src/openssl-*/LICENSE.txt
+    lic opus "$WORK"/src/opus-*/COPYING
+    lic json-c "$WORK"/src/json-c-*/COPYING
+    lic miniupnpc "$WORK"/src/miniupnpc-*/LICENSE
+    lic libevent "$WORK"/src/libevent-*/LICENSE
+    lic curl "$CHIAKI_NG/third-party/curl/COPYING"
+    lic nanopb "$CHIAKI_NG/third-party/nanopb/LICENSE.txt"
+    lic jerasure "$CHIAKI_NG/third-party/jerasure/COPYING"
+    lic gf-complete "$CHIAKI_NG/third-party/gf-complete/COPYING"
+    echo "-- licenses: $(find "$dir" -name '*.txt' | wc -l | tr -d ' ') in $dir"
+}
+
 build_openssl
 build_opus
 build_jsonc
@@ -406,6 +433,7 @@ build_libevent
 setup_host_tools
 build_chiaki
 stage_chiaki
+stage_licenses
 verify
 
 log "done in $((SECONDS - START))s"

@@ -15,17 +15,16 @@
 
 #define FILE_VERSION 1
 #define FILE_NAME    "chiaki.conf"
-#define FALLBACK_DIR "/tmp/chiaki-webos"   /* writable everywhere, cleared on boot */
-#define DUID_PREFIX  "0000000700410080"     /* chiaki-ng lib/include/chiaki/remote/holepunch.h */
-#define LINE_MAX_LEN 1024                   /* longest valid line: an escaped 255-char token + key */
+#define FALLBACK_DIR "/tmp/chiaki-webos" /* writable everywhere, cleared on boot */
+#define DUID_PREFIX  "0000000700410080"  /* chiaki-ng lib/include/chiaki/remote/holepunch.h */
+#define LINE_MAX_LEN 1024                /* longest valid line: an escaped 255-char token + key */
 
-#define DEFAULT_CONFIG {                                                                                          \
-    .stream = { .codec = CODEC_H265, .width = 1920, .height = 1080, .fps = 60, .bitrate_kbps = 15000, .hdr = false }, \
-    .input = { .rumble = true, .touchpad = false, .motion = true, .cursor_speed = 100 },                              \
-}
+#define DEFAULT_CONFIG                                                                                                 \
+    .stream = { .codec = CODEC_H265, .width = 1920, .height = 1080, .fps = 60, .bitrate_kbps = 15000, .hdr = false },  \
+    .input = { .rumble = true, .touchpad = true }
 
-static const config_t g_defaults = DEFAULT_CONFIG;
-static config_t g_config = DEFAULT_CONFIG;
+static const config_t g_defaults = { DEFAULT_CONFIG };
+static config_t g_config = { DEFAULT_CONFIG };
 static config_host_t g_hosts[CONFIG_MAX_HOSTS];
 static int g_host_count;
 static config_psn_t g_psn;
@@ -51,7 +50,7 @@ static bool mkdir_p(const char *dir) {
     for (char *p = tmp + 1; *p; p++) {
         if (*p != '/') continue;
         *p = '\0';
-        mkdir(tmp, 0700);   /* EEXIST and friends: the final stat() decides */
+        mkdir(tmp, 0700); /* EEXIST and friends: the final stat() decides */
         *p = '/';
     }
     mkdir(tmp, 0700);
@@ -64,7 +63,7 @@ static void resolve_path(void) {
     const char *env = getenv("CHIAKI_CONFIG_DIR"), *home = getenv("HOME");
     if (env && *env) snprintf(g_dir, sizeof(g_dir), "%s", env);
 #ifdef __linux__
-    else if (home && *home) snprintf(g_dir, sizeof(g_dir), "%s/conf", home);   /* the TV: HOME = app dir */
+    else if (home && *home) snprintf(g_dir, sizeof(g_dir), "%s/conf", home); /* the TV: HOME = app dir */
 #else
     else if (home && *home) snprintf(g_dir, sizeof(g_dir), "%s/.chiaki-webos", home);
 #endif
@@ -113,12 +112,12 @@ static void write_all(FILE *f) {
     put_int(f, "stream.fps", c->stream.fps);
     put_int(f, "stream.bitrate_kbps", c->stream.bitrate_kbps);
     put_int(f, "stream.hdr", c->stream.hdr);
+    put_int(f, "stream.smooth_ms", c->stream.smooth_ms);
     put_int(f, "input.rumble", c->input.rumble);
-    put_int(f, "input.touchpad", c->input.touchpad);
-    put_int(f, "input.motion", c->input.motion);
-    put_int(f, "input.cursor_speed", c->input.cursor_speed);
-    if (g_psn.linked) {
-        put_int(f, "psn.linked", 1);
+    put_int(f, "input.touch", c->input.touchpad);
+    put_int(f, "debug.probe", c->debug.probe);
+    if (g_psn.linked || config_psn_has_account_id()) {
+        put_int(f, "psn.linked", g_psn.linked ? 1 : 0);
         put_hex(f, "psn.account_id", g_psn.account_id, sizeof(g_psn.account_id));
         put_str(f, "psn.online_id", g_psn.online_id);
         put_str(f, "psn.access_token", g_psn.access_token);
@@ -134,6 +133,9 @@ static void write_all(FILE *f) {
         put_hex(f, KEY("server_mac"), h->server_mac, sizeof(h->server_mac));
         put_hex(f, KEY("rp_regist_key"), h->rp_regist_key, sizeof(h->rp_regist_key));
         put_hex(f, KEY("rp_key"), h->rp_key, sizeof(h->rp_key));
+        put_int(f, KEY("via_psn"), h->via_psn);
+        put_hex(f, KEY("psn_uid"), h->psn_uid, sizeof(h->psn_uid));
+        if (h->prefer_psn) put_int(f, KEY("prefer_psn"), 1);
 #undef KEY
     }
 }
@@ -142,7 +144,7 @@ bool config_save(void) {
     resolve_path();
     char tmp[sizeof(g_path) + 8];
     snprintf(tmp, sizeof(tmp), "%s.tmp", g_path);
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);   /* keys and tokens: owner only */
+    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600); /* keys and tokens: owner only */
     FILE *f = fd >= 0 ? fdopen(fd, "w") : NULL;
     if (!f) {
         log_event(LOG_ERR, "CONFIG", "cannot write %s: %s", tmp, strerror(errno));
@@ -231,6 +233,9 @@ static void apply_host(const char *k, const char *v, config_host_t *hosts, bool 
     else if (!strcmp(field, "server_mac")) ok = get_hex(v, h->server_mac, sizeof(h->server_mac));
     else if (!strcmp(field, "rp_regist_key")) ok = get_hex(v, h->rp_regist_key, sizeof(h->rp_regist_key));
     else if (!strcmp(field, "rp_key")) ok = get_hex(v, h->rp_key, sizeof(h->rp_key));
+    else if (!strcmp(field, "via_psn")) ok = get_bool(v, &h->via_psn);
+    else if (!strcmp(field, "psn_uid")) ok = get_hex(v, h->psn_uid, sizeof(h->psn_uid));
+    else if (!strcmp(field, "prefer_psn")) ok = get_bool(v, &h->prefer_psn);
     if (ok) seen[i] = true;
 }
 
@@ -252,10 +257,10 @@ static void apply(const char *k, const char *v, config_host_t *hosts, bool *seen
     else if (!strcmp(k, "stream.fps")) get_int(v, 30, 60, &s->fps);
     else if (!strcmp(k, "stream.bitrate_kbps")) get_int(v, 2000, 50000, &s->bitrate_kbps);
     else if (!strcmp(k, "stream.hdr")) get_bool(v, &s->hdr);
+    else if (!strcmp(k, "stream.smooth_ms")) get_int(v, 0, 300, &s->smooth_ms);
     else if (!strcmp(k, "input.rumble")) get_bool(v, &in->rumble);
-    else if (!strcmp(k, "input.touchpad")) get_bool(v, &in->touchpad);
-    else if (!strcmp(k, "input.motion")) get_bool(v, &in->motion);
-    else if (!strcmp(k, "input.cursor_speed")) get_int(v, 50, 200, &in->cursor_speed);
+    else if (!strcmp(k, "input.touch")) get_bool(v, &in->touchpad);
+    else if (!strcmp(k, "debug.probe")) get_bool(v, &g_config.debug.probe);
     else if (!strcmp(k, "psn.linked")) get_bool(v, &g_psn.linked);
     else if (!strcmp(k, "psn.account_id")) get_hex(v, g_psn.account_id, sizeof(g_psn.account_id));
     else if (!strcmp(k, "psn.online_id")) get_str(v, g_psn.online_id, sizeof(g_psn.online_id));
@@ -263,7 +268,7 @@ static void apply(const char *k, const char *v, config_host_t *hosts, bool *seen
     else if (!strcmp(k, "psn.refresh_token")) get_str(v, g_psn.refresh_token, sizeof(g_psn.refresh_token));
 }
 
-/* only the combinations the Video tab offers */
+/* only the combinations Settings > Stream offers */
 static void validate(void) {
     stream_settings_t *s = &g_config.stream;
     bool res_ok = (s->width == 1280 && s->height == 720) || (s->width == 1920 && s->height == 1080);
@@ -296,7 +301,7 @@ bool config_load(void) {
     char line[LINE_MAX_LEN];
     while (fgets(line, sizeof(line), f)) {
         size_t len = strlen(line);
-        if (len == sizeof(line) - 1 && line[len - 1] != '\n') {   /* too long: skip the rest, ignore it */
+        if (len == sizeof(line) - 1 && line[len - 1] != '\n') { /* too long: skip the rest, ignore it */
             int c;
             while ((c = fgetc(f)) != EOF && c != '\n') {}
             continue;
@@ -309,9 +314,11 @@ bool config_load(void) {
     }
     fclose(f);
     validate();
-    if (g_psn.linked && !g_psn.refresh_token[0] && !g_psn.access_token[0]) memset(&g_psn, 0, sizeof(g_psn));
+    /* a linked account is only meaningful with an account id or a token; drop an empty psn block */
+    if (g_psn.linked && !config_psn_has_account_id() && !g_psn.refresh_token[0] && !g_psn.access_token[0])
+        memset(&g_psn, 0, sizeof(g_psn));
     for (int i = 0; i < CONFIG_MAX_HOSTS; i++)
-        if (seen[i]) config_host_add(&hosts[i]);   /* drops entries without an identity and duplicates */
+        if (seen[i]) config_host_add(&hosts[i]); /* drops entries without an identity and duplicates */
     log_msg("config: loaded %s (%d console(s), PSN %s)", g_path, g_host_count, g_psn.linked ? "linked" : "not linked");
     return true;
 }
@@ -324,9 +331,19 @@ static bool mac_set(const uint8_t mac[6]) {
     return false;
 }
 
+static bool uid_set(const uint8_t uid[32]) {
+    for (int i = 0; i < 32; i++)
+        if (uid[i]) return true;
+    return false;
+}
+
 static bool same_console(const config_host_t *a, const config_host_t *b) {
-    if (a->addr[0] && !strcmp(a->addr, b->addr)) return true;
-    return mac_set(a->server_mac) && !memcmp(a->server_mac, b->server_mac, sizeof(a->server_mac));
+    /* PSN uid, then MAC when both are known; the address is only a fallback (DHCP reassigns it,
+     * and a PSN console has no address at all) */
+    if (uid_set(a->psn_uid) && uid_set(b->psn_uid)) return !memcmp(a->psn_uid, b->psn_uid, sizeof(a->psn_uid));
+    if (mac_set(a->server_mac) && mac_set(b->server_mac))
+        return !memcmp(a->server_mac, b->server_mac, sizeof(a->server_mac));
+    return a->addr[0] && !strcmp(a->addr, b->addr);
 }
 
 int config_host_count(void) { return g_host_count; }
@@ -340,7 +357,7 @@ int config_host_find(const config_host_t *host) {
 
 bool config_host_add(const config_host_t *host) {
     if (!host || g_host_count >= CONFIG_MAX_HOSTS) return false;
-    if (!host->addr[0] && !mac_set(host->server_mac)) return false;
+    if (!host->addr[0] && !mac_set(host->server_mac) && !uid_set(host->psn_uid)) return false;
     if (config_host_find(host) >= 0) return false;
     g_hosts[g_host_count] = *host;
     g_hosts[g_host_count].nickname[sizeof(host->nickname) - 1] = '\0';
@@ -379,6 +396,20 @@ void config_psn_set(const uint8_t account_id[8], const char *online_id, const ch
     snprintf(g_psn.online_id, sizeof(g_psn.online_id), "%s", online_id ? online_id : "");
     snprintf(g_psn.access_token, sizeof(g_psn.access_token), "%s", access_token ? access_token : "");
     snprintf(g_psn.refresh_token, sizeof(g_psn.refresh_token), "%s", refresh_token ? refresh_token : "");
+}
+
+void config_psn_set_expiry(long long expires_at) { g_psn.expires_at = expires_at; }
+
+void config_psn_set_account_id(const uint8_t account_id[8]) {
+    if (memcmp(g_psn.account_id, account_id, sizeof(g_psn.account_id)) == 0) return;
+    memset(&g_psn, 0, sizeof(g_psn)); /* a different id does not belong to any stored PSN tokens */
+    memcpy(g_psn.account_id, account_id, sizeof(g_psn.account_id));
+}
+
+bool config_psn_has_account_id(void) {
+    for (size_t i = 0; i < sizeof(g_psn.account_id); i++)
+        if (g_psn.account_id[i]) return true;
+    return false;
 }
 
 void config_psn_clear(void) { memset(&g_psn, 0, sizeof(g_psn)); }

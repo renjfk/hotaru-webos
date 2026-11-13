@@ -1,0 +1,121 @@
+name: Prerelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number (leave empty for branch-only prerelease)"
+        required: false
+      comment_id:
+        description: "Comment ID for reply (set by slash-command dispatcher)"
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  resolve:
+    name: Resolve context
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      checkout_ref: ${{ steps.resolve.outputs.checkout_ref }}
+      release_tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+
+    steps:
+      - name: Resolve
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          if [ -n "$PR_NUMBER" ]; then
+            PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,headRefName)
+            HEAD_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
+            HEAD_REF=$(echo "$PR_JSON" | jq -r '.headRefName')
+            CHECKOUT_REF="refs/pull/$PR_NUMBER/head"
+          else
+            HEAD_SHA="$GITHUB_SHA"
+            HEAD_REF="$GITHUB_REF_NAME"
+            CHECKOUT_REF="$GITHUB_SHA"
+          fi
+
+          LATEST_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" \
+            --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')
+          BASE="${LATEST_TAG:-v0.0}"
+          BASE="${BASE#v}"
+          SHORT_SHA="${HEAD_SHA:0:7}"
+
+          if [ -n "$PR_NUMBER" ]; then
+            TAG="v${BASE}-pr${PR_NUMBER}.${SHORT_SHA}"
+          else
+            SAFE_REF="${HEAD_REF//[^a-zA-Z0-9._-]/-}"
+            TAG="v${BASE}-${SAFE_REF}.${SHORT_SHA}"
+          fi
+
+          # webOS wants three numbers: the base release, then the run number
+          MAJOR_MINOR=$(echo "$BASE" | cut -d. -f1-2)
+
+          {
+            echo "pr_number=$PR_NUMBER"
+            echo "checkout_ref=$CHECKOUT_REF"
+            echo "tag=$TAG"
+            echo "version=${MAJOR_MINOR}.${GITHUB_RUN_NUMBER}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Prerelease: $TAG ($HEAD_REF @ $SHORT_SHA)"
+
+  prerelease:
+    name: Build and Prerelease
+    runs-on: macos-latest
+    needs: resolve
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Create release tag
+        env:
+          TAG: ${{ needs.resolve.outputs.release_tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Prerelease $TAG"
+          git push origin "$TAG"
+
+      - name: Build the .ipk
+        id: build
+        uses: ./.github/actions/build-ipk
+        with:
+          version: ${{ needs.resolve.outputs.version }}
+
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve.outputs.release_tag }}
+          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+          IPK: ${{ steps.build.outputs.ipk }}
+        run: |
+          if [ -n "$PR_NUMBER" ]; then
+            NOTES="Pre-release build from PR #$PR_NUMBER."
+          else
+            NOTES="Pre-release build from $GITHUB_REF_NAME."
+          fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease \
+            --title "Prerelease $TAG" --notes "$NOTES" "$IPK" "$IPK.sha256"
+
+      - name: Comment on the PR
+        if: needs.resolve.outputs.pr_number != '' && inputs.comment_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve.outputs.release_tag }}
+          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+        run: |
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --body "Prerelease [$TAG]($URL) is ready: install the .ipk with \`scripts/tv.sh install\` or webOS Dev Manager."

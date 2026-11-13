@@ -35,7 +35,10 @@ cmake -S "$SCRIPT_DIR" -B "$BUILD" -G "Unix Makefiles" \
     -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_DIR/share/buildroot/toolchainfile.cmake" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCHIAKI_LIB_STAGING="$CHIAKI_STAGING"
-cmake --build "$BUILD" --target chiaki -j"$(sysctl -n hw.ncpu)"
+cmake --build "$BUILD" --target chiaki -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
 cmake --build "$BUILD" --target chiaki-package
 
-echo; echo "== built =="; ls -lh "$SCRIPT_DIR"/dist/*.ipk 2>/dev/null | tail -1
+echo
+echo "== built =="
+# shellcheck disable=SC2012 # only shows the package and its size
+ls -lh "$SCRIPT_DIR"/dist/*.ipk 2>/dev/null | tail -1

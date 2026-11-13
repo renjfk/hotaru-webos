@@ -45,8 +45,8 @@ Porting notes
 - EVIOCGRAB on the physical node succeeds, so an app gets exclusive input and
   the TV stops intercepting Back/OK-style buttons.
 - Do NOT assume hid-sony mapping. Use the table above.
-- This is why chiaki-lg shows "L2/R2 acting like axis movement": it maps
-  ABS_RX/ABS_RY to the right stick, but on this stack those are the triggers.
+- A client that maps ABS_RX/ABS_RY to the right stick gets L2/R2 acting like
+  stick movement: on this stack those are the triggers.
 - Rumble: CONFIRMED working. The node advertises the full DS4 FF set
   (FF_RUMBLE, FF_PERIODIC, FF_SQUARE/TRIANGLE/SINE, FF_GAIN) and an
   FF_RUMBLE effect uploaded via EVIOCSFF (effect id 0); writing EV_FF

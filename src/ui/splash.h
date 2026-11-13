@@ -5,13 +5,13 @@
  * splash_hide()). main.c calls it once, after ui_create(); CHIAKI_NO_SPLASH=1
  * skips it (useful for fast UI iteration in the simulator).
  */
-#ifndef CHIAKI_SPLASH_H
-#define CHIAKI_SPLASH_H
+#ifndef CHIAKI_WEBOS_SPLASH_H
+#define CHIAKI_WEBOS_SPLASH_H
 
 #include <stdbool.h>
 
-void splash_show(void);   /* build + fade in, auto-dismiss after SPLASH_MS */
-void splash_hide(void);   /* dismiss now (no-op if not shown) */
+void splash_show(void); /* build + fade in, auto-dismiss after SPLASH_MS */
+void splash_hide(void); /* dismiss now (no-op if not shown) */
 bool splash_active(void);
 
 #endif

@@ -1,0 +1,92 @@
+# Pinned developer tools, the same versions locally and in CI (`mise install`), and the project's commands
+# as tasks (`mise tasks` lists them). The tasks call the scripts, which also run on their own; arguments pass
+# through: `mise run tv log -f` is `scripts/tv.sh log -f`.
+# Not here: the webOS toolchain (`mise run sdk`), and SDL2 and the libchiaki dependencies (Homebrew, see
+# README.md).
+
+[tools]
+uv = "0.13.7"                     # installs the two below from PyPI
+"pipx:clang-format" = "23.1.4"
+"pipx:clang-tidy" = "23.1.4"
+shellcheck = "0.11.0"
+actionlint = "1.7.12"
+
+# ---------- build ----------
+
+[tasks.sdk]
+description = "Install the webOS toolchain and ares-cli-rs into ~/webos-sdk (once)"
+run = "scripts/webos-sdk.sh"
+
+[tasks."libchiaki:webos"]
+description = "Cross-build libchiaki and its static dependencies for the TV (once)"
+run = "scripts/chiaki-lib-build-webos.sh"
+
+[tasks."libchiaki:macos"]
+description = "Build libchiaki for this Mac, so the simulator talks to real consoles"
+run = "scripts/chiaki-lib-build-macos.sh"
+
+[tasks."libchiaki:update"]
+description = "Move chiaki-ng to its newest commit ([REF]) and update the notices"
+run = "scripts/chiaki-lib-update.sh"
+
+[tasks.build]
+description = "Build the .ipk into dist/"
+run = "./build.sh"
+
+# ---------- run and test ----------
+
+[tasks.sim]
+description = "The app in a window on this Mac"
+run = "sim/run.sh"
+
+[tasks.test]
+description = "Host tests (macOS): the whole UI offscreen, with a fake controller"
+run = "tests/host/run.sh"
+
+[tasks.tv]
+description = "On the TV: key, install, launch [--probe], stop, running, log [-f], save"
+run = "scripts/tv.sh"
+
+# ---------- design and images ----------
+
+[tasks.design]
+description = "The design studies live in a window ([--study add] [concept number])"
+run = "design/menu/run.sh"
+
+[tasks."design:capture"]
+description = "Record the design studies into a gallery ([--study add] [concept])"
+run = "design/menu/capture.sh"
+
+[tasks.art]
+description = "Scale the device drawings in design/menu/art into assets/devices"
+run = "scripts/make-device-art.sh"
+
+[tasks.screenshots]
+description = "Make the README's images from the host tests' and the gallery's renders"
+run = "scripts/make-screenshots.sh"
+
+# ---------- format and lint ----------
+
+[tasks.format]
+description = "Format the C sources in place"
+run = "python3 scripts/check_format.py --fix"
+
+[tasks.lint]
+description = "Every check CI runs"
+depends = ["lint:format", "lint:tidy", "lint:shell", "lint:workflows"]
+
+[tasks."lint:format"]
+description = "C sources match .clang-format"
+run = "python3 scripts/check_format.py"
+
+[tasks."lint:tidy"]
+description = "clang-tidy (.clang-tidy) on the C sources"
+run = "python3 scripts/check_tidy.py"
+
+[tasks."lint:shell"]
+description = "shellcheck on the shell scripts"
+run = "git ls-files --cached --others --exclude-standard '*.sh' | while read -r f; do [ -f \"$f\" ] && echo \"$f\"; done | xargs shellcheck"
+
+[tasks."lint:workflows"]
+description = "actionlint on the GitHub workflows"
+run = "actionlint"

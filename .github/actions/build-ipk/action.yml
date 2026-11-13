@@ -1,0 +1,70 @@
+name: Build the webOS package
+description: >-
+  Install the webOS SDK, cross-build libchiaki and the app, and package the .ipk with its
+  checksum. Runs on a macOS arm64 runner (the toolchain build scripts/webos-sdk.sh installs).
+  Expects a checkout with the chiaki-ng submodule.
+
+inputs:
+  version:
+    description: The app version, three numbers (written into appinfo.json for this build)
+    required: true
+
+outputs:
+  ipk:
+    description: Path of the built .ipk
+    value: ${{ steps.package.outputs.ipk }}
+
+runs:
+  using: composite
+  steps:
+    - name: Cache the webOS SDK
+      uses: actions/cache@v4
+      with:
+        path: ~/webos-sdk
+        key: webos-sdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/webos-sdk.sh') }}
+
+    - name: Install the webOS SDK
+      shell: bash
+      run: scripts/webos-sdk.sh
+
+    - name: chiaki-ng's own submodules (only what libchiaki builds from)
+      id: ng
+      shell: bash
+      run: |
+        git -C chiaki-ng submodule update --init --depth 1 \
+          third-party/curl third-party/jerasure third-party/gf-complete third-party/nanopb
+        echo "sha=$(git rev-parse HEAD:chiaki-ng)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache libchiaki
+      id: libchiaki
+      uses: actions/cache@v4
+      with:
+        path: out/chiaki-lib-staging
+        key: libchiaki-${{ runner.arch }}-${{ steps.ng.outputs.sha }}-${{ hashFiles('scripts/chiaki-lib-build-webos.sh') }}
+
+    - name: Build libchiaki and its static dependencies
+      if: steps.libchiaki.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        command -v pkg-config >/dev/null || brew install pkg-config
+        scripts/chiaki-lib-build-webos.sh
+
+    - name: Set the version
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        jq --arg v "$VERSION" '.version = $v' appinfo.json > appinfo.json.tmp
+        mv appinfo.json.tmp appinfo.json
+
+    - name: Build and package
+      id: package
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        ./build.sh
+        ipk="dist/org.homebrew.chiakiwebos_${VERSION}_arm.ipk"
+        test -f "$ipk"
+        (cd dist && shasum -a 256 "$(basename "$ipk")" > "$(basename "$ipk").sha256")
+        echo "ipk=$ipk" >> "$GITHUB_OUTPUT"

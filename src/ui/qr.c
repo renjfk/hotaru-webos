@@ -6,14 +6,14 @@
 #include "../vendor/qrcodegen.h"
 #include "theme.h"
 
-#define QUIET 4   /* white border, in modules, that the QR spec asks for */
+#define QUIET 4 /* white border, in modules, that the QR spec asks for */
 
 static void buf_free_cb(lv_event_t *e) { free(lv_event_get_user_data(e)); }
 
 static lv_obj_t *placeholder(lv_obj_t *tile, const char *why) {
     lv_obj_t *l = lv_label_create(tile);
     lv_obj_add_style(l, &st_txt[TXT_CAPTION], 0);
-    lv_obj_set_style_text_color(l, C(COL_BG_BOTTOM), 0);   /* dark on the white tile */
+    lv_obj_set_style_text_color(l, C(COL_BG_BOTTOM), 0); /* dark on the white tile */
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(l, LV_PCT(100));
     lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
@@ -43,7 +43,7 @@ lv_obj_t *ui_qr(lv_obj_t *parent, const char *text, lv_coord_t size) {
     lv_obj_remove_style_all(tile);
     lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_size(tile, size, size);
-    lv_obj_set_style_radius(tile, R_SM, 0);   /* inside the quiet zone, never cuts a module */
+    lv_obj_set_style_radius(tile, R_SM, 0); /* inside the quiet zone, never cuts a module */
     lv_obj_set_style_bg_color(tile, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
 
@@ -59,7 +59,7 @@ lv_obj_t *ui_qr(lv_obj_t *parent, const char *text, lv_coord_t size) {
     int px = size / (qrcodegen_getSize(qr) + 2 * QUIET);
     lv_coord_t side = (lv_coord_t)(px * (qrcodegen_getSize(qr) + 2 * QUIET));
     lv_color_t *buf = px > 0 ? malloc(LV_CANVAS_BUF_SIZE_TRUE_COLOR(side, side)) : NULL;
-    if (!buf) {   /* too small to be scannable, or RAM is tight */
+    if (!buf) { /* too small to be scannable, or RAM is tight */
         free(qr);
         return placeholder(tile, "QR code unavailable");
     }

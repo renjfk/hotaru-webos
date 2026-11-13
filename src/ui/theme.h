@@ -1,100 +1,81 @@
 /* ui/theme.h - design tokens and the shared LVGL theme.
  *
  * All colours, spacing, radii, layout sizes and fonts live here; UI code uses
- * these tokens instead of magic numbers. theme_init() installs a custom LVGL
- * theme (on top of the default theme as fallback) that styles every standard
- * widget; the st_* styles below are the extra variants UI code adds itself.
+ * these tokens instead of magic numbers. theme_init() installs a small LVGL
+ * theme for what LVGL creates plainly (the screen, containers, the spinner);
+ * the st_* styles below are the variants UI code adds itself.
  * Layout target: 1920x1080, nothing may overflow the screen.
  */
-#ifndef CHIAKI_THEME_H
-#define CHIAKI_THEME_H
+#ifndef CHIAKI_WEBOS_THEME_H
+#define CHIAKI_WEBOS_THEME_H
 
 #include <lvgl.h>
 
 /* palette: deep navy surfaces, PlayStation blue accent */
-#define COL_BG_TOP       0x0f1f40
-#define COL_BG_BOTTOM    0x04060b
-#define COL_SURFACE_TOP  0x172238   /* cards: vertical gradient top */
-#define COL_SURFACE      0x101726   /* cards: vertical gradient bottom */
-#define COL_RAISED       0x1b2640   /* list items, fields, secondary buttons */
-#define COL_RAISED_HI    0x283759   /* hovered option, special keys */
-#define COL_INSET        0x080d17   /* text inputs, log console */
-#define COL_TRACK        0x222e4b   /* slider/bar/switch tracks */
-#define COL_LINE         0x2a3756   /* borders */
-#define COL_DIVIDER      0x1c2640   /* row separators */
-#define COL_ACCENT       0x0070d1   /* PlayStation blue */
-#define COL_ACCENT_HI    0x3592ff
-#define COL_ACCENT_DEEP  0x004496
-#define COL_ACCENT_TINT  0x14305d   /* selected item background */
-#define COL_TEXT         0xeef2f8
-#define COL_MUTED        0x8f9bb4
-#define COL_DIM          0x5c6884
-#define COL_OK           0x2fd47a
-#define COL_WARN         0xffb21e
-#define COL_ERR          0xff5468
-#define COL_INFO         0x58c6ff
-#define COL_FOCUS        0xffffff
-#define COL_DANGER_BG    0x3a1622
-#define COL_DANGER_LINE  0x6e2638
-#define COL_DANGER_TEXT  0xff8f9d
-#define COL_PS_CROSS     0x9dbcff   /* button hint glyph */
-#define COL_DECO_TRI     0x2a809d   /* face-button decoration, pre-blended onto the hero card */
-#define COL_DECO_CIRCLE  0x7f537f
-#define COL_DECO_CROSS   0x4d74b9
-#define COL_DECO_SQUARE  0x7963a8
+#define COL_BG_TOP      0x0f1f40
+#define COL_BG_BOTTOM   0x04060b
+#define COL_INSET       0x080d17 /* the log console */
+#define COL_TRACK       0x222e4b /* the splash spinner's track */
+#define COL_LINE        0x2a3756 /* borders */
+#define COL_ACCENT      0x0070d1 /* PlayStation blue */
+#define COL_ACCENT_HI   0x3592ff
+#define COL_ACCENT_DEEP 0x004496
+#define COL_TEXT        0xeef2f8
+#define COL_MUTED       0x8f9bb4
+#define COL_DIM         0x5c6884
+#define COL_OK          0x2fd47a
+#define COL_WARN        0xffb21e
+#define COL_ERR         0xff5468
+#define COL_INFO        0x58c6ff
+#define COL_DANGER_TEXT 0xff8f9d
+#define COL_PS_CROSS    0x9dbcff /* button hint glyph */
+#define COL_PS_CIRCLE   0xff8f9a /* button hint glyph */
+#define COL_PS_TRIANGLE 0x3fd3b6 /* face-button glyphs on Home and the stream menu */
+#define COL_PS_SQUARE   0xe58ad8
+
+/* a battery level, in percent: at or below these it reads amber, then red */
+#define BATT_LOW  20
+#define BATT_CRIT 10
+
+/* Home and the stream menu: focus-driven screens on a tinted backdrop */
+#define COL_FROST        0xffffff /* frosted surfaces: white at a low opacity, solid when focused */
+#define COL_ON_FROST     0x0a1020 /* text and icons on a solid (focused) frost surface */
+#define COL_SHADE        0x000000 /* wells and summary cards: black at a low opacity */
+#define COL_SHEET        0x070b16 /* near-black sheets: stream menu, pop-up menus, toast, hint chips */
+#define COL_SUBTLE       0xb4bfd6 /* secondary text on a tinted backdrop */
+#define COL_PSN          0x2bd2c4 /* PSN avatar gradient */
+#define COL_PSN_DEEP     0x0b6f9c
+#define COL_PSN_HI       0x5fe0d2 /* PSN's accent: progress, tags on the PSN path */
+#define COL_TINT_LAN     0x1d57b8 /* backdrops: the local-network path, */
+#define COL_TINT_PSN     0x0e6b78 /* the PSN path, */
+#define COL_TINT_NEUTRAL 0x24324f /* and neither (Add a console) */
 
 /* spacing: 4px base, 8px rhythm */
-#define SP_XS   4
-#define SP_S    8
-#define SP_M    12
-#define SP_L    16
-#define SP_XL   24
-#define SP_2XL  32
-#define SP_3XL  48
+#define SP_S   8
+#define SP_M   12
+#define SP_L   16
+#define SP_XL  24
+#define SP_2XL 32
 
 /* corner radii */
-#define R_SM    10
-#define R_MD    16
-#define R_LG    24
-#define R_PILL  LV_RADIUS_CIRCLE
+#define R_SM   10
+#define R_MD   16
+#define R_PILL LV_RADIUS_CIRCLE
 
 /* layout (1920x1080 reference; everything fits without scrolling) */
-#define PAGE_MARGIN  48
-#define TOPBAR_H     96
-#define BOTBAR_H     104
-#define TABBAR_H     64
-#define TABBAR_W     860
-#define ROW_H        104
-#define CTRL_W       440
-#define SLIDER_VAL_W 130
-#define TILE_SM      48
-#define TILE_MD      56
-#define FOCUS_W      3
-#define FOCUS_PAD    3
-#define FOCUS_EXT    (FOCUS_W + FOCUS_PAD)   /* how far a focus/hover ring reaches outside a widget */
-#define BTN_SHADOW_W 24
-#define BTN_SHADOW_Y 6
-#define DECOR_EXT    (BTN_SHADOW_W / 2 + BTN_SHADOW_Y)  /* deepest decoration: button shadow below */
-#define SLIDER_HIT   SP_XL   /* extra click area around sliders: forgiving for a stick cursor */
-#define CURSOR_D     34
-#define KB_W         1480
-#define KB_H         470
-#define DECO_SIZE    84            /* faint PlayStation face-button diamond */
-#define DECO_GAP     118
-#define DECO_W       7
-#define QR_SIZE      450           /* PSN sign-in QR: 5 px modules for the ~570-char authorize URL */
-#define REG_SIDE_W   560           /* registration overlay: method + status column */
-
-/* motion */
-#define TRANS_MS     120
+#define KB_W 1480
+#define KB_H 420 /* the on-screen keyboard, without its off-screen corners */
 
 /* typography */
+#define FONT_HERO    (&lv_font_montserrat_48) /* Home's titles */
 #define FONT_DISPLAY (&lv_font_montserrat_40)
 #define FONT_TITLE   (&lv_font_montserrat_32)
 #define FONT_HEADING (&lv_font_montserrat_28)
 #define FONT_BODY    (&lv_font_montserrat_24)
 #define FONT_CAPTION (&lv_font_montserrat_20)
 #define FONT_SMALL   (&lv_font_montserrat_16)
+#define FONT_ICON    (&font_icons_72) /* tile icons, drawn at the focused size: only their four symbols */
+LV_FONT_DECLARE(font_icons_72)
 
 typedef enum { TXT_DISPLAY, TXT_TITLE, TXT_HEADING, TXT_BODY, TXT_CAPTION, TXT_OVERLINE, TXT__COUNT } txt_kind_t;
 
@@ -102,10 +83,8 @@ typedef enum { TXT_DISPLAY, TXT_TITLE, TXT_HEADING, TXT_BODY, TXT_CAPTION, TXT_O
 #define BULLET "  " LV_SYMBOL_BULLET "  "
 
 /* style variants for UI code (the theme styles plain widgets on its own) */
-extern lv_style_t st_txt[TXT__COUNT];
-extern lv_style_t st_screen, st_card, st_card_hero, st_tile, st_row, st_bar_bottom;
-extern lv_style_t st_chip, st_badge, st_badge_soft, st_glyph, st_console;
-extern lv_style_t st_btn_secondary, st_btn_danger, st_btn_ghost;
+extern lv_style_t st_txt[TXT__COUNT]; /* the type scale (the splash, the QR placeholder) */
+extern lv_style_t st_screen, st_console;
 
 void theme_init(lv_disp_t *disp);
 

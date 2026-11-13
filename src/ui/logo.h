@@ -1,12 +1,12 @@
 /* ui/logo.h - the Chiaki webOS mark.
  *
  * ui_logo() builds the app mark: a rounded PlayStation-blue tile with the app
- * icon's play-waves glyph (a white Play triangle and two signal arcs), drawn
+ * icon's glyph (Wi-Fi arcs, circle, cross and a solid gamepad, in white), drawn
  * procedurally on an lv_canvas so it stays crisp at any size. Used by the top
  * bar and the startup splash, so both show the same mark as the launcher icon.
  */
-#ifndef CHIAKI_LOGO_H
-#define CHIAKI_LOGO_H
+#ifndef CHIAKI_WEBOS_LOGO_H
+#define CHIAKI_WEBOS_LOGO_H
 
 #include <lvgl.h>
 

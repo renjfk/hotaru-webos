@@ -4,6 +4,7 @@
   "main": "chiaki",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
+  "iconColor": "#1A61BC",
   "title": "Chiaki webOS",
   "appDescription": "PlayStation Remote Play for LG webOS",
   "version": "0.1.0",

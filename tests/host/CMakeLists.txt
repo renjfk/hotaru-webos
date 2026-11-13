@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.16)
 project(chiaki-host-tests C)
 set(CMAKE_C_STANDARD 11)
 get_filename_component(APP "${CMAKE_SOURCE_DIR}/../.." ABSOLUTE)
+include(${APP}/cmake/AppVersion.cmake)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL2 REQUIRED sdl2)
 
@@ -16,8 +17,11 @@ file(GLOB_RECURSE SRC CONFIGURE_DEPENDS ${APP}/src/*.c)
 list(FILTER SRC EXCLUDE REGEX "/src/main\\.c$|/src/platform/display\\.c$")
 add_executable(host-tests harness.c ${SRC})
 target_compile_definitions(host-tests PRIVATE INPUT_DIR="${CMAKE_BINARY_DIR}/devinput"
+                                              SYS_INPUT_DIR="${CMAKE_BINARY_DIR}/sys/class/input"
                                               SHOTS_DIR="${CMAKE_BINARY_DIR}/shots"
-                                              CONFIG_DIR="${CMAKE_BINARY_DIR}/config")
+                                              CONFIG_DIR="${CMAKE_BINARY_DIR}/config"
+                                              CHIAKI_ASSETS_DIR="${APP}/assets"
+                                              CHIAKI_WEBOS_VERSION="${CHIAKI_WEBOS_VERSION}")
 target_include_directories(host-tests PRIVATE ${CMAKE_SOURCE_DIR}/shim ${APP}/src ${SDL2_INCLUDE_DIRS})
 target_compile_options(host-tests PRIVATE -Wall -Wextra -Wno-unused-function)
 target_link_libraries(host-tests PRIVATE lvgl ${SDL2_LINK_LIBRARIES})

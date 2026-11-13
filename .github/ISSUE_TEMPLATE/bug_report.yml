@@ -1,0 +1,92 @@
+name: Bug Report
+description: "Report a bug or unexpected behavior. For setup help or questions, please start a Discussion first."
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Open ...
+        2. Press ...
+        3. See error
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Visible in Settings -> About.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: tv
+    attributes:
+      label: TV model and webOS version
+      description: The model is on the label at the back; the version is in the TV's Settings -> Support -> TV Information.
+      placeholder: "LG 50UP75003LF, webOS TV 6.5.3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: console
+    attributes:
+      label: Console
+      options:
+        - PS5
+        - PS4 / PS4 Pro
+        - Not related to a console
+    validations:
+      required: true
+
+  - type: dropdown
+    id: route
+    attributes:
+      label: Connection
+      options:
+        - Local network
+        - Over PSN (from elsewhere)
+        - Not related to streaming
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Turn on Settings -> About -> Diagnostics, reproduce the issue, then copy /tmp/chiaki.log
+        from the TV (with Developer Mode: `scripts/tv.sh save`) and paste it here. The logs will
+        render inside a collapsible code block.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add photos or screenshots to help explain the problem.
+    validations:
+      required: false

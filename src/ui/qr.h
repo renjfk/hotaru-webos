@@ -8,14 +8,14 @@
  * buffer is freed with the widget. If the text does not fit a QR code or the
  * memory is not there, a placeholder tile with a short message is returned.
  */
-#ifndef CHIAKI_QR_H
-#define CHIAKI_QR_H
+#ifndef CHIAKI_WEBOS_QR_H
+#define CHIAKI_WEBOS_QR_H
 
 #include <stdbool.h>
 #include <lvgl.h>
 
 /* returns a white square tile, `size` px; positions/sizes in the parent's flex */
 lv_obj_t *ui_qr(lv_obj_t *parent, const char *text, lv_coord_t size);
-bool ui_qr_ok(const lv_obj_t *qr);   /* false for the placeholder */
+bool ui_qr_ok(const lv_obj_t *qr); /* false for the placeholder */
 
 #endif

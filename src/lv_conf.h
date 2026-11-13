@@ -6,6 +6,10 @@
 /* Use 32-bit color depth */
 #define LV_COLOR_DEPTH     32
 
+/* The screen carries an alpha channel: while streaming, the app surface is cleared
+ * transparent so the NDL video plane below shows through (see platform/display.c). */
+#define LV_COLOR_SCREEN_TRANSP 1
+
 /* Use stdlib to allocate/free memory */
 #define LV_MEM_CUSTOM      1
 #define LV_MEM_CUSTOM_INCLUDE   <string.h>   /*Header for the dynamic memory function*/
@@ -22,7 +26,7 @@
 #define LV_TICK_CUSTOM_SYS_TIME_EXPR (SDL_GetTicks())
 
 #define LV_DRAW_COMPLEX 1
-#define LV_SHADOW_CACHE_SIZE    0
+#define LV_SHADOW_CACHE_SIZE    160
 #define LV_IMG_CACHE_DEF_SIZE       0
 
 /* Use SDL draw backend */
@@ -44,6 +48,7 @@
 #define LV_FONT_MONTSERRAT_28    1
 #define LV_FONT_MONTSERRAT_32    1
 #define LV_FONT_MONTSERRAT_40    1
+#define LV_FONT_MONTSERRAT_48    1   /* Home's titles */
 
 #define LV_FONT_DEFAULT &lv_font_montserrat_32
 
@@ -147,6 +152,12 @@
 #define LV_USE_TILEVIEW     0
 
 #define LV_USE_WIN          1
+
+/* Home's tile icons are drawn once into an image that zooms with its tile (ui/home.c) */
+#define LV_USE_SNAPSHOT 1
+
+/* PNG decoding (lodepng) for the device illustrations, ui/art.c */
+#define LV_USE_PNG 1
 
 #define LV_USE_SPAN         1
 #if LV_USE_SPAN

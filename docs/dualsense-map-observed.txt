@@ -1,0 +1,60 @@
+Observed DualSense (Sony DualSense, USB id 054c:0ce6) on the LG 50UP75003LF
+(webOS TV Lite 6.5.3), paired over Bluetooth. Captured with the app's probe mode
+(Settings > About > Diagnostics), pressing every control in a known order.
+
+Like the DualShock 4 it is a webOS uhid device, one node (event9 here):
+  N: Name="DualSense Wireless Controller"   H: Handlers=js5 event9
+  B: EV=1b (SYN, KEY, ABS, MSC: no EV_FF)   B: KEY=3fff0000 ... (0x130..0x13d)
+  B: ABS=3003f (0x00..0x05 and the hat 0x10/0x11: no ABS_MT_*)
+There are no /dev/hidraw* or /dev/uhid nodes for the app to write HID output to.
+
+BUTTONS: the DualShock 4's order (docs/ds4-map-observed.txt)
+  Physical          Linux code
+  Square            0x130
+  Cross             0x131
+  Circle            0x132
+  Triangle          0x133
+  L1                0x134
+  R1                0x135
+  L2 (click)        0x136   with the analog L2 on ABS_RX
+  R2 (click)        0x137   with the analog R2 on ABS_RY
+  Create            0x138
+  Options           0x139
+  L3                0x13a
+  R3                0x13b
+  PS                0x13c
+  Touchpad click    0x13d
+  Mute              (nothing reported)
+
+AXES: the DualShock 4's
+  Left stick X/Y    ABS_X / ABS_Y      0..255 (flat 15), up = 0
+  Right stick X/Y   ABS_Z / ABS_RZ     0..255 (flat 15), up = 0
+  L2 / R2 analog    ABS_RX / ABS_RY    0..255, released = 0
+  D-pad             ABS_HAT0X / HAT0Y  -1..1
+
+Log excerpt (probe):
+  pad: /dev/input/event9 "DualSense Wireless Controller": a gamepad
+  pad: bus 0x0005 vendor 0x054c product 0x0ce6 version 0x0100
+  pad: keys 0x130 0x131 0x132 0x133 0x134 0x135 0x136 0x137 0x138 0x139 0x13a 0x13b 0x13c 0x13d
+  pad: abs 0x00..0x05 0..255 (flat 15, fuzz 0); abs 0x10, 0x11 -1..1
+  pad: force feedback            (no rumble, periodic or constant effect)
+  pad: key 0x131 down (Cross) ... key 0x136 down (unmapped) + abs 0x03 1..247 (L2) ...
+  pad: key 0x13c down (PS); key 0x13d down (Touchpad); key 0x13a/0x13b (L3/R3)
+
+CONCLUSIONS
+- The DualShock 4's button table is right for the DualSense.
+- No rumble: the node has no force feedback, and without hidraw the app cannot send the
+  DualSense's output report, so haptics, adaptive triggers and the lightbar are out of reach.
+- No touchpad touches: only the click reaches the app. Swiping produced no events.
+- The Mute button is not reported.
+
+OUTPUT THROUGH THE BLUETOOTH SERVICE (tried, not usable)
+The TV's com.webos.service.bluetooth2 lets a Developer Mode app call hid/internal/sendData,
+hid/internal/setReport and hid/internal/getReport (they answer instead of being denied;
+hid/getStatus reports the DualSense connected). getReport (feature, id 9) returned an empty
+reportData. sendData with a Bluetooth output report 0x31 (rumble, a red lightbar, R2
+resistance, CRC32 over 0xA2 + the report) was accepted (returnValue true), but the controller
+did nothing visible and stopped sending input until it was reset; the app picked it up again
+on its own. That fits the DualSense switching to its full 0x31 input report, which webOS's
+mapping does not read, so output effects would cost the controller's input. There is no way
+to read raw input reports through the service. Not pursued.

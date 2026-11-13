@@ -1,0 +1,97 @@
+# clang-tidy configuration for the C11 sources (src/, tests/, design/)
+# Run: python3 scripts/check_tidy.py
+#
+# Only checks that apply to C, in groups: bug detection (bugprone-*), CERT, the static analyzer
+# (path-sensitive: null dereference, leaks, use after free, dead stores), misc, performance, readability.
+# Keep comments out of the Checks string: YAML folds it into one line, so a comment there would
+# swallow the check that follows it.
+#
+# Left out on purpose:
+#   bugprone-easily-swappable-parameters / narrowing-conversions / implicit-widening-of-multiplication-result:
+#     LVGL coordinates are int16 and colours uint32; the casts are deliberate and everywhere
+#   bugprone-branch-clone: switch cases that do the same thing on purpose (key maps, state tables)
+#   cert-err33-c: unchecked snprintf/fclose results are fine for best-effort logging and truncation
+#   cert-err34-c: sscanf reads /proc and three-digit octets with its count checked; atoi reads dev overrides
+#   clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling: wants the Annex K _s functions,
+#     which glibc does not have
+#   readability-braces-around-statements / else-after-return / identifier-naming / magic-numbers /
+#   implicit-bool-conversion: they fight the code style (see AGENTS.md)
+---
+Checks: '-*,
+  bugprone-assert-side-effect,
+  bugprone-bad-signal-to-kill-thread,
+  bugprone-bool-pointer-implicit-conversion,
+  bugprone-casting-through-void,
+  bugprone-chained-comparison,
+  bugprone-float-loop-counter,
+  bugprone-inc-dec-in-conditions,
+  bugprone-incorrect-roundings,
+  bugprone-infinite-loop,
+  bugprone-integer-division,
+  bugprone-macro-parentheses,
+  bugprone-macro-repeated-side-effects,
+  bugprone-misplaced-operator-in-strlen-in-alloc,
+  bugprone-misplaced-pointer-arithmetic-in-alloc,
+  bugprone-misplaced-widening-cast,
+  bugprone-multi-level-implicit-pointer-conversion,
+  bugprone-multiple-statement-macro,
+  bugprone-no-escape,
+  bugprone-non-zero-enum-to-bool-conversion,
+  bugprone-not-null-terminated-result,
+  bugprone-posix-return,
+  bugprone-redundant-branch-condition,
+  bugprone-signal-handler,
+  bugprone-signed-char-misuse,
+  bugprone-sizeof-expression,
+  bugprone-spuriously-wake-up-functions,
+  bugprone-string-literal-with-embedded-nul,
+  bugprone-suspicious-enum-usage,
+  bugprone-suspicious-include,
+  bugprone-suspicious-memory-comparison,
+  bugprone-suspicious-memset-usage,
+  bugprone-suspicious-missing-comma,
+  bugprone-suspicious-realloc-usage,
+  bugprone-suspicious-semicolon,
+  bugprone-suspicious-string-compare,
+  bugprone-swapped-arguments,
+  bugprone-terminating-continue,
+  bugprone-too-small-loop-variable,
+  bugprone-unsafe-functions,
+  bugprone-unused-return-value,
+  cert-env33-c,
+  cert-flp30-c,
+  cert-msc30-c,
+  cert-msc32-c,
+  cert-str34-c,
+  clang-analyzer-core.*,
+  clang-analyzer-deadcode.*,
+  clang-analyzer-nullability.*,
+  clang-analyzer-security.*,
+  clang-analyzer-unix.*,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  misc-misplaced-const,
+  misc-redundant-expression,
+  misc-static-assert,
+  performance-type-promotion-in-math-fn,
+  readability-avoid-const-params-in-decls,
+  readability-duplicate-include,
+  readability-inconsistent-declaration-parameter-name,
+  readability-misleading-indentation,
+  readability-misplaced-array-index,
+  readability-non-const-parameter,
+  readability-redundant-control-flow,
+  readability-redundant-declaration,
+  readability-redundant-function-ptr-dereference,
+  readability-redundant-preprocessor,
+  readability-simplify-subscript-expr'
+CheckOptions:
+  # flag ignored results of allocation and opening only: snprintf and friends are best effort
+  - key: bugprone-unused-return-value.CheckedFunctions
+    value: '::malloc;::calloc;::realloc;::strdup;::strndup;::fopen;::fdopen;::open;::mmap'
+  - key: readability-inconsistent-declaration-parameter-name.IgnoreMacros
+    value: 'true'
+
+HeaderFilterRegex: '(src|tests|design)/'
+ExcludeHeaderFilterRegex: '(third_party|chiaki-ng|out|src/vendor)/|lv_conf\.h'
+WarningsAsErrors: ''
+...

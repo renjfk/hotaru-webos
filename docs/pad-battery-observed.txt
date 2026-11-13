@@ -1,0 +1,50 @@
+Battery of the controllers on the LG 50UP75003LF (webOS TV Lite 6.5.3,
+kernel 4.4.84), read over the Developer Mode SSH shell while a DualShock 4
+("Wireless Controller", BT a4:53:85:2f:3f:b8) was connected.
+
+THE CLASS DIRECTORIES ARE MISSING
+  /sys/class/power_supply, /sys/class/bluetooth and /sys/class/hid do not exist
+  on this TV (their subsystem links dangle). Enumerating from a class is not an
+  option: the node has to be reached from the device itself.
+
+DUALSHOCK 4: YES
+  /sys/devices/virtual/misc/uhid/0005:054C:09CC.0001/power_supply/
+    sony_controller_battery_b8:3f:2f:85:53:a4/
+      capacity = 60
+      status   = Discharging
+      present  = 1
+      type     = Battery
+      scope    = Device
+
+  hid-sony registers it on the pad's uhid node (CONFIG_HID_SONY=y; the kernel
+  has no CONFIG_HID_BATTERY_STRENGTH but LG's hid-sony still publishes it).
+  The files are 0444, so any app user can read them.
+  The value is hid-sony's cache of the battery byte in the pad's input reports:
+  it moves when the pad sends input, and it stays where it was while the pad is
+  idle or asleep.
+
+  From the pad's own node: /sys/class/input/event9/device resolves to
+  .../uhid/0005:054C:09CC.0001/input/input9, which sits in the HID device's
+  input/ directory, so the HID device that holds the power_supply is two
+  levels up:
+
+    /sys/class/input/event9/device/../../power_supply/*/capacity
+
+  That is what src/input/gamepad.c (gamepad_battery) reads.
+
+DUALSENSE: NO
+  CONFIG_HID_PLAYSTATION is absent from the kernel, so a DualSense is only
+  hid-generic (which is also why its node has no FF and no touchpad). It
+  registered no power_supply, and bluetooth2/device/getStatus carries no
+  battery field for HID devices (checked while it was paired).
+
+MAGIC REMOTE: NOT REACHABLE FROM AN APP
+  No battery node anywhere in sysfs (/sys/devices has exactly one capacity
+  file: the DualShock 4's). com.webos.service.mrcu knows the level
+  (getDeviceInfo), but the method sits in the private list of the luna API
+  permissions: luna-send-pub answers
+
+    {"returnValue":false,"errorCode":-1,
+     "errorText":"Denied method call \"getDeviceInfo\" for category \"/\""}
+
+  so a third-party app cannot read it. bthidmanager is denied the same way.

@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned tools (mise.toml)
+        uses: jdx/mise-action@v5
+
+      - name: Install SDL2
+        run: brew install sdl2 pkg-config
+
+      - name: Fetch LVGL
+        run: git clone --depth 1 --branch v8.3.11 https://github.com/lvgl/lvgl.git third_party/lvgl
+
+      - name: Format check (clang-format)
+        run: mise run lint:format
+
+      - name: Static analysis (clang-tidy)
+        run: mise run lint:tidy
+
+      - name: Shell scripts (shellcheck)
+        run: mise run lint:shell
+
+      - name: Workflows (actionlint)
+        run: mise run lint:workflows
+
+  host:
+    name: Host tests and simulator
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SDL2
+        run: brew install sdl2 pkg-config
+
+      - name: Fetch LVGL
+        run: git clone --depth 1 --branch v8.3.11 https://github.com/lvgl/lvgl.git third_party/lvgl
+
+      - name: Host tests
+        run: tests/host/run.sh
+
+      - name: Build the simulator
+        run: |
+          cmake -S sim -B out/sim -DCMAKE_BUILD_TYPE=Release -Wno-dev
+          cmake --build out/sim -j"$(sysctl -n hw.ncpu)"
+
+  tv:
+    name: TV build
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Build the .ipk
+        uses: ./.github/actions/build-ipk
+        with:
+          version: 0.0.${{ github.run_number }}

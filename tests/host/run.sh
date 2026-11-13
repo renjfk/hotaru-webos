@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds and runs the host behaviour tests (macOS, needs `brew install sdl2`
-# and LVGL in third_party/, which ./build.sh fetches). Screenshots of each tab
+# and LVGL in third_party/, which ./build.sh fetches). Screenshots of each step
 # land in out/host-tests/shots/*.ppm. Exit status = number of failures.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

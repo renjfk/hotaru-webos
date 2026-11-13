@@ -26,7 +26,7 @@
  *   version=1
  *   device_uid=0000000700410080<32 hex>
  *   stream.codec=1
- *   input.cursor_speed=100
+ *   input.rumble=1
  *   psn.account_id=<16 hex>
  *   host.0.nickname=PS5-123
  *   host.0.rp_key=<32 hex>
@@ -38,68 +38,83 @@
 #include <stdint.h>
 
 #define CONFIG_MAX_HOSTS 16
-#define CONFIG_DUID_LEN  48   /* chiaki's DUID_PREFIX (16 hex) + 16 random bytes as hex */
+#define CONFIG_DUID_LEN  48 /* chiaki's DUID_PREFIX (16 hex) + 16 random bytes as hex */
 
 typedef enum { CODEC_H264, CODEC_H265, CODEC_H265_HDR } video_codec_t;
 
 typedef struct {
     video_codec_t codec;
-    int width, height;    /* 1280x720 or 1920x1080 */
-    int fps;              /* 30 or 60 */
+    int width, height; /* 1280x720 or 1920x1080 */
+    int fps;           /* 30 or 60 */
     int bitrate_kbps;
     bool hdr;
+    int smooth_ms; /* playout buffer that hides Wi-Fi stalls: 0 (off) .. 300; applies live */
 } stream_settings_t;
 
 typedef struct {
-    bool rumble, touchpad, motion;
-    int cursor_speed;     /* percent of the base stick-cursor speed */
+    bool rumble;   /* the console's rumble reaches the pad */
+    bool touchpad; /* touches on the pad's touchpad reach the console (its click always does) */
 } input_settings_t;
+
+typedef struct {
+    bool probe; /* Settings > About > Diagnostics: log what the TV checks need (log.h log_probe) */
+} debug_settings_t;
 
 typedef struct {
     stream_settings_t stream;
     input_settings_t input;
+    debug_settings_t debug;
 } config_t;
 
-/* a console paired via Remote Play registration (keys come from libchiaki) */
+/* a console paired via Remote Play registration (keys come from libchiaki), or
+ * one found through the linked PSN account (holepunch; no address/keys) */
 typedef struct {
     char nickname[64];
-    char addr[64];          /* last known IP or hostname; empty for a console registered over PSN */
+    char addr[64]; /* last known IP or hostname; empty for a PSN console */
     bool is_ps5;
-    uint8_t server_mac[6];  /* identity of the console (all zero = unknown) */
+    uint8_t server_mac[6]; /* identity of a LAN console (all zero = unknown) */
     uint8_t rp_regist_key[16];
     uint8_t rp_key[16];
+    bool via_psn;        /* found through the PSN account, connect over holepunch */
+    uint8_t psn_uid[32]; /* PSN device uid (all zero = not a PSN console) */
+    bool prefer_psn;     /* on a PSN entry whose console is PIN-paired too: connect over PSN (app.h routes) */
 } config_host_t;
 
 /* the linked PSN account (OAuth via QR + code, see chiaki/session.h) */
 typedef struct {
-    bool    linked;
-    uint8_t account_id[8];        /* PSN account id */
-    char    online_id[32];
-    char    access_token[256];
-    char    refresh_token[256];
+    bool linked;
+    uint8_t account_id[8]; /* PSN account id */
+    char online_id[32];
+    char access_token[256];
+    char refresh_token[256];
+    long long expires_at; /* unix time the access token expires; 0 = unknown (refresh on next use) */
 } config_psn_t;
 
 config_t *config_get(void);
 const char *config_codec_name(video_codec_t codec);
 
-bool config_load(void);          /* defaults, then the file; false if there was no readable file */
-bool config_save(void);          /* atomic write; false (and logged) on any I/O error */
-const char *config_path(void);   /* the file config_load()/config_save() use */
+bool config_load(void);        /* defaults, then the file; false if there was no readable file */
+bool config_save(void);        /* atomic write; false (and logged) on any I/O error */
+const char *config_path(void); /* the file config_load()/config_save() use */
 
 /* registered consoles, in registration order. A host is a duplicate of another
- * if they share a non-empty addr or a non-zero server_mac. */
+ * when both have a MAC and the MACs match, or (when a MAC is unknown) when they
+ * share a non-empty addr. */
 int config_host_count(void);
-const config_host_t *config_host(int index);              /* NULL if out of range */
-int config_host_find(const config_host_t *host);           /* index of its duplicate, or -1 */
-bool config_host_add(const config_host_t *host);           /* false when full, empty or a duplicate */
+const config_host_t *config_host(int index);     /* NULL if out of range */
+int config_host_find(const config_host_t *host); /* index of its duplicate, or -1 */
+bool config_host_add(const config_host_t *host); /* false when full, empty or a duplicate */
 bool config_host_update(int index, const config_host_t *host);
 bool config_host_remove(int index);
 
 config_psn_t *config_psn(void);
-void config_psn_set(const uint8_t account_id[8], const char *online_id,
-                    const char *access_token, const char *refresh_token);
+void config_psn_set(const uint8_t account_id[8], const char *online_id, const char *access_token,
+                    const char *refresh_token);
+void config_psn_set_account_id(const uint8_t account_id[8]); /* manual entry: an id without tokens */
+void config_psn_set_expiry(long long expires_at);            /* access token expiry (unix seconds) */
+bool config_psn_has_account_id(void);                        /* an id is stored (entered or from PSN) */
 void config_psn_clear(void);
 
-const char *config_device_uid(void);   /* stable device UID; generated (and saved) on first call */
+const char *config_device_uid(void); /* stable device UID; generated (and saved) on first call */
 
 #endif

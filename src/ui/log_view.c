@@ -8,10 +8,12 @@
 #include "../log.h"
 #include "theme.h"
 
-#define LOG_LINES 240
+#define LOG_LINES    240
 #define LOG_LINE_LEN 160
+#define REFRESH_MS   120 /* a burst of events (probe mode) lays the label out once */
 static char g_lines[LOG_LINES][LOG_LINE_LEN];
 static int g_count;
+static bool g_dirty;
 static lv_obj_t *g_view, *g_label;
 
 static uint32_t tag_color(log_level_t level, const char *tag) {
@@ -34,7 +36,10 @@ static void store(const char *when, const char *tag, uint32_t tag_col, const cha
              (unsigned)tag_col, tag, msg);
 }
 
-static void refresh(void) {
+static void refresh(lv_timer_t *t) {
+    (void)t;
+    if (!g_dirty) return;
+    g_dirty = false;
     static char buf[LOG_LINES * (LOG_LINE_LEN + 1)];
     size_t n = 0;
     for (int i = 0; i < g_count; i++)
@@ -49,7 +54,7 @@ static void sink(log_level_t level, const char *tag, const char *msg) {
     char when[16];
     snprintf(when, sizeof(when), "%02u:%02u", s / 60, s % 60);
     store(when, tag, tag_color(level, tag), msg);
-    refresh();
+    g_dirty = true;
 }
 
 lv_obj_t *log_view_create(lv_obj_t *parent) {
@@ -63,39 +68,7 @@ lv_obj_t *log_view_create(lv_obj_t *parent) {
     lv_obj_set_width(g_label, LV_PCT(100));
     lv_label_set_recolor(g_label, true);
     lv_label_set_text(g_label, "");
+    lv_timer_create(refresh, REFRESH_MS, NULL);
     log_set_sink(sink);
     return g_view;
-}
-
-void log_view_demo_backlog(void) {
-    enum { N = 90 };
-    char when[16], msg[128];
-    unsigned r = 12345;
-    for (int i = 0; i < N; i++) {
-        unsigned ago = (unsigned)(N - i) * 7;
-        r = r * 1103515245u + 12345u;
-        unsigned v = (r >> 16) % 100;
-        snprintf(when, sizeof(when), "-%02u:%02u", ago / 60, ago % 60);
-        switch (i % 6) {
-        case 0: snprintf(msg, sizeof(msg), "%u fps, %u.%u Mbps, decode %u.%u ms", 58 + v % 3, 13 + v % 4, v % 10, 4 + v % 3, v % 10);
-                store(when, "VIDEO", COL_ACCENT_HI, msg); break;
-        case 1: snprintf(msg, sizeof(msg), "rtt %u ms, jitter %u ms, loss %u.%u%%", 6 + v % 9, 1 + v % 4, v % 2, v % 10);
-                store(when, "NET", COL_INFO, msg); break;
-        case 2: snprintf(msg, sizeof(msg), "opus 48 kHz stereo, buffer %u ms", 20 + v % 30);
-                store(when, "AUDIO", COL_OK, msg); break;
-        case 3: snprintf(msg, sizeof(msg), "DualShock 4 reports at %u Hz", 248 + v % 5);
-                store(when, "INPUT", COL_OK, msg); break;
-        case 4: snprintf(msg, sizeof(msg), "keyframe %u received (%u KB)", 1000 + (unsigned)i * 37, 90 + v);
-                store(when, "VIDEO", COL_ACCENT_HI, msg); break;
-        default: if (v < 30) {
-                    snprintf(msg, sizeof(msg), "frame %u arrived %u ms late", 4000 + (unsigned)i * 61, 8 + v % 20);
-                    store(when, "WARN", COL_WARN, msg);
-                 } else {
-                    snprintf(msg, sizeof(msg), "bitrate target %u.%u Mbps", 12 + v % 5, v % 10);
-                    store(when, "NET", COL_INFO, msg);
-                 }
-        }
-    }
-    store("--:--", "APP", COL_ACCENT_HI, "previous session ended, new session below");
-    refresh();
 }

@@ -1,6 +1,6 @@
 /* ui/splash.c - the startup overlay: the app mark and a short "starting" state.
  *
- * The mark is ui_logo() (the same play-waves glyph as the icon), so the splash,
+ * The mark is ui_logo() (the same glyph as the icon), so the splash,
  * the top bar and the launcher all show the same thing. The overlay is on the
  * top layer, swallows input, and deletes itself when dismissed.
  */
@@ -13,8 +13,8 @@
 #include "theme.h"
 #include "widgets.h"
 
-#define SPLASH_MS 1500   /* how long the overlay stays up before it dismisses */
-#define MARK      300    /* mark size (px) */
+#define SPLASH_MS 1500 /* how long the overlay stays up before it dismisses */
+#define MARK      300  /* mark size (px) */
 
 static lv_obj_t *g_root;
 static lv_timer_t *g_timer;
@@ -28,13 +28,19 @@ static uint32_t splash_ms(void) {
 
 static void dismiss_cb(lv_timer_t *t) {
     (void)t;
-    g_timer = NULL;   /* one-shot: LVGL frees it after this call */
+    g_timer = NULL; /* one-shot: LVGL frees it after this call */
     splash_hide();
 }
 
 void splash_hide(void) {
-    if (g_timer) { lv_timer_del(g_timer); g_timer = NULL; }
-    if (g_root) { lv_obj_del(g_root); g_root = NULL; }
+    if (g_timer) {
+        lv_timer_del(g_timer);
+        g_timer = NULL;
+    }
+    if (g_root) {
+        lv_obj_del(g_root);
+        g_root = NULL;
+    }
     log_msg("splash dismissed");
 }
 
@@ -51,7 +57,7 @@ void splash_show(void) {
     lv_obj_set_style_bg_grad_dir(g_root, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_bg_opa(g_root, LV_OPA_COVER, 0);
     lv_obj_clear_flag(g_root, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(g_root, LV_OBJ_FLAG_CLICKABLE);   /* swallow input while it is up */
+    lv_obj_add_flag(g_root, LV_OBJ_FLAG_CLICKABLE); /* swallow input while it is up */
     lv_obj_set_flex_flow(g_root, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(g_root, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(g_root, SP_2XL, 0);

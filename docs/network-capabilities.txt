@@ -6,8 +6,8 @@ needs is available from a jailbroken native app.
 
 Interfaces / routing
   lo     127.0.0.1, ::1
-  wlan0  10.10.10.12 (IPv4 + link-local IPv6), UP RUN
-  default route: wlan0 via 10.10.10.1
+  wlan0  192.168.1.20 (IPv4 + link-local IPv6), UP RUN
+  default route: wlan0 via 192.168.1.1
   (the TV is on Wi-Fi, not Ethernet - relevant for stream throughput)
 
 / etc/resolv.conf is not used (empty/unreadable to the app); webOS resolves
@@ -31,6 +31,6 @@ Implications for a chiaki-ng port
 - TLS works with OpenSSL, but the TV ships OpenSSL 1.0.2 while the webOS SDK
   sysroot provides 1.1: link OpenSSL STATICALLY (libssl.a/libcrypto.a). A
   runtime dependency on libssl.so.1.1 fails to load and WebAppMgr relaunches
-  the app in a loop. chiaki-lg does the same for this reason.
+  the app in a loop.
 - No CA bundle problem was tested for verification; the probe used
   SSL_VERIFY_NONE. Production would need a CA store (chiaki-ng bundles one).
