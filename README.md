@@ -34,14 +34,13 @@ TV remote or the controller.
 |:--------------------------------------:|:--------------------------------------------------:|:------------------------------------------------:|
 | ![Settings](screenshots/settings.webp) | ![Menu over the game](screenshots/stream-menu.webp) | ![Login passcode](screenshots/login-passcode.webp) |
 
-The screens were designed as interactive previews first ([design/menu](design/menu/README.md)); these clips come
-from them:
+The screens were designed as interactive previews first ([design/menu](design/menu/README.md)). Here is the app on
+the TV in one take: Home, Settings, the steps of adding a console, waking a PS5 from rest mode, the game with the
+menu over it, and connecting again over PSN. Recorded with a phone, with only the game's sound kept.
 
-|                    Moving around Home                    |                 Adding a console with its PIN                  |
-|:--------------------------------------------------------:|:--------------------------------------------------------------:|
-| ![Moving around Home](screenshots/demo-home.webp)        | ![Adding a console with its PIN](screenshots/demo-add-console.webp) |
-|                 **Signing in with PSN**                  |                    **The menu over the game**                    |
-| ![Signing in with PSN](screenshots/demo-psn-sign-in.webp) | ![The menu over the game](screenshots/demo-stream-menu.webp)    |
+<p align="center">
+ <a href="screenshots/demo.mp4"><img width="720" alt="Chiaki webOS on the TV, a three-minute demo" src="screenshots/demo.webp"></a>
+</p>
 
 ## Motivation
 

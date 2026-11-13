@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# scripts/make-screenshots.sh - the README's images in screenshots/: stills from the host tests' renders,
-# demo clips from the design gallery's recordings, all WebP.
+# scripts/make-screenshots.sh - the README's images in screenshots/: stills from the host tests' renders, the
+# menu over the game laid on the design gallery's stand-in game, and the demo video's poster, all WebP.
 #
-#   tests/host/run.sh                                        # out/host-tests/shots/*.ppm
-#   design/menu/capture.sh && design/menu/capture.sh --study add   # out/{menu,add}-gallery/
+#   tests/host/run.sh                      # out/host-tests/shots/*.ppm, *.pam
+#   design/menu/capture.sh                 # out/menu-gallery/ (the stand-in game)
 #   scripts/make-screenshots.sh
 #
-# Needs ImageMagick 7, ffmpeg and libwebp's img2webp (brew install imagemagick ffmpeg webp). The clips get a
-# keyframe every few frames: lossy WebP frames diffed against each other otherwise leave blocky residue.
+# screenshots/demo.mp4 is not made here: it is the app on the TV, recorded with a phone, with only the game's
+# sound kept. Needs ImageMagick 7 and ffmpeg (brew install imagemagick ffmpeg).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SHOTS="$ROOT/out/host-tests/shots"
 OUT="$ROOT/screenshots"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$OUT"
 
-still() {   # source name
-    magick "$1" -resize 1280x720 -strip -quality 82 -define webp:method=6 "$OUT/$2.webp"
+webp() {    # source name [ImageMagick options]
+    local src="$1" name="$2"
+    shift 2
+    magick "$src" "$@" -strip -quality 82 -define webp:method=6 "$OUT/$name.webp"
 }
 
-clip() {    # source name
-    local tmp
-    tmp="$(mktemp -d)"
-    ffmpeg -v error -i "$1" -vf "fps=20,scale=960:-1:flags=lanczos" "$tmp/f%04d.png"
-    img2webp -loop 0 -kmin 3 -kmax 6 -lossy -q 70 -m 6 -d 50 "$tmp"/f*.png -o "$OUT/$2.webp" >/dev/null
-    rm -rf "$tmp"
+still() {   # source name
+    webp "$1" "$2" -resize 1280x720
 }
 
 still "$SHOTS/home.ppm" home
@@ -34,11 +34,15 @@ still "$SHOTS/add-pin.ppm" add-console-pin
 still "$SHOTS/add-psn.ppm" psn-sign-in
 still "$SHOTS/settings-stream.ppm" settings
 still "$SHOTS/login-passcode.ppm" login-passcode
-still "$ROOT/out/menu-gallery/01-home/stream-menu.png" stream-menu   # over a stand-in game frame
 
-clip "$ROOT/out/menu-gallery/01-home/tour.mp4" demo-home
-clip "$ROOT/out/add-gallery/01-setup/pin-flow.mp4" demo-add-console
-clip "$ROOT/out/add-gallery/01-setup/psn-flow.mp4" demo-psn-sign-in
-clip "$ROOT/out/menu-gallery/01-home/stream.mp4" demo-stream-menu
+# the menu over the game: the app's render, by its alpha, over a frame of the gallery's stand-in game
+ffmpeg -v error -ss 3 -i "$ROOT/out/menu-gallery/01-home/stream.mp4" -frames:v 1 "$TMP/game.png"
+magick "$TMP/game.png" "$SHOTS/stream-menu.pam" -composite "$TMP/stream-menu.png"
+still "$TMP/stream-menu.png" stream-menu
+
+# the demo's poster: the menu over the game on the TV, with a play mark over the game
+ffmpeg -v error -ss 92 -i "$OUT/demo.mp4" -frames:v 1 "$TMP/poster.png"
+webp "$TMP/poster.png" demo -fill '#000000a0' -draw "circle 480,170 480,226" \
+    -fill white -draw "polygon 464,144 464,196 506,170"
 
 ls -l "$OUT"

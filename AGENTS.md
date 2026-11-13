@@ -41,7 +41,7 @@ tests/host/         macOS behaviour tests (shim/ fakes <linux/input.h>)
 sim/                macOS simulator: the whole app in a window
 design/menu/        design studies and their gallery (not in the app); art/ holds the art originals
 docs/               STATUS.md, TV-CHECKS.md, user-guide.md, raw hardware evidence (*-observed.txt)
-screenshots/        README images: app renders from the host tests, demo clips from design/menu
+screenshots/        README images: app renders from the host tests, demo.mp4 recorded on the TV
 scripts/            webos-sdk.sh toolchain + packager; chiaki-lib-build-{webos,macos}.sh libchiaki,
                     chiaki-lib-update.sh moves chiaki-ng forward;
                     tv.sh install/launch/log on a TV; make-device-art.sh; make-screenshots.sh (README

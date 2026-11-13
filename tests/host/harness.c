@@ -68,8 +68,25 @@ static void pump(int ms) {
         SDL_Delay(5);
     }
 }
+/* the frame with its alpha, for scripts/make-screenshots.sh to lay over a game frame */
+static void shot_rgba(const char *name) {
+    char path[256];
+    snprintf(path, sizeof(path), SHOTS_DIR "/%s.pam", name);
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        perror(path);
+        g_fail++;
+        return;
+    }
+    fprintf(f, "P7\nWIDTH %d\nHEIGHT %d\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n", W, H);
+    for (int i = 0; i < W * H; i++) {
+        unsigned char px[4] = { (fb[i] >> 16) & 255, (fb[i] >> 8) & 255, fb[i] & 255, fb[i] >> 24 };
+        fwrite(px, 1, 4, f);
+    }
+    fclose(f);
+}
 /* over_video: blend the UI by its alpha over a bright stand-in for the NDL video plane, as
- * the TV composites the app surface while streaming */
+ * the TV composites the app surface while streaming (and keep the alpha in <name>.pam) */
 static void shot_ex(const char *name, bool over_video) {
     pump(50);
     lv_obj_invalidate(lv_scr_act());
@@ -93,6 +110,7 @@ static void shot_ex(const char *name, bool over_video) {
         fwrite(rgb, 1, 3, f);
     }
     fclose(f);
+    if (over_video) shot_rgba(name);
 }
 static void shot(const char *name) { shot_ex(name, false); }
 static unsigned fb_alpha(lv_coord_t x, lv_coord_t y) { return fb[y * W + x] >> 24; }

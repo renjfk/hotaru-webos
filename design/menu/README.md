@@ -89,5 +89,5 @@ loads the drawings from another folder.
 Home and Setup (with the dialogs) are in the app now. The concepts' building blocks moved to
 `src/ui/controls.c`, `motion.c` and `art.c`, nav keys reach the screen in front through one key sink instead
 of a pointer, the mock data became `app_*`/`config_*`, and the art is pre-scaled at build time
-(`scripts/make-device-art.sh`). The README's demo clips are recorded from these concepts
-(`design/menu/capture.sh`, then `scripts/make-screenshots.sh`).
+(`scripts/make-device-art.sh`). The README's still of the menu over the game lays the app's render on this
+gallery's stand-in game (`design/menu/capture.sh`, then `scripts/make-screenshots.sh`).
