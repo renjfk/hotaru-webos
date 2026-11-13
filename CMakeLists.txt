@@ -37,7 +37,9 @@ if(CHIAKI_LIB_STAGING)
     target_compile_definitions(hotaru PRIVATE HOTARU_HAVE_LIBCHIAKI=1)
     # link.txt is the exact ordered link line the build script verified. Prefer it over a glob:
     # libevent.a already contains libevent_core/extra/pthreads, so globbing defines symbols twice.
+    # Archives are recorded as @STAGING@/lib/... so a cached or moved staging tree still links.
     file(READ "${CHIAKI_LIB_STAGING}/link.txt" CHIAKI_LINK_LINE)
+    string(REPLACE "@STAGING@" "${CHIAKI_LIB_STAGING}" CHIAKI_LINK_LINE "${CHIAKI_LINK_LINE}")
     separate_arguments(CHIAKI_LINK_ARGS NATIVE_COMMAND "${CHIAKI_LINK_LINE}")
     target_link_libraries(hotaru PRIVATE ${CHIAKI_LINK_ARGS})
 endif()

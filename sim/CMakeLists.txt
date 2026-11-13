@@ -45,6 +45,7 @@ if(CHIAKI_LIB_STAGING)
     target_include_directories(hotaru-sim SYSTEM PRIVATE "${CHIAKI_LIB_STAGING}/include" ${JSONC_INCLUDE_DIRS})
     target_compile_definitions(hotaru-sim PRIVATE HOTARU_HAVE_LIBCHIAKI=1)
     file(READ "${CHIAKI_LIB_STAGING}/link.txt" CHIAKI_LINK_LINE)
+    string(REPLACE "@STAGING@" "${CHIAKI_LIB_STAGING}" CHIAKI_LINK_LINE "${CHIAKI_LINK_LINE}")
     separate_arguments(CHIAKI_LINK_ARGS NATIVE_COMMAND "${CHIAKI_LINK_LINE}")
     target_link_libraries(hotaru-sim PRIVATE ${CHIAKI_LINK_ARGS})
     # system frameworks the static libcurl/libchiaki needs on macOS; link.txt

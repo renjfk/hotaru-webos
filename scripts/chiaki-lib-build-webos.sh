@@ -345,7 +345,9 @@ stage_chiaki() {
     for a in libchiaki.a libcurl.a libjerasure.a libgf_complete.a libprotobuf-nanopb.a; do
         stage_archive "$a"
     done
-    { printf '%s ' "${LINK_ARCHIVES[@]/#/$STAGING/lib/}"; echo "${LINK_SYSLIBS[*]}"; } > "$STAGING/link.txt"
+    # @STAGING@ keeps the link line relocatable: CMake expands it to wherever the staging tree
+    # actually is, so a cached tree (CI) or a moved checkout still links.
+    { printf '%s ' "${LINK_ARCHIVES[@]/#/@STAGING@/lib/}"; echo "${LINK_SYSLIBS[*]}"; } > "$STAGING/link.txt"
 }
 
 # Static link order: dependents before their dependencies

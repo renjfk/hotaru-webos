@@ -134,7 +134,8 @@ LINK_SYSLIBS=(
 LINK_FRAMEWORKS=(
     -framework CoreFoundation -framework CoreServices -framework Security -framework SystemConfiguration
 )
-{ printf '%s ' "${LINK_ARCHIVES[@]/#/$STAGING/lib/}"; echo "${LINK_SYSLIBS[*]}"; } > "$STAGING/link.txt"
+# @STAGING@ keeps the link line relocatable: CMake expands it to wherever the staging tree actually is
+{ printf '%s ' "${LINK_ARCHIVES[@]/#/@STAGING@/lib/}"; echo "${LINK_SYSLIBS[*]}"; } > "$STAGING/link.txt"
 
 # ── verification ────────────────────────────────────────────────────────────────
 log "link test"
