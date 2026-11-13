@@ -19,9 +19,9 @@
 static lv_obj_t *g_root;
 static lv_timer_t *g_timer;
 
-/* CHIAKI_SPLASH_MS overrides the hold time (dev: keep the splash up to inspect it) */
+/* HOTARU_SPLASH_MS overrides the hold time (dev: keep the splash up to inspect it) */
 static uint32_t splash_ms(void) {
-    const char *v = getenv("CHIAKI_SPLASH_MS");
+    const char *v = getenv("HOTARU_SPLASH_MS");
     int ms = v && *v ? atoi(v) : 0;
     return ms > 0 ? (uint32_t)ms : SPLASH_MS;
 }
@@ -63,7 +63,7 @@ void splash_show(void) {
     lv_obj_set_style_pad_row(g_root, SP_2XL, 0);
 
     ui_logo(g_root, MARK);
-    ui_text(g_root, TXT_DISPLAY, "Chiaki webOS");
+    ui_text(g_root, TXT_DISPLAY, "Hotaru");
     lv_obj_t *sub = ui_text(g_root, TXT_CAPTION, "PlayStation Remote Play");
     lv_obj_set_style_text_color(sub, C(COL_MUTED), 0);
 

@@ -115,7 +115,7 @@ static void build_rail(void) {
     lv_obj_set_style_border_opa(g.rail, LV_OPA_10, 0);
     lv_obj_t *logo = kit_app_mark(g.rail, 64);
     lv_obj_set_pos(logo, (RAIL_C - 64) / 2, SAFE_Y);
-    g.brand = kit_label(g.rail, FONT_HEADING, COL_TEXT, "Chiaki webOS");
+    g.brand = kit_label(g.rail, FONT_HEADING, COL_TEXT, "Hotaru");
     lv_obj_set_pos(g.brand, RAIL_C - 8, SAFE_Y + 16);
     lv_obj_set_style_text_opa(g.brand, LV_OPA_TRANSP, 0);
     g.pill = kit_rect(g.rail, RAIL_C - 32, ITEM_H - 8, 24, COL_ACCENT, LV_OPA_COVER);

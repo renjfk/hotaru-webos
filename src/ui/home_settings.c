@@ -255,7 +255,7 @@ static void build_about(void) {
     char ver[64];
     snprintf(ver, sizeof(ver), "LVGL %d.%d.%d, SDL2, libchiaki from chiaki-ng", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
              LVGL_VERSION_PATCH);
-    prow_t *app = add_row(SET_ABOUT, "Chiaki webOS " CHIAKI_WEBOS_VERSION, "");
+    prow_t *app = add_row(SET_ABOUT, "Hotaru " HOTARU_VERSION, "");
     app->kind = ROW_INFO;
     g.about_ver = app->caption;
     add_row(SET_ABOUT, "Remote Play",
@@ -266,12 +266,12 @@ static void build_about(void) {
     net->kind = ROW_INFO;
     g.about_net = net->caption;
     add_row(SET_ABOUT, "Built with", ver)->kind = ROW_INFO;
-    row_toggle(add_row(SET_ABOUT, "Diagnostics", "Logs input, discovery and frame timing to /tmp/chiaki.log"),
+    row_toggle(add_row(SET_ABOUT, "Diagnostics", "Logs input, discovery and frame timing to /tmp/hotaru.log"),
                &config_get()->debug.probe);
     lv_obj_t *c = summary(SET_ABOUT, "ABOUT");
     lv_obj_t *logo = ui_logo(c, 140);
     lv_obj_set_pos(logo, 0, 50);
-    lv_obj_t *n = ctl_label(c, FONT_TITLE, COL_TEXT, "Chiaki webOS");
+    lv_obj_t *n = ctl_label(c, FONT_TITLE, COL_TEXT, "Hotaru");
     lv_obj_set_pos(n, 0, 220);
     lv_obj_t *d = ctl_label(c, FONT_CAPTION, COL_MUTED,
                             "Open source (AGPL-3.0), built on chiaki-ng. "

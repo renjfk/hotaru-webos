@@ -5,7 +5,7 @@ What works, and where it was proven. The device: LG 50UP75003LF, webOS TV Lite 6
 
 Evidence comes from three places:
 
-- **TV**: the app on the device, read back from `/tmp/chiaki.log` (`scripts/tv.sh log`)
+- **TV**: the app on the device, read back from `/tmp/hotaru.log` (`scripts/tv.sh log`)
 - **Probe**: a standalone probe app run on the TV before this one; its raw results are kept here:
   [ds4-map-observed.txt](ds4-map-observed.txt), [dualsense-map-observed.txt](dualsense-map-observed.txt),
   [pad-battery-observed.txt](pad-battery-observed.txt), [network-capabilities.txt](network-capabilities.txt),
@@ -23,7 +23,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | Hardware video (H.264, H.265) and 48 kHz audio through NDL DirectMedia | TV |
 | 60 fps with no socket drops or FEC failures; Smooth playback hides the Wi-Fi stalls | TV |
 | PSN sign-in (OAuth code from the phone), the account's console list, token refresh | TV + host |
-| Settings, consoles and the PSN account kept in `conf/chiaki.conf` | TV + host |
+| Settings, consoles and the PSN account kept in `conf/hotaru.conf` | TV + host |
 | DualShock 4: grab, the button map, forwarding to the console, rumble | TV (probe + earlier builds) + host |
 | DualShock 4 battery on Home, the Controller panel and the stream menu (sysfs `power_supply`) | TV (probe) + host |
 | Home, Add a console, the dialogs, the menu over the game (this UI) | host + simulator: the earlier tabbed UI ran on the TV |
@@ -40,7 +40,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 `luna-send-pub .../dev/install`; runs as a jailed native app. `SDL_GetCurrentDisplayMode` reports 1920x1080 and a
 refresh rate of 0 Hz; the renderer is `opengles2`. LVGL renders in software into two full-screen buffers that are
 copied into one streaming texture. Idle CPU ~0.7% of a core, RSS ~33-46 MB. There is no journald and no usable
-stdout: the app logs to `/tmp/chiaki.log` only. Over SSH, `/usr/bin/python`, `node` and `nc` exist; `ping` is not
+stdout: the app logs to `/tmp/hotaru.log` only. Over SSH, `/usr/bin/python`, `node` and `nc` exist; `ping` is not
 allowed for `prisoner` and `iw`/`ip` are missing; per-thread CPU and run-queue waits are in
 `/proc/<pid>/task/*/schedstat`.
 
@@ -89,9 +89,9 @@ statically: the binary needs no `libssl`, `libcrypto` or `libcurl` (the TV ships
 ## Config
 
 One `key=value` file, written atomically with mode 0600 (it holds the pairing keys and PSN tokens): on the TV
-`$HOME/conf/chiaki.conf`, where the jailer sets `HOME` to the app's install directory. Writing it works and it
+`$HOME/conf/hotaru.conf`, where the jailer sets `HOME` to the app's install directory. Writing it works and it
 survives reboots; whether it survives an update over the same app id is one of the [TV checks](TV-CHECKS.md). If the
-directory is not writable the app falls back to `/tmp/chiaki-webos`, which a reboot clears.
+directory is not writable the app falls back to `/tmp/hotaru`, which a reboot clears.
 
 ## Constraints
 

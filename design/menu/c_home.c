@@ -57,7 +57,7 @@ typedef struct {
 
 static const char *const g_set_names[SET__N] = { "Stream", "Controller", "PSN account", "Log", "About" };
 static const char *g_set_caps[SET__N] = { "Quality and smoothness", "DualShock 4", "Signed in as player_one",
-                                          "What just happened", "Chiaki webOS 0.4" };
+                                          "What just happened", "Hotaru 0.4" };
 static const uint32_t g_set_tint[SET__N] = { 0x1d4f9c, 0x58308f, 0x0e6b78, 0x334055, 0x27406a };
 
 static struct {
@@ -442,7 +442,7 @@ static void build_panels(void) {
         { "21:38  Living Room PS5 woke up", "Wake-up sent over the LAN" },
     };
     for (int i = 0; i < 3; i++) panel_row(SET_LOG, logl[i][0], logl[i][1])->kind = PK_INFO;
-    static const char *const about[][2] = { { "Chiaki webOS 0.4", "PlayStation Remote Play for LG webOS TVs" },
+    static const char *const about[][2] = { { "Hotaru 0.4", "PlayStation Remote Play for LG webOS TVs" },
                                             { "Built on chiaki-ng", "libchiaki, LVGL 8.3, SDL2" } };
     for (int i = 0; i < 2; i++) panel_row(SET_ABOUT, about[i][0], about[i][1])->kind = PK_INFO;
 }

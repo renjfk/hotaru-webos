@@ -73,6 +73,6 @@ void input_rumble(uint8_t left, uint8_t right) { gamepad_rumble(left, right); }
 bool input_pad_rumbles(void) { return gamepad_can_rumble(); }
 bool input_pad_touches(void) { return gamepad_can_touch(); }
 
-#ifdef CHIAKI_SIM
+#ifdef HOTARU_SIM
 void input_sim_wheel(float wheel_y) { scroll_tick(0.0f, wheel_y, 0.06f); }
 #endif

@@ -46,9 +46,9 @@ static unsigned char *read_file(const char *path, size_t *len) {
     return buf;
 }
 
-/* CHIAKI_GALLERY_ART_DIR points the gallery at another folder of drawings */
+/* HOTARU_GALLERY_ART_DIR points the gallery at another folder of drawings */
 static const char *art_dir(void) {
-    const char *d = getenv("CHIAKI_GALLERY_ART_DIR");
+    const char *d = getenv("HOTARU_GALLERY_ART_DIR");
     return d && *d ? d : ART_DIR;
 }
 

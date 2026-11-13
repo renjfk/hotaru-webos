@@ -5,8 +5,8 @@
  * change in place with LEFT/RIGHT (segmented choice, level bar, toggle), so there are no
  * dropdown lists to open. ctl_menu is the one pop-up: a short list anchored to a button.
  */
-#ifndef CHIAKI_WEBOS_CONTROLS_H
-#define CHIAKI_WEBOS_CONTROLS_H
+#ifndef HOTARU_CONTROLS_H
+#define HOTARU_CONTROLS_H
 
 #include <stdbool.h>
 #include <lvgl.h>

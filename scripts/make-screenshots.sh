@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/make-screenshots.sh - the README's images in screenshots/: stills from the host tests' renders, the
-# menu over the game laid on the design gallery's stand-in game, and the demo video's poster, all WebP.
+# menu over the game laid on the design gallery's stand-in game, all WebP.
 #
 #   tests/host/run.sh                      # out/host-tests/shots/*.ppm, *.pam
 #   design/menu/capture.sh                 # out/menu-gallery/ (the stand-in game)
@@ -39,10 +39,5 @@ still "$SHOTS/login-passcode.ppm" login-passcode
 ffmpeg -v error -ss 3 -i "$ROOT/out/menu-gallery/01-home/stream.mp4" -frames:v 1 "$TMP/game.png"
 magick "$TMP/game.png" "$SHOTS/stream-menu.pam" -composite "$TMP/stream-menu.png"
 still "$TMP/stream-menu.png" stream-menu
-
-# the demo's poster: the menu over the game on the TV, with a play mark over the game
-ffmpeg -v error -ss 92 -i "$OUT/demo.mp4" -frames:v 1 "$TMP/poster.png"
-webp "$TMP/poster.png" demo -fill '#000000a0' -draw "circle 480,170 480,226" \
-    -fill white -draw "polygon 464,144 464,196 506,170"
 
 ls -l "$OUT"

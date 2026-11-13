@@ -6,14 +6,14 @@
  * exception is config_device_uid(): it saves as soon as it generates the UID,
  * so the id stays stable even if the app is killed before the next save.
  *
- * Location: $CHIAKI_CONFIG_DIR/chiaki.conf when that variable is set (host
- * tests, simulator). Otherwise, on the TV, $HOME/conf/chiaki.conf: the jailer
+ * Location: $HOTARU_CONFIG_DIR/hotaru.conf when that variable is set (host
+ * tests, simulator). Otherwise, on the TV, $HOME/conf/hotaru.conf: the jailer
  * sets HOME to the app's install directory, which is writable on webOS 4+ and
  * survives reboots (moonlight-tv keeps its pairing keys there the same way).
  * TODO(path): confirm on the TV whether an update over the same app id keeps
  * that directory; an uninstall certainly removes it. Elsewhere (macOS) the
- * default is $HOME/.chiaki-webos. If the directory cannot be created the file
- * goes to /tmp/chiaki-webos (cleared on boot) and a warning is logged.
+ * default is $HOME/.hotaru. If the directory cannot be created the file
+ * goes to /tmp/hotaru (cleared on boot) and a warning is logged.
  *
  * Format: UTF-8 text, one `key=value` per line, '#' starts a comment line.
  * The value is everything after the first '='; in strings `\\`, `\n` and `\r`
@@ -31,8 +31,8 @@
  *   host.0.nickname=PS5-123
  *   host.0.rp_key=<32 hex>
  */
-#ifndef CHIAKI_WEBOS_CONFIG_H
-#define CHIAKI_WEBOS_CONFIG_H
+#ifndef HOTARU_CONFIG_H
+#define HOTARU_CONFIG_H
 
 #include <stdbool.h>
 #include <stdint.h>

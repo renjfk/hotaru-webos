@@ -1,6 +1,6 @@
 # Manual Release Process Guide
 
-This document describes the step-by-step manual release process for Chiaki webOS using AI assistance to analyze
+This document describes the step-by-step manual release process for Hotaru using AI assistance to analyze
 commits, generate release notes, and trigger the GitHub Actions workflow via opencode (with `gh` CLI integration).
 
 ## Overview
@@ -32,7 +32,7 @@ Use this prompt in opencode to handle the entire release process:
 ### Master Release Prompt
 
 ```
-I need to create a new release for Chiaki webOS. Please:
+I need to create a new release for Hotaru. Please:
 
 STEP 1: ANALYZE COMMITS
 - Use `gh` CLI or available tools to get the latest release tag
@@ -101,7 +101,7 @@ opencode will:
    webOS SDK (`scripts/webos-sdk.sh`), **cross-builds libchiaki** and its static dependencies
    (`scripts/chiaki-lib-build-webos.sh`, cached per chiaki-ng commit), writes the version into `appinfo.json`
    (`v0.2` is `0.2.0`: webOS wants three numbers), **builds and packages** the app (`./build.sh`) and publishes the
-   GitHub Release with `com.renjfk.chiakiwebos_<version>_arm.ipk`, its `.sha256` and `com.renjfk.chiakiwebos.manifest.json`
+   GitHub Release with `com.renjfk.hotaru_<version>_arm.ipk`, its `.sha256` and `com.renjfk.hotaru.manifest.json`
 
 The release page's body is `release-notes/<tag>.md` read from the tagged commit, not an input: what was reviewed in
 the pull request is what the release says.
@@ -122,11 +122,11 @@ the app's About panel points here.
 [webosbrew/apps-repo](https://github.com/webosbrew/apps-repo). A release carries the manifest that index fetches:
 
 ```json
-{ "id": "com.renjfk.chiakiwebos", "version": "0.1.0", "ipkUrl": "com.renjfk.chiakiwebos_0.1.0_arm.ipk", ... }
+{ "id": "com.renjfk.hotaru", "version": "0.1.0", "ipkUrl": "com.renjfk.hotaru_0.1.0_arm.ipk", ... }
 ```
 
 so the entry in apps-repo points at a URL that always serves the newest one:
-`https://github.com/renjfk/chiaki-webos/releases/latest/download/com.renjfk.chiakiwebos.manifest.json`. That
+`https://github.com/renjfk/hotaru-webos/releases/latest/download/com.renjfk.hotaru.manifest.json`. That
 `latest` URL only starts working with the first release that is not a pre-release, so check a candidate through its
 own tag (`/releases/download/v0.1.0-rc2/...`). Installing an `.ipk` by hand (Dev Manager's install button or
 `scripts/tv.sh install`) needs none of this: installed apps are listed from the TV itself.

@@ -17,7 +17,7 @@
  */
 #include "ndl.h"
 
-#ifdef CHIAKI_HAVE_NDL
+#ifdef HOTARU_HAVE_NDL
 
 #define NDL_DIRECTMEDIA_API_VERSION 2
 #include <NDL_directmedia_v2.h>
@@ -57,7 +57,7 @@ bool ndl_open(const stream_settings_t *stream) {
     if (!stream) return false;
     if (!g.initialized) {
         const char *appid = getenv("APPID");
-        if (!appid || !*appid) appid = "com.renjfk.chiakiwebos";
+        if (!appid || !*appid) appid = "com.renjfk.hotaru";
         int r = NDL_DirectMediaInit(appid, NULL);
         if (r != 0) {
             log_event(LOG_ERR, "NDL", "DirectMediaInit failed: %s", NDL_DirectMediaGetError());
@@ -283,7 +283,7 @@ int ndl_audio_buffered_ms(void) {
     return total >= avail ? (total - avail) / (NDL_AUDIO_RATE * 2 * (int)sizeof(int16_t) / 1000) : -1;
 }
 
-#else /* !CHIAKI_HAVE_NDL: host tests and the simulator have no NDL */
+#else /* !HOTARU_HAVE_NDL: host tests and the simulator have no NDL */
 
 bool ndl_available(void) { return false; }
 int ndl_video_buffered(void) { return -1; }
@@ -308,4 +308,4 @@ bool ndl_push_audio(const uint8_t *pcm, size_t len, int64_t pts_us) {
     return false;
 }
 
-#endif /* CHIAKI_HAVE_NDL */
+#endif /* HOTARU_HAVE_NDL */

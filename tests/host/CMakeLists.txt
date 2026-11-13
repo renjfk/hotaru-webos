@@ -1,7 +1,7 @@
 # Host (macOS) behaviour tests: every src/ module except main.c and the SDL
 # display, rendered offscreen with a fake evdev pad. Run via tests/host/run.sh.
 cmake_minimum_required(VERSION 3.16)
-project(chiaki-host-tests C)
+project(hotaru-host-tests C)
 set(CMAKE_C_STANDARD 11)
 get_filename_component(APP "${CMAKE_SOURCE_DIR}/../.." ABSOLUTE)
 include(${APP}/cmake/AppVersion.cmake)
@@ -20,8 +20,8 @@ target_compile_definitions(host-tests PRIVATE INPUT_DIR="${CMAKE_BINARY_DIR}/dev
                                               SYS_INPUT_DIR="${CMAKE_BINARY_DIR}/sys/class/input"
                                               SHOTS_DIR="${CMAKE_BINARY_DIR}/shots"
                                               CONFIG_DIR="${CMAKE_BINARY_DIR}/config"
-                                              CHIAKI_ASSETS_DIR="${APP}/assets"
-                                              CHIAKI_WEBOS_VERSION="${CHIAKI_WEBOS_VERSION}")
+                                              HOTARU_ASSETS_DIR="${APP}/assets"
+                                              HOTARU_VERSION="${HOTARU_VERSION}")
 target_include_directories(host-tests PRIVATE ${CMAKE_SOURCE_DIR}/shim ${APP}/src ${SDL2_INCLUDE_DIRS})
 target_compile_options(host-tests PRIVATE -Wall -Wextra -Wno-unused-function)
 target_link_libraries(host-tests PRIVATE lvgl ${SDL2_LINK_LIBRARIES})

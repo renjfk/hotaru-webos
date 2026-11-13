@@ -1,4 +1,4 @@
-/* ui/logo.c - the Chiaki webOS mark, drawn procedurally (see logo.h).
+/* ui/logo.c - the Hotaru mark, drawn procedurally (see logo.h).
  *
  * Glyph geometry is the app icon's, on a 512-unit grid that spans the whole tile,
  * scaled to the requested size so every instance is crisp. The rounded gradient

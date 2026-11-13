@@ -5,7 +5,7 @@
 # part of the app build: src/ is not globbed, only theme.c (the tokens and theme), the QR
 # widget and the app mark are borrowed.
 cmake_minimum_required(VERSION 3.16)
-project(chiaki-menu-gallery C)
+project(hotaru-menu-gallery C)
 set(CMAKE_C_STANDARD 11)
 get_filename_component(APP "${CMAKE_SOURCE_DIR}/../.." ABSOLUTE)
 

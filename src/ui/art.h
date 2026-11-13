@@ -4,11 +4,11 @@
  * scaled down to the largest size the UI uses (scripts/make-device-art.sh, from the originals in
  * design/menu/art/). Asking for a height decodes the PNG once and keeps an area-filtered copy at
  * exactly that height, so each image is crisp; an animated size zooms down from the larger one.
- * Location: $CHIAKI_ASSETS_DIR/devices, else the directory of the running binary + /assets/devices
+ * Location: $HOTARU_ASSETS_DIR/devices, else the directory of the running binary + /assets/devices
  * (the sim and the host tests compile in the repo's assets/). A missing file draws nothing.
  */
-#ifndef CHIAKI_WEBOS_ART_H
-#define CHIAKI_WEBOS_ART_H
+#ifndef HOTARU_ART_H
+#define HOTARU_ART_H
 
 #include <stdbool.h>
 #include <lvgl.h>

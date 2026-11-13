@@ -61,7 +61,7 @@ const char *mock_clock_text(void) {
 bool mock_pad_dualsense(void) {
     static int on = -1;
     if (on < 0) {
-        const char *e = getenv("CHIAKI_GALLERY_PAD");
+        const char *e = getenv("HOTARU_GALLERY_PAD");
         on = e && !strcmp(e, "dualsense") && art_exists(ART_DUALSENSE);
     }
     return on;

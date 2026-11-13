@@ -15,8 +15,8 @@
  * own (ctl_keyboard). It crossfades with Home: once it covers the screen, ui_cover() stops Home
  * drawing under it, and closing brings Home back at once under the fading sheet.
  */
-#ifndef CHIAKI_WEBOS_REGISTER_H
-#define CHIAKI_WEBOS_REGISTER_H
+#ifndef HOTARU_REGISTER_H
+#define HOTARU_REGISTER_H
 
 #include <stdbool.h>
 #include <stdint.h>

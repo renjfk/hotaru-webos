@@ -67,7 +67,7 @@ runs:
         VERSION: ${{ inputs.version }}
       run: |
         ./build.sh
-        ipk="dist/com.renjfk.chiakiwebos_${VERSION}_arm.ipk"
+        ipk="dist/com.renjfk.hotaru_${VERSION}_arm.ipk"
         test -f "$ipk"
         (cd dist && shasum -a 256 "$(basename "$ipk")" > "$(basename "$ipk").sha256")
         echo "ipk=$ipk" >> "$GITHUB_OUTPUT"

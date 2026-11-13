@@ -14,10 +14,10 @@
 #include "../log.h"
 
 #define FILE_VERSION 1
-#define FILE_NAME    "chiaki.conf"
-#define FALLBACK_DIR "/tmp/chiaki-webos" /* writable everywhere, cleared on boot */
-#define DUID_PREFIX  "0000000700410080"  /* chiaki-ng lib/include/chiaki/remote/holepunch.h */
-#define LINE_MAX_LEN 1024                /* longest valid line: an escaped 255-char token + key */
+#define FILE_NAME    "hotaru.conf"
+#define FALLBACK_DIR "/tmp/hotaru"      /* writable everywhere, cleared on boot */
+#define DUID_PREFIX  "0000000700410080" /* chiaki-ng lib/include/chiaki/remote/holepunch.h */
+#define LINE_MAX_LEN 1024               /* longest valid line: an escaped 255-char token + key */
 
 #define DEFAULT_CONFIG                                                                                                 \
     .stream = { .codec = CODEC_H265, .width = 1920, .height = 1080, .fps = 60, .bitrate_kbps = 15000, .hdr = false },  \
@@ -60,12 +60,12 @@ static bool mkdir_p(const char *dir) {
 
 static void resolve_path(void) {
     if (g_path[0]) return;
-    const char *env = getenv("CHIAKI_CONFIG_DIR"), *home = getenv("HOME");
+    const char *env = getenv("HOTARU_CONFIG_DIR"), *home = getenv("HOME");
     if (env && *env) snprintf(g_dir, sizeof(g_dir), "%s", env);
 #ifdef __linux__
     else if (home && *home) snprintf(g_dir, sizeof(g_dir), "%s/conf", home); /* the TV: HOME = app dir */
 #else
-    else if (home && *home) snprintf(g_dir, sizeof(g_dir), "%s/.chiaki-webos", home);
+    else if (home && *home) snprintf(g_dir, sizeof(g_dir), "%s/.hotaru", home);
 #endif
     if (!g_dir[0] || !mkdir_p(g_dir)) {
         if (g_dir[0]) log_event(LOG_WARN, "CONFIG", "%s is not writable, settings last until reboot", g_dir);
@@ -103,7 +103,7 @@ static void put_int(FILE *f, const char *key, int v) { fprintf(f, "%s=%d\n", key
 
 static void write_all(FILE *f) {
     const config_t *c = &g_config;
-    fputs("# Chiaki webOS settings, written by the app (format: see src/config/config.h)\n", f);
+    fputs("# Hotaru settings, written by the app (format: see src/config/config.h)\n", f);
     put_int(f, "version", FILE_VERSION);
     if (g_duid[0]) put_str(f, "device_uid", g_duid);
     put_int(f, "stream.codec", (int)c->stream.codec);

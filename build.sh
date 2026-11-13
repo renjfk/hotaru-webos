@@ -35,8 +35,8 @@ cmake -S "$SCRIPT_DIR" -B "$BUILD" -G "Unix Makefiles" \
     -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_DIR/share/buildroot/toolchainfile.cmake" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCHIAKI_LIB_STAGING="$CHIAKI_STAGING"
-cmake --build "$BUILD" --target chiaki -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
-cmake --build "$BUILD" --target chiaki-package
+cmake --build "$BUILD" --target hotaru -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
+cmake --build "$BUILD" --target hotaru-package
 
 echo
 echo "== built =="

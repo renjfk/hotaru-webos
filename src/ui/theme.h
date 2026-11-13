@@ -6,8 +6,8 @@
  * the st_* styles below are the variants UI code adds itself.
  * Layout target: 1920x1080, nothing may overflow the screen.
  */
-#ifndef CHIAKI_WEBOS_THEME_H
-#define CHIAKI_WEBOS_THEME_H
+#ifndef HOTARU_THEME_H
+#define HOTARU_THEME_H
 
 #include <lvgl.h>
 

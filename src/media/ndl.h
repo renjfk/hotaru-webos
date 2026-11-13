@@ -1,6 +1,6 @@
 /* media/ndl.h - hardware video/audio output through LG's NDL DirectMedia.
  *
- * On the TV (CHIAKI_HAVE_NDL, set by CMakeLists.txt when the NDL headers/lib are
+ * On the TV (HOTARU_HAVE_NDL, set by CMakeLists.txt when the NDL headers/lib are
  * found in the SDK sysroot) this feeds the stream's H.264/H.265 NAL units and
  * decoded PCM straight into the hardware decoder: NDL_DirectMediaInit/Load,
  * NDL_DirectVideoPlay / NDL_DirectAudioPlay, NDL_DirectMediaUnload.
@@ -13,8 +13,8 @@
  * how that plane composes with the SDL app surface is unverified on this TV
  * (see docs/STATUS.md).
  */
-#ifndef CHIAKI_WEBOS_NDL_H
-#define CHIAKI_WEBOS_NDL_H
+#ifndef HOTARU_NDL_H
+#define HOTARU_NDL_H
 
 #include <stdbool.h>
 #include <stddef.h>

@@ -18,7 +18,7 @@
 
 #define VERSION     "0.2"
 #define INSTALLED   "0.1"
-#define REPO        "github.com/renjfk/chiaki-webos"
+#define REPO        "github.com/renjfk/hotaru-webos"
 #define RELEASE_URL "https://" REPO "/releases/latest"
 #define ARRIVE_MS   1400 /* the splash is gone and GitHub has answered */
 
@@ -110,10 +110,10 @@ static void toast_gone_cb(lv_timer_t *t) {
 
 static void show_toast(bool sticky) {
     U.note = frame(U.layer, 400, TOAST_H, LV_RADIUS_CIRCLE, 235);
-    fit_width(U.note,
-              kit_label(U.note, FONT_BODY, COL_TEXT,
-                        LV_SYMBOL_DOWNLOAD "   Chiaki webOS " VERSION " is available" BULLET REPO),
-              SP_2XL);
+    fit_width(
+        U.note,
+        kit_label(U.note, FONT_BODY, COL_TEXT, LV_SYMBOL_DOWNLOAD "   Hotaru " VERSION " is available" BULLET REPO),
+        SP_2XL);
     lv_obj_align(U.note, LV_ALIGN_BOTTOM_LEFT, SAFE_X, -SAFE_Y + 4);
     kit_anim_from(U.note, KA_TY, 30, 0, 320, 0, lv_anim_path_ease_out);
     kit_anim_from(U.note, KA_OPA, 0, 255, 200, 0, lv_anim_path_ease_out);
@@ -138,7 +138,7 @@ static void show_card(void) {
     lv_obj_set_pos(qr, SP_XL, SP_XL);
     lv_coord_t x = CARD_QR + 2 * SP_XL + SP_S, w = CARD_W - x - SP_XL;
     lv_obj_set_pos(overline(U.note, "UPDATE AVAILABLE"), x, 30);
-    lv_obj_set_pos(kit_label(U.note, FONT_TITLE, COL_TEXT, "Chiaki webOS " VERSION), x, 56);
+    lv_obj_set_pos(kit_label(U.note, FONT_TITLE, COL_TEXT, "Hotaru " VERSION), x, 56);
     lv_obj_set_pos(wrapped(U.note, FONT_CAPTION, COL_SUBTLE, "Scan it with a phone:\nthe download and what is new", w),
                    x, 104);
     lv_obj_set_pos(kit_label(U.note, FONT_SMALL, COL_MUTED, REPO), x, 164);
@@ -185,7 +185,7 @@ static void show_sheet(void) {
     lv_coord_t x = SHEET_P + 96 + SP_XL, text_w = SHEET_W - SHEET_QR - 2 * SHEET_P - SP_2XL;
     lv_obj_set_pos(kit_app_mark(U.note, 96), SHEET_P, SHEET_P);
     lv_obj_set_pos(overline(U.note, "UPDATE AVAILABLE"), x, SHEET_P + 4);
-    lv_obj_set_pos(kit_label(U.note, FONT_TITLE, COL_TEXT, "Chiaki webOS " VERSION " is out"), x, SHEET_P + 28);
+    lv_obj_set_pos(kit_label(U.note, FONT_TITLE, COL_TEXT, "Hotaru " VERSION " is out"), x, SHEET_P + 28);
     lv_obj_set_pos(kit_label(U.note, FONT_CAPTION, COL_SUBTLE, "This TV has " INSTALLED), x, SHEET_P + 74);
     lv_obj_t *news = wrapped(U.note, FONT_BODY, COL_TEXT,
                              LV_SYMBOL_BULLET "   Wakes a console in rest mode before it connects\n" LV_SYMBOL_BULLET
@@ -225,7 +225,7 @@ static void show_qr_toast(void) {
     lv_obj_set_pos(ui_qr(U.note, RELEASE_URL, QT_QR), m, m);
     lv_coord_t x = QT_QR + 2 * m + SP_S, w = QT_W - x - SP_XL;
     lv_obj_set_pos(overline(U.note, "UPDATE AVAILABLE"), x, 28);
-    lv_obj_set_pos(kit_label(U.note, FONT_HEADING, COL_TEXT, "Chiaki webOS " VERSION), x, 54);
+    lv_obj_set_pos(kit_label(U.note, FONT_HEADING, COL_TEXT, "Hotaru " VERSION), x, 54);
     lv_obj_set_pos(wrapped(U.note, FONT_CAPTION, COL_SUBTLE, "Scan it with a phone for the download", w), x, 100);
     kit_anim_from(U.note, KA_TY, 40, 0, 360, 0, lv_anim_path_ease_out);
     kit_anim_from(U.note, KA_OPA, 0, 255, 240, 0, lv_anim_path_ease_out);
@@ -248,7 +248,7 @@ static void show_mini(void) {
     lv_obj_set_style_shadow_opa(U.note, LV_OPA_40, 0);
     lv_obj_set_pos(ui_logo(U.note, MINI_LOGO), MINI_SIDE, MINI_PAD);
     lv_coord_t x = MINI_SIDE + MINI_LOGO + MINI_GAP;
-    lv_obj_t *title = kit_label(U.note, FONT_BODY, COL_TEXT, "Chiaki webOS " VERSION " is available");
+    lv_obj_t *title = kit_label(U.note, FONT_BODY, COL_TEXT, "Hotaru " VERSION " is available");
     lv_obj_set_pos(title, x, MINI_PAD - 5);
     lv_obj_t *addr = kit_label(U.note, FONT_CAPTION, COL_MUTED, REPO);
     lv_obj_set_pos(addr, x, MINI_PAD + 27);

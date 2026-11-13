@@ -7,8 +7,8 @@
  * (register.h), the stream menu (stream_menu.h) or Home (home.h). No screen uses an LVGL group of
  * its own, and nothing turns the pointer on. Everything must fit 1920x1080 with no overflow.
  */
-#ifndef CHIAKI_WEBOS_UI_H
-#define CHIAKI_WEBOS_UI_H
+#ifndef HOTARU_UI_H
+#define HOTARU_UI_H
 
 #include <stdbool.h>
 #include <lvgl.h>

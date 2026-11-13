@@ -4,8 +4,8 @@
  * Each (drawing, height) pair is made once and cached: ask for the height it is shown at and it
  * stays crisp; an animated size can zoom down from the largest one.
  */
-#ifndef CHIAKI_WEBOS_ART_H
-#define CHIAKI_WEBOS_ART_H
+#ifndef HOTARU_ART_H
+#define HOTARU_ART_H
 
 #include <lvgl.h>
 

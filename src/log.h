@@ -11,12 +11,12 @@
  * logged elsewhere (libchiaki, PSN workers) wait for log_pump(), which the
  * main loop calls every iteration.
  */
-#ifndef CHIAKI_WEBOS_LOG_H
-#define CHIAKI_WEBOS_LOG_H
+#ifndef HOTARU_LOG_H
+#define HOTARU_LOG_H
 
 #include <stdbool.h>
 
-#define LOG_PATH "/tmp/chiaki.log"
+#define LOG_PATH "/tmp/hotaru.log"
 
 typedef enum { LOG_INFO, LOG_OK, LOG_WARN, LOG_ERR } log_level_t;
 

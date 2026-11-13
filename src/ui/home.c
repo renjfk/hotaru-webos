@@ -179,7 +179,7 @@ static void update_wait_cb(lv_timer_t *t) {
     lv_timer_del(t);
     g.update_wait = NULL;
     if (!app_update_version()[0]) return;
-    lv_label_set_text_fmt(g.update_title, "Chiaki webOS %s is available", app_update_version());
+    lv_label_set_text_fmt(g.update_title, "Hotaru %s is available", app_update_version());
     lv_coord_t x = UPDATE_SIDE + UPDATE_LOGO + UPDATE_GAP;
     lv_obj_set_width(g.update, x + LV_MAX(text_width(g.update_title), text_width(g.update_addr)) + UPDATE_SIDE +
                                    2 * UPDATE_BORDER);

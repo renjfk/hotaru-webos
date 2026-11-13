@@ -5,8 +5,8 @@
  * directional keys (nav_t) instead of a pointer, and keeps its own focus state; LVGL groups are
  * not used. Colours, spacing and fonts come from ui/theme.h so the concepts match the app.
  */
-#ifndef CHIAKI_WEBOS_KIT_H
-#define CHIAKI_WEBOS_KIT_H
+#ifndef HOTARU_KIT_H
+#define HOTARU_KIT_H
 
 #include <stdbool.h>
 #include <lvgl.h>
@@ -53,7 +53,7 @@ extern const char *const mock_smooth_opts[4];
 const char *mock_quality_text(void); /* "1080p · 60 fps" */
 const char *mock_summary_text(void); /* "H.265 · SDR · 15 Mbps" */
 const char *mock_clock_text(void);   /* the session time, "00:42:13", ticks with lv_tick */
-/* the connected pad: a DualShock 4, or a DualSense with CHIAKI_GALLERY_PAD=dualsense (when its
+/* the connected pad: a DualShock 4, or a DualSense with HOTARU_GALLERY_PAD=dualsense (when its
  * drawing exists) */
 bool mock_pad_dualsense(void);
 const char *mock_pad_name(void);

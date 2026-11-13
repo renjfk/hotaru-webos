@@ -1,6 +1,6 @@
 /* ui/log_view.h - scrollable on-screen console fed by log_event(). */
-#ifndef CHIAKI_WEBOS_LOG_VIEW_H
-#define CHIAKI_WEBOS_LOG_VIEW_H
+#ifndef HOTARU_LOG_VIEW_H
+#define HOTARU_LOG_VIEW_H
 
 #include <lvgl.h>
 

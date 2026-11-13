@@ -12,8 +12,8 @@
  * group's focus. While a session connects Home shows a "Connecting" screen (Circle cancels);
  * while it streams Home is hidden (ui.c) and the stream menu takes over.
  */
-#ifndef CHIAKI_WEBOS_HOME_H
-#define CHIAKI_WEBOS_HOME_H
+#ifndef HOTARU_HOME_H
+#define HOTARU_HOME_H
 
 #include <stdbool.h>
 #include <lvgl.h>

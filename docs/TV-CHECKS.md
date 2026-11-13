@@ -15,7 +15,7 @@ scripts/tv.sh save               # keep the log: out/tv-logs/<time>.log
 ```
 
 Probe mode can also be switched on in the app (Settings > About > Diagnostics, kept across launches) or with the
-flag file `/tmp/chiaki-probe`. It adds `probe:` lines to `/tmp/chiaki.log`:
+flag file `/tmp/hotaru-probe`. It adds `probe:` lines to `/tmp/hotaru.log`:
 
 | Prefix | What |
 | --- | --- |
@@ -138,7 +138,7 @@ Install a newer build over the installed one (same app id).
 Launch a build older than the latest release (the repository must be public): a local build is `appinfo.json`'s
 version, below every release.
 
-- **Look for** `ui: [UPDATE] Chiaki webOS <version> is out` and, once the splash is gone, the notice over the top
+- **Look for** `ui: [UPDATE] Hotaru <version> is out` and, once the splash is gone, the notice over the top
   bar's right end for 9 s; Settings > About names the version too. An `update: GitHub not reached` line means the TV
   was not on its network yet: the check tries 4 times, 15 s apart.
 - **It decides** whether GitHub's API is reachable over the TV's CA bundle like PSN is (`src/net/update.c`).

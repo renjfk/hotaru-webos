@@ -9,7 +9,7 @@
 
 #include "../log.h"
 
-#ifdef CHIAKI_HAVE_LIBCHIAKI
+#ifdef HOTARU_HAVE_LIBCHIAKI
 #include <curl/curl.h>
 #include <json-c/json.h>
 #endif
@@ -61,7 +61,7 @@ bool update_newer(const char *tag, const char *installed) {
     return false;
 }
 
-#ifdef CHIAKI_HAVE_LIBCHIAKI
+#ifdef HOTARU_HAVE_LIBCHIAKI
 
 enum { FETCH_OK, FETCH_RETRY, FETCH_FAIL };
 
@@ -92,8 +92,8 @@ static int fetch_latest(char *tag, size_t cap) {
     hdrs = curl_slist_append(hdrs, "X-GitHub-Api-Version: 2022-11-28");
     curl_easy_setopt(h, CURLOPT_URL, UPDATE_URL);
     curl_easy_setopt(h, CURLOPT_HTTPHEADER, hdrs);
-    curl_easy_setopt(h, CURLOPT_USERAGENT, "chiaki-webos/" CHIAKI_WEBOS_VERSION); /* GitHub's API wants one */
-    curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 1L);                              /* a renamed repository redirects */
+    curl_easy_setopt(h, CURLOPT_USERAGENT, "hotaru/" HOTARU_VERSION); /* GitHub's API wants one */
+    curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 1L);                  /* a renamed repository redirects */
     curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1L); /* a worker thread: no signals for the DNS timeout */
     curl_easy_setopt(h, CURLOPT_TIMEOUT, UPDATE_TIMEOUT_S);
     curl_easy_setopt(h, CURLOPT_WRITEFUNCTION, body_cb);
@@ -158,7 +158,7 @@ void update_start(void) {
     if (g_started) return;
     g_started = true;
     lock_init();
-    const char *fake = getenv("CHIAKI_UPDATE_LATEST");
+    const char *fake = getenv("HOTARU_UPDATE_LATEST");
     if (fake && *fake) update_fake(fake);
     else check();
 }
@@ -177,12 +177,12 @@ bool update_poll(void) {
     snprintf(tag, sizeof(tag), "%s", g_tag);
     SDL_UnlockMutex(g_lock);
     if (!got) return false;
-    if (update_newer(tag, CHIAKI_WEBOS_VERSION)) {
+    if (update_newer(tag, HOTARU_VERSION)) {
         snprintf(g_latest, sizeof(g_latest), "%s", tag[0] == 'v' || tag[0] == 'V' ? tag + 1 : tag);
-        log_event(LOG_INFO, "UPDATE", "Chiaki webOS %s is out (this is %s)", g_latest, CHIAKI_WEBOS_VERSION);
+        log_event(LOG_INFO, "UPDATE", "Hotaru %s is out (this is %s)", g_latest, HOTARU_VERSION);
     } else {
         g_latest[0] = '\0';
-        if (tag[0]) log_msg("update: the latest release is %s, this is %s", tag, CHIAKI_WEBOS_VERSION);
+        if (tag[0]) log_msg("update: the latest release is %s, this is %s", tag, HOTARU_VERSION);
     }
     return true;
 }

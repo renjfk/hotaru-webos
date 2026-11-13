@@ -3,8 +3,8 @@
  * Home, Add a console, the dialogs and the stream menu are built from ui/controls.h. What is
  * here: a non-clipping flex box and a themed label, for the splash.
  */
-#ifndef CHIAKI_WEBOS_WIDGETS_H
-#define CHIAKI_WEBOS_WIDGETS_H
+#ifndef HOTARU_WIDGETS_H
+#define HOTARU_WIDGETS_H
 
 #include <stdbool.h>
 #include <lvgl.h>

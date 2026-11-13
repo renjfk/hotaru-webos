@@ -1,13 +1,13 @@
 /* chiaki/session.c - the simulated session/registration backend (see session.h).
  *
  * Compiled only when libchiaki is NOT linked; the real backend lives in
- * chiaki/session_real.c and is selected by CHIAKI_HAVE_LIBCHIAKI. Sessions and
+ * chiaki/session_real.c and is selected by HOTARU_HAVE_LIBCHIAKI. Sessions and
  * registration run on the main thread here, so the UI can walk the whole flow;
  * no libchiaki threads exist in this build.
  */
 #include "session.h"
 
-#ifndef CHIAKI_HAVE_LIBCHIAKI
+#ifndef HOTARU_HAVE_LIBCHIAKI
 
 #include <SDL.h>
 #include <stdio.h>
@@ -414,4 +414,4 @@ const char *session_reg_psn_url(void) {
     return url;
 }
 
-#endif /* !CHIAKI_HAVE_LIBCHIAKI */
+#endif /* !HOTARU_HAVE_LIBCHIAKI */

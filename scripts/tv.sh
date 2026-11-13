@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/tv.sh - install, run and watch Chiaki webOS on an LG TV in Developer Mode, over SSH.
+# scripts/tv.sh - install, run and watch Hotaru on an LG TV in Developer Mode, over SSH.
 #
 # Uses the TV's own luna-send-pub through the Developer Mode SSH server (port 9922, user
 # prisoner), so neither ares-cli nor a webOS SDK is needed. The TV has no scp: files are
@@ -12,7 +12,7 @@
 #   scripts/tv.sh launch [--probe]     start it; --probe turns diagnostics on for this run
 #   scripts/tv.sh stop
 #   scripts/tv.sh running              is it running
-#   scripts/tv.sh log [-f]             print /tmp/chiaki.log (-f: follow it)
+#   scripts/tv.sh log [-f]             print /tmp/hotaru.log (-f: follow it)
 #   scripts/tv.sh save                 copy the log to out/tv-logs/<time>.log
 #
 # Env: WEBOS_HOST (default LGwebOSTV.local), WEBOS_PORT (9922), WEBOS_USER (prisoner),
@@ -20,14 +20,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_ID="com.renjfk.chiakiwebos"
+APP_ID="com.renjfk.hotaru"
 WEBOS_HOST="${WEBOS_HOST:-LGwebOSTV.local}"
 WEBOS_PORT="${WEBOS_PORT:-9922}"
 WEBOS_USER="${WEBOS_USER:-prisoner}"
 WEBOS_KEY="${WEBOS_KEY:-$HOME/.ssh/webos_rsa}"
 TV_TMP="/media/developer/temp"
-TV_LOG="/tmp/chiaki.log"
-PROBE_FLAG="/tmp/chiaki-probe"   # src/main.c: probe mode for the run when it exists
+TV_LOG="/tmp/hotaru.log"
+PROBE_FLAG="/tmp/hotaru-probe"   # src/main.c: probe mode for the run when it exists
 LUNA="/usr/bin/luna-send-pub"
 
 die() { echo "error: $*" >&2; exit 1; }

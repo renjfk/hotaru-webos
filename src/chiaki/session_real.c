@@ -1,6 +1,6 @@
 /* chiaki/session_real.c - the real libchiaki backend (see session.h).
  *
- * Compiled only when CHIAKI_HAVE_LIBCHIAKI is set (libchiaki is linked, see
+ * Compiled only when HOTARU_HAVE_LIBCHIAKI is set (libchiaki is linked, see
  * CHIAKI_LIB_STAGING in CMakeLists.txt); the simulated backend is session.c.
  *
  * Threading: libchiaki runs the session and the registration on its own
@@ -22,7 +22,7 @@
  */
 #include "session.h"
 
-#ifdef CHIAKI_HAVE_LIBCHIAKI
+#ifdef HOTARU_HAVE_LIBCHIAKI
 
 #include <SDL.h>
 #include <ctype.h>
@@ -1337,4 +1337,4 @@ const char *session_reg_psn_url(void) {
     return url;
 }
 
-#endif /* CHIAKI_HAVE_LIBCHIAKI */
+#endif /* HOTARU_HAVE_LIBCHIAKI */

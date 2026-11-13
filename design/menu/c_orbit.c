@@ -671,7 +671,7 @@ static void build(lv_obj_t *root) {
     for (int i = 0; i < 3; i++) build_tgl(g.pages[PG_PAD], i);
 
     /* header, pager, hints */
-    lv_obj_t *over = kit_label(g.home, FONT_SMALL, COL_ACCENT_HI, "CHIAKI WEBOS");
+    lv_obj_t *over = kit_label(g.home, FONT_SMALL, COL_ACCENT_HI, "HOTARU");
     lv_obj_set_style_text_letter_space(over, 3, 0);
     lv_obj_set_pos(over, SAFE_X, SAFE_Y);
     g.title = kit_label(g.home, FONT_HERO, COL_TEXT, g_page_names[0]);

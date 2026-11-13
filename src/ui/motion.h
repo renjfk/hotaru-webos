@@ -4,8 +4,8 @@
  * property replaces the running one, so a quick second key press turns an animation around
  * mid-way instead of stacking. LVGL deletes an object's animations with the object.
  */
-#ifndef CHIAKI_WEBOS_MOTION_H
-#define CHIAKI_WEBOS_MOTION_H
+#ifndef HOTARU_MOTION_H
+#define HOTARU_MOTION_H
 
 #include <lvgl.h>
 

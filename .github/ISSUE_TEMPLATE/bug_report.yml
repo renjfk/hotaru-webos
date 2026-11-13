@@ -76,7 +76,7 @@ body:
     attributes:
       label: Logs
       description: |
-        Turn on Settings -> About -> Diagnostics, reproduce the issue, then copy /tmp/chiaki.log
+        Turn on Settings -> About -> Diagnostics, reproduce the issue, then copy /tmp/hotaru.log
         from the TV (with Developer Mode: `scripts/tv.sh save`) and paste it here. The logs will
         render inside a collapsible code block.
       render: shell

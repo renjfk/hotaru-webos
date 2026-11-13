@@ -95,7 +95,7 @@ design/menu/run.sh --study update       # live: 1-8 concept, arrows, Enter, Esc
 The consoles and controllers are `art/ps5.png`, `ps4.png`, `ds4.png` and `dualsense.png`:
 original illustrations made for this project (provenance and floor contacts in
 [art/README.md](art/README.md)). `art.c` downscales them once per displayed size with an area filter.
-`CHIAKI_GALLERY_PAD=dualsense` makes the DualSense the connected pad, `CHIAKI_GALLERY_ART_DIR=<dir>`
+`HOTARU_GALLERY_PAD=dualsense` makes the DualSense the connected pad, `HOTARU_GALLERY_ART_DIR=<dir>`
 loads the drawings from another folder.
 
 ## Files

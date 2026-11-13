@@ -41,7 +41,7 @@ static const concept_t *const g_update[] = { &concept_update_toast, &concept_upd
                                              &concept_update_mini,  &concept_update_mini_low };
 static const study_t g_studies[] = {
     { "menu",
-      "Chiaki webOS: main menu concepts",
+      "Hotaru: main menu concepts",
       "Three directions for a cursor-free, D-pad and remote driven main menu, each with its in-stream menu. "
       "Built with LVGL 8.3 on the app's theme tokens and rendered at 1920x1080 exactly as the TV would "
       "(the stream menus are alpha-composed over a stand-in game frame, like the NDL video plane). Clips run on "
@@ -53,7 +53,7 @@ static const study_t g_studies[] = {
       { "home", "settings", "stream-menu" },
       true },
     { "add",
-      "Chiaki webOS: Add a console",
+      "Hotaru: Add a console",
       "The pairing flow redone in Home's language: tinted backdrops, frosted pills, a white focus, big targets, "
       "nothing to point at. Three places for it to live (a full-screen setup, inline in Home's hero, a sheet over "
       "Home) share the same steps and controls: the console kind as tiles, the address as four octets that start "
@@ -66,7 +66,7 @@ static const study_t g_studies[] = {
       { "method", "pin", "psn-keyboard" },
       false },
     { "update",
-      "Chiaki webOS: update notice",
+      "Hotaru: update notice",
       "Ways to say that a newer release is out, each over Home as the app shows it once the splash is gone. "
       "The check is the same for all of them: once per launch, GitHub's latest release against this build "
       "(<code>src/net/update.c</code>). A TV cannot follow a link, so a notice either names the address or carries "

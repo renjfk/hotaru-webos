@@ -18,8 +18,8 @@
  * Streaming: while a session runs, input_set_streaming() stops the UI effects and
  * input_pad_get() exposes the raw pad the app forwards to chiaki/session.h.
  */
-#ifndef CHIAKI_WEBOS_INPUT_H
-#define CHIAKI_WEBOS_INPUT_H
+#ifndef HOTARU_INPUT_H
+#define HOTARU_INPUT_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -101,7 +101,7 @@ bool input_streaming(void);                     /* the pad is captured for the c
 bool input_pad_get(input_pad_t *out);           /* false when no pad is attached */
 void input_rumble(uint8_t left, uint8_t right); /* 0..255; 0/0 stops (pad FF_RUMBLE) */
 
-#ifdef CHIAKI_SIM
+#ifdef HOTARU_SIM
 void input_sim_wheel(float wheel_y); /* simulator: the mouse wheel stands in for the right stick */
 #endif
 

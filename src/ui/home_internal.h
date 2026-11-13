@@ -1,6 +1,6 @@
 /* ui/home_internal.h - what home.c and home_settings.c share; private to them. */
-#ifndef CHIAKI_WEBOS_HOME_INTERNAL_H
-#define CHIAKI_WEBOS_HOME_INTERNAL_H
+#ifndef HOTARU_HOME_INTERNAL_H
+#define HOTARU_HOME_INTERNAL_H
 
 #include <stdbool.h>
 #include <lvgl.h>
@@ -15,7 +15,7 @@
 #define HOME_PROW_GAP 10
 
 /* where the source of what runs is (AGPL-3.0 section 6), and its releases */
-#define HOME_SOURCE_URL "github.com/renjfk/chiaki-webos"
+#define HOME_SOURCE_URL "github.com/renjfk/hotaru-webos"
 
 enum { SET_STREAM, SET_PAD, SET_ACCOUNT, SET_LOG, SET_ABOUT, SET__N };
 

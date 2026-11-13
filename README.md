@@ -1,13 +1,13 @@
-[![CI](https://github.com/renjfk/chiaki-webos/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/renjfk/chiaki-webos/actions/workflows/ci.yml)
+[![CI](https://github.com/renjfk/hotaru-webos/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/renjfk/hotaru-webos/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Latest Release](https://img.shields.io/github/v/release/renjfk/chiaki-webos)](https://github.com/renjfk/chiaki-webos/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/renjfk/chiaki-webos/total)](https://github.com/renjfk/chiaki-webos/releases)
+[![Latest Release](https://img.shields.io/github/v/release/renjfk/hotaru-webos)](https://github.com/renjfk/hotaru-webos/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/renjfk/hotaru-webos/total)](https://github.com/renjfk/hotaru-webos/releases)
 
 <p align="center">
- <img width="160" alt="Chiaki webOS Icon" src="assets/icon-400.png">
+ <img width="160" alt="Hotaru Icon" src="assets/icon-400.png">
 </p>
 
-# Chiaki webOS
+# Hotaru
 
 PlayStation Remote Play for LG webOS TVs. A native app built on [chiaki-ng](https://github.com/streetpea/chiaki-ng)'s
 libchiaki that streams a PS5 or PS4 to the TV with hardware decoding, played with a DualShock 4 and driven by the
@@ -15,11 +15,11 @@ TV remote or the controller.
 
 > [!NOTE]
 > This is an early beta, built and tested on one TV (an LG 50UP75003LF on webOS 6). Things may break and other
-> TVs are untested. If you run into problems, an [issue](https://github.com/renjfk/chiaki-webos/issues) is always
+> TVs are untested. If you run into problems, an [issue](https://github.com/renjfk/hotaru-webos/issues) is always
 > welcome.
 
 > [!IMPORTANT]
-> Chiaki webOS is not on the LG Content Store: it installs on a TV in Developer Mode (or one rooted with the
+> Hotaru is not on the LG Content Store: it installs on a TV in Developer Mode (or one rooted with the
 > Homebrew Channel). It needs your own PS5 or PS4 with Remote Play turned on.
 
 |                 Home                 |                 Rest mode                  |                 Waking up                  |
@@ -47,9 +47,11 @@ that webOS handles native apps, hardware video and controllers, so at the end of
 developers where a webOS port would start ([chiaki-ng#517](https://github.com/chiaki-ng/chiaki-ng/issues/517)),
 but never had the capacity to build it.
 
-Chiaki webOS is the app I had in mind: one made for the TV, with a home screen modelled on the PS5's own, driven
+Hotaru is the app I had in mind: one made for the TV, with a home screen modelled on the PS5's own, driven
 entirely by the remote or the controller, that finds your consoles, wakes them, and carries on over PSN when you are
 away. AI-assisted development is what finally made a project of this size possible on the side.
+
+The name is Japanese: hotaru (蛍) is a firefly, a small light glowing in another room.
 
 ## Features
 
@@ -96,11 +98,11 @@ What is proven on the TV and what only in the tests is tracked in [docs/STATUS.m
 
 ### Quick Start
 
-1. Download `com.renjfk.chiakiwebos_<version>_arm.ipk` from the
-   [latest release](https://github.com/renjfk/chiaki-webos/releases/latest)
+1. Download `com.renjfk.hotaru_<version>_arm.ipk` from the
+   [latest release](https://github.com/renjfk/hotaru-webos/releases/latest)
 2. Install it with [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop), or from this repository:
    `scripts/tv.sh key <passphrase>` once, then `scripts/tv.sh install <file.ipk>`
-3. Open **Chiaki webOS** on the TV, choose **Add a console** and follow it: the console's PIN from
+3. Open **Hotaru** on the TV, choose **Add a console** and follow it: the console's PIN from
    Settings > System > Remote Play > Link Device, or sign in to PSN with your phone
 4. Pick the console and **Start Remote Play**
 
@@ -112,17 +114,17 @@ troubleshooting.
 On macOS with Apple silicon (the webOS toolchain build used here is for it):
 
 ```bash
-git clone --recursive https://github.com/renjfk/chiaki-webos.git && cd chiaki-webos
+git clone --recursive https://github.com/renjfk/hotaru-webos.git && cd hotaru-webos
 scripts/webos-sdk.sh                 # webosbrew's toolchain and ares-cli-rs into ~/webos-sdk
 scripts/chiaki-lib-build-webos.sh    # libchiaki and its static dependencies (once)
-./build.sh                           # dist/com.renjfk.chiakiwebos_<version>_arm.ipk
+./build.sh                           # dist/com.renjfk.hotaru_<version>_arm.ipk
 ```
 
 Without the libchiaki step the app builds with a simulated session backend, which is handy for UI work.
 
 ## Contributing
 
-Chiaki webOS is open to contributions and ideas! The most useful ones are trying it on other TVs, consoles and
+Hotaru is open to contributions and ideas! The most useful ones are trying it on other TVs, consoles and
 controllers (turn on Diagnostics and attach the log), filing clear bug reports, and opening PRs.
 
 > [!IMPORTANT]

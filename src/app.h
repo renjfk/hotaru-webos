@@ -30,8 +30,8 @@
  * Updates: app_init() starts the one release check of the run (net/update.h); its answer is
  * announced as APP_CHANGED_UPDATE.
  */
-#ifndef CHIAKI_WEBOS_APP_H
-#define CHIAKI_WEBOS_APP_H
+#ifndef HOTARU_APP_H
+#define HOTARU_APP_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -109,7 +109,7 @@ void app_settings_changed(void);
 const char *app_update_version(void);
 
 /* probe mode (log.h log_probe): on while Settings > About > Diagnostics is, or for this whole run
- * once forced (a launch parameter, CHIAKI_PROBE=1 or the flag file; see main.c) */
+ * once forced (a launch parameter, HOTARU_PROBE=1 or the flag file; see main.c) */
 void app_probe_force(void);
 bool app_probe_forced(void);
 

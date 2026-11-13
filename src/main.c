@@ -1,9 +1,9 @@
 /* main.c - entry point: init the modules, wire them together, run the loop.
  *
- * Chiaki webOS is a PlayStation Remote Play client (chiaki-ng port) for LG
+ * Hotaru is a PlayStation Remote Play client (chiaki-ng port) for LG
  * webOS TVs. Module map: see AGENTS.md.
  *
- * Probe mode (log.h) is forced on for the run by CHIAKI_PROBE=1, by the flag file
+ * Probe mode (log.h) is forced on for the run by HOTARU_PROBE=1, by the flag file
  * PROBE_FLAG (touch it over SSH before launching), or by a launch parameter
  * {"probe": true} (webOS hands a native app its parameters on the command line; every
  * argument is logged at startup to confirm how). In probe mode the loop also logs every
@@ -16,7 +16,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#ifndef CHIAKI_SIM
+#ifndef HOTARU_SIM
 #include <SDL_webOS.h> /* SDL_HINT_WEBOS_ACCESS_POLICY_KEYS_BACK, SDL_WEBOS_SCANCODE_BACK */
 #endif
 
@@ -29,11 +29,11 @@
 #include "ui/theme.h"
 #include "ui/ui.h"
 
-#define PROBE_FLAG     "/tmp/chiaki-probe"
+#define PROBE_FLAG     "/tmp/hotaru-probe"
 #define PROBE_FRAME_MS 5000
 
 static bool probe_requested(int argc, char **argv) {
-    const char *env = getenv("CHIAKI_PROBE");
+    const char *env = getenv("HOTARU_PROBE");
     if (env && *env && strcmp(env, "0") != 0) return true;
     if (access(PROBE_FLAG, F_OK) == 0) return true;
     for (int i = 1; i < argc; i++) {
@@ -144,7 +144,7 @@ static void poll_sdl(void) {
 #ifdef SDLK_AC_BACK
             if (k == SDLK_AC_BACK) back = true;
 #endif
-#ifndef CHIAKI_SIM
+#ifndef HOTARU_SIM
             if (e.key.keysym.scancode == SDL_WEBOS_SCANCODE_BACK) back = true; /* the claimed TV remote Back */
 #endif
             if (back) {
@@ -154,7 +154,7 @@ static void poll_sdl(void) {
                 input_remote_key(k, e.key.keysym.mod);
             }
         }
-#ifdef CHIAKI_SIM
+#ifdef HOTARU_SIM
         else if (e.type == SDL_MOUSEWHEEL)
             input_sim_wheel(e.wheel.preciseY);
 #endif
@@ -163,11 +163,11 @@ static void poll_sdl(void) {
 
 int main(int argc, char **argv) {
     log_init(LOG_PATH);
-    log_msg("Chiaki webOS %s starting (LVGL %d.%d.%d)", CHIAKI_WEBOS_VERSION, LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
+    log_msg("Hotaru %s starting (LVGL %d.%d.%d)", HOTARU_VERSION, LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
             LVGL_VERSION_PATCH);
     for (int i = 1; i < argc; i++) log_msg("argument %d: %s", i, argv[i]);
 
-#ifndef CHIAKI_SIM
+#ifndef HOTARU_SIM
     /* the TV keeps the Back key for itself unless the app claims it; after this the
      * press arrives as SDL_WEBOS_SCANCODE_BACK (handled in poll_sdl) */
     SDL_SetHint(SDL_HINT_WEBOS_ACCESS_POLICY_KEYS_BACK, "true");
@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
     app_init(ui_app_changed);
     ui_create();
     log_msg("UI created (%dx%d)", lv_disp_get_hor_res(NULL), lv_disp_get_ver_res(NULL));
-#ifndef CHIAKI_SIM
+#ifndef HOTARU_SIM
     log_msg("backend: BACK key policy=%s", SDL_GetHint(SDL_HINT_WEBOS_ACCESS_POLICY_KEYS_BACK));
     log_msg("backend: SDL %d.%d.%d, video driver=%s", SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_PATCHLEVEL,
             SDL_GetCurrentVideoDriver());
@@ -200,7 +200,7 @@ int main(int argc, char **argv) {
     };
     input_init(ui_group(), &hooks);
 
-    if (!getenv("CHIAKI_NO_SPLASH")) splash_show();
+    if (!getenv("HOTARU_NO_SPLASH")) splash_show();
 
     while (app_running()) {
         poll_sdl();

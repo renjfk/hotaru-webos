@@ -11,8 +11,8 @@
  * sign in on the phone (QR, then the code with the keyboard) -> signing in -> the consoles found.
  * Mock rules: a PIN starting with 0000 is refused; any code links two consoles.
  */
-#ifndef CHIAKI_WEBOS_ADDKIT_H
-#define CHIAKI_WEBOS_ADDKIT_H
+#ifndef HOTARU_ADDKIT_H
+#define HOTARU_ADDKIT_H
 
 #include "kit.h"
 

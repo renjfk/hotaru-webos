@@ -1,6 +1,6 @@
 # Third-party notices
 
-Chiaki webOS is licensed under the AGPL-3.0 with an additional permission to link OpenSSL ([LICENSE](LICENSE)). The
+Hotaru is licensed under the AGPL-3.0 with an additional permission to link OpenSSL ([LICENSE](LICENSE)). The
 release package links the components below statically and carries their full license texts in `licenses/`; in
 this repository they come with their sources (the `chiaki-ng` submodule, the dependency tarballs
 `scripts/chiaki-lib-build-webos.sh` downloads, LVGL in `third_party/`) or are in [LICENSES/](LICENSES).

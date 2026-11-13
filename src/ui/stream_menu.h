@@ -8,8 +8,8 @@
  * smoothing and rumble apply at once). It covers the bottom ~37% of the screen, which also keeps
  * the repaint cheap while the menu is up.
  */
-#ifndef CHIAKI_WEBOS_STREAM_MENU_H
-#define CHIAKI_WEBOS_STREAM_MENU_H
+#ifndef HOTARU_STREAM_MENU_H
+#define HOTARU_STREAM_MENU_H
 
 #include <stdbool.h>
 #include <lvgl.h>

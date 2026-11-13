@@ -1,6 +1,6 @@
 /* input/input_internal.h - state and functions shared by the input/ files only. */
-#ifndef CHIAKI_WEBOS_INPUT_INTERNAL_H
-#define CHIAKI_WEBOS_INPUT_INTERNAL_H
+#ifndef HOTARU_INPUT_INTERNAL_H
+#define HOTARU_INPUT_INTERNAL_H
 
 #include "input.h"
 

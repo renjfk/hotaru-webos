@@ -8,8 +8,8 @@
  *
  * feeder_push() may be called from any thread; fn() only ever runs on the feeder's thread.
  */
-#ifndef CHIAKI_WEBOS_FEEDER_H
-#define CHIAKI_WEBOS_FEEDER_H
+#ifndef HOTARU_FEEDER_H
+#define HOTARU_FEEDER_H
 
 #include <stdbool.h>
 #include <stddef.h>

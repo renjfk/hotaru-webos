@@ -1,7 +1,7 @@
 /* chiaki/session.h - a PS Remote Play session and console registration, wrapping chiaki-ng's libchiaki.
  *
  * Two backends implement this API, selected at compile time:
- *   - chiaki/session_real.c (CHIAKI_HAVE_LIBCHIAKI, linked by CMakeLists.txt via
+ *   - chiaki/session_real.c (HOTARU_HAVE_LIBCHIAKI, linked by CMakeLists.txt via
  *     CHIAKI_LIB_STAGING): real libchiaki; scripts/chiaki-lib-build-webos.sh is the
  *     proven cross-build recipe. session_available() returns true.
  *   - chiaki/session.c (otherwise): a simulation on the main thread (~3 s of progress,
@@ -37,8 +37,8 @@
  * session with an address ending in ".99" emits a login-PIN request mid-handshake;
  * one ending in ".98" is never reached on the local network (an unreachable quit).
  */
-#ifndef CHIAKI_WEBOS_SESSION_H
-#define CHIAKI_WEBOS_SESSION_H
+#ifndef HOTARU_SESSION_H
+#define HOTARU_SESSION_H
 
 #include <stdbool.h>
 #include <stdint.h>

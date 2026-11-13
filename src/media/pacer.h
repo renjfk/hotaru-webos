@@ -11,8 +11,8 @@
  * longer stall) restarts the cadence with the full max_ms delay. Pure logic, no clock of its
  * own: times are in whatever millisecond clock the caller passes.
  */
-#ifndef CHIAKI_WEBOS_PACER_H
-#define CHIAKI_WEBOS_PACER_H
+#ifndef HOTARU_PACER_H
+#define HOTARU_PACER_H
 
 #define PACER_MARGIN_MS 15.0    /* lead kept in hand: stalls vary (109-142 ms seen on the TV) */
 #define PACER_WINDOW_MS 10000.0 /* how long a stall pattern is watched before the delay shrinks */

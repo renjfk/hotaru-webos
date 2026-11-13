@@ -8,8 +8,8 @@
  * buffer is freed with the widget. If the text does not fit a QR code or the
  * memory is not there, a placeholder tile with a short message is returned.
  */
-#ifndef CHIAKI_WEBOS_QR_H
-#define CHIAKI_WEBOS_QR_H
+#ifndef HOTARU_QR_H
+#define HOTARU_QR_H
 
 #include <stdbool.h>
 #include <lvgl.h>

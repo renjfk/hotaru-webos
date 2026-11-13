@@ -11,7 +11,7 @@
 
 ## Before you start
 
-Chiaki webOS is not in the LG Content Store, so the TV has to accept apps from elsewhere. Either:
+Hotaru is not in the LG Content Store, so the TV has to accept apps from elsewhere. Either:
 
 - **Developer Mode**: install LG's [Developer Mode app](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app)
   from the Content Store, sign in with a free LG developer account, and turn on **Dev Mode Status** (the TV
@@ -27,8 +27,8 @@ game itself.
 
 ## Installing
 
-Download `com.renjfk.chiakiwebos_<version>_arm.ipk` from the
-[latest release](https://github.com/renjfk/chiaki-webos/releases/latest), then either:
+Download `com.renjfk.hotaru_<version>_arm.ipk` from the
+[latest release](https://github.com/renjfk/hotaru-webos/releases/latest), then either:
 
 - **webOS Dev Manager**: install [Dev Manager](https://github.com/webosbrew/dev-manager-desktop) on a computer, add
   the TV with the passphrase shown in its Developer Mode app, and install the `.ipk` from the Apps tab.
@@ -36,17 +36,17 @@ Download `com.renjfk.chiakiwebos_<version>_arm.ipk` from the
 
   ```bash
   WEBOS_HOST=<the TV's address> scripts/tv.sh key <passphrase>
-  WEBOS_HOST=<the TV's address> scripts/tv.sh install com.renjfk.chiakiwebos_<version>_arm.ipk
+  WEBOS_HOST=<the TV's address> scripts/tv.sh install com.renjfk.hotaru_<version>_arm.ipk
   ```
 
-Chiaki webOS then shows up among the TV's apps. Installing a newer `.ipk` the same way updates it.
+Hotaru then shows up among the TV's apps. Installing a newer `.ipk` the same way updates it.
 
 ## Preparing the console
 
 On a **PS5**:
 
 - Settings > System > Remote Play: turn on **Enable Remote Play**
-- To start it from Chiaki webOS while it is in rest mode: Settings > System > Power Saving > Features Available in
+- To start it from Hotaru while it is in rest mode: Settings > System > Power Saving > Features Available in
   Rest Mode: turn on **Stay Connected to the Internet** and **Enable Turning On PS5 from Network**
 
 On a **PS4**:
@@ -57,7 +57,7 @@ On a **PS4**:
 
 ## Adding a console
 
-Open Chiaki webOS and choose **Add a console** (the + tile on Home, or Settings > PSN account). There are two ways
+Open Hotaru and choose **Add a console** (the + tile on Home, or Settings > PSN account). There are two ways
 in; a console added both ways stays one console that uses the local network first.
 
 **With the console's PIN** (on the same network as the TV):
@@ -115,9 +115,9 @@ Settings. The TV remote's arrows, OK and Back do the same.
 - **The picture stutters**: connect the TV with an Ethernet cable if you can: TV Wi-Fi can pause for a moment
   several times a second, which no setting fully hides. On Wi-Fi, raise Smooth playback or lower the bitrate.
 - **Reporting a bug**: turn on Settings > About > **Diagnostics**, reproduce the problem, and attach the log to an
-  [issue](https://github.com/renjfk/chiaki-webos/issues). The log is `/tmp/chiaki.log` on the TV; with Developer
+  [issue](https://github.com/renjfk/hotaru-webos/issues). The log is `/tmp/hotaru.log` on the TV; with Developer
   Mode, `scripts/tv.sh save` copies it.
 
 ## Uninstalling
 
-Remove Chiaki webOS from the TV's app list (or from Dev Manager). Its settings, pairings and PSN sign-in go with it.
+Remove Hotaru from the TV's app list (or from Dev Manager). Its settings, pairings and PSN sign-in go with it.

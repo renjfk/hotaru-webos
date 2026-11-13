@@ -1,4 +1,4 @@
-# AGENTS.md - Chiaki webOS
+# AGENTS.md - Hotaru
 
 Guidelines for AI agents working in this repository. Keep this file concise - only document constraints and rules
 an agent would get wrong without being told. Implementation details belong in code comments, not here. What works
@@ -6,11 +6,11 @@ and where it was proven: [docs/STATUS.md](docs/STATUS.md); what only the TV can 
 
 ## Project Overview
 
-**Chiaki webOS** is a native LG webOS TV app: a PlayStation Remote Play client on
+**Hotaru** is a native LG webOS TV app: a PlayStation Remote Play client on
 [chiaki-ng](https://github.com/streetpea/chiaki-ng)'s libchiaki. C11, SDL2 + LVGL 8.3.11 (software rendered), no
 web stack. AGPL-3.0 with an OpenSSL exception, like chiaki-ng.
 
-- **App:** id `com.renjfk.chiakiwebos`, title "Chiaki webOS", binary `chiaki`, version in `appinfo.json` (three
+- **App:** id `com.renjfk.hotaru`, title "Hotaru", binary `hotaru`, version in `appinfo.json` (three
   numbers; releases write the tag into it)
 - **Target TV:** LG 50UP75003LF, webOS TV Lite 6.5.3, 1920x1080, armv7l, 4 cores, ~340 MB free RAM, on Wi-Fi that
   goes quiet ~115 ms twice a second ("Smooth playback" hides it)
@@ -22,7 +22,7 @@ web stack. AGPL-3.0 with an OpenSSL exception, like chiaki-ng.
 ```
 src/
   main.c            entry: init modules, wire hooks, main loop; probe mode triggers, SDL event probe, frame timing
-  log.[ch]          the only logger: /tmp/chiaki.log, the Log panel's feed, probe lines
+  log.[ch]          the only logger: /tmp/hotaru.log, the Log panel's feed, probe lines
   app.[ch]          state the UI renders: consoles, discovery, connection, registration; glue to config/session
   platform/         display.[ch]: SDL window + streaming texture + LVGL display driver
   input/            remote + controller -> the LVGL keypad indev: keypad.c, gamepad.c (evdev), scroll.c
@@ -33,7 +33,7 @@ src/
                     widgets.[ch], logo.[ch], log_view.[ch], splash.[ch], qr.[ch]
   config/           settings, consoles, PSN account, device UID; one key=value file (config.h)
   chiaki/           session.h: the libchiaki wrapper API; session_real.c the real backend
-                    (CHIAKI_HAVE_LIBCHIAKI), session.c the simulation (host tests, simulator)
+                    (HOTARU_HAVE_LIBCHIAKI), session.c the simulation (host tests, simulator)
   media/            ndl.[ch] NDL hardware video + PCM audio; feeder.[ch] media worker threads;
                     pacer.[ch] even playout cadence for "Smooth playback"
   net/              update.[ch]: is a newer release out (GitHub's latest release, once per launch)
@@ -87,7 +87,7 @@ assets/             app icons; devices/ the console and pad art the app loads at
 ```bash
 scripts/webos-sdk.sh                 # once: toolchain + ares-cli-rs into ~/webos-sdk (macOS arm64)
 scripts/chiaki-lib-build-webos.sh    # once: libchiaki + static deps -> out/chiaki-lib-staging
-./build.sh                           # dist/com.renjfk.chiakiwebos_<version>_arm.ipk (fetches LVGL on first run)
+./build.sh                           # dist/com.renjfk.hotaru_<version>_arm.ipk (fetches LVGL on first run)
 tests/host/run.sh                    # host tests (brew install sdl2); exit status = failures
 sim/run.sh                           # the app in a window
 scripts/chiaki-lib-update.sh [REF]   # chiaki-ng to its newest commit (or REF), notices updated; then rebuild
@@ -122,7 +122,7 @@ scripts/tv.sh install && scripts/tv.sh launch --probe && scripts/tv.sh log -f
 
 - **OpenSSL and libchiaki are linked statically.** The TV ships OpenSSL 1.0.2, the SDK 1.1: a dynamic `libssl`
   fails to load and the app is relaunched in a loop. Do not define `CHIAKI_LIB_ENABLE_MBEDTLS` (it changes
-  `ecdh.h`). Our headers use `CHIAKI_WEBOS_*_H` guards: libchiaki's use `CHIAKI_LOG_H`, `CHIAKI_SESSION_H`, ...
+  `ecdh.h`). Our headers use `HOTARU_*_H` guards: libchiaki's use `CHIAKI_LOG_H`, `CHIAKI_SESSION_H`, ...
 - **The controller map is webOS's, not hid-sony's**: buttons in HID order from 0x130 (Cross 0x131, L1 0x134, R1
   0x135, Options 0x139), right stick `ABS_Z`/`ABS_RZ`, triggers `ABS_RX`/`ABS_RY`
   ([docs/ds4-map-observed.txt](docs/ds4-map-observed.txt)). Tables are per device name; the DualSense uses the same
@@ -157,10 +157,10 @@ scripts/tv.sh install && scripts/tv.sh launch --probe && scripts/tv.sh log -f
 - **Device art** comes from `design/menu/art/`, scaled by `scripts/make-device-art.sh` into `assets/devices/`; the
   ipk installs it next to the binary. The app icon is a checked-in PNG with the glyph only: the launcher draws the
   tile in `appinfo.json` `iconColor`
-- **Logs**: no journald or stdout on the TV, only `/tmp/chiaki.log` (truncated per launch). Probe mode
+- **Logs**: no journald or stdout on the TV, only `/tmp/hotaru.log` (truncated per launch). Probe mode
   (`log_probe()`) is for what only the TV can answer; keep it off the hot paths unless throttled
-- **Config**: `$CHIAKI_CONFIG_DIR/chiaki.conf`, else `$HOME/conf/chiaki.conf` on the TV (the app's directory), else
-  `/tmp/chiaki-webos`. Mode 0600: it holds pairing keys and PSN tokens. Whether it survives an update: `TODO(path)`.
+- **Config**: `$HOTARU_CONFIG_DIR/hotaru.conf`, else `$HOME/conf/hotaru.conf` on the TV (the app's directory), else
+  `/tmp/hotaru`. Mode 0600: it holds pairing keys and PSN tokens. Whether it survives an update: `TODO(path)`.
   Rename a key when its meaning changes (unknown keys are ignored): an old saved value would apply otherwise
 - **Licenses**: the `.ipk` ships `LICENSE`, `THIRD_PARTY_NOTICES.md` and every bundled component's license text;
   a new statically linked dependency needs its license in `stage_licenses` (`scripts/chiaki-lib-build-webos.sh`)

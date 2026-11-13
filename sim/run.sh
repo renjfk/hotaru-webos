@@ -3,9 +3,9 @@
 # driven by the keyboard (TV remote keys: arrows = D-pad, Enter = select,
 # Esc = back/quit; typing goes into fields and digit boxes) and the mouse wheel
 # (the right stick: scrolls the log). Set
-# CHIAKI_NO_SPLASH=1 to skip the startup overlay while iterating on the UI.
+# HOTARU_NO_SPLASH=1 to skip the startup overlay while iterating on the UI.
 # Settings and registered consoles persist in out/sim/config (override with
-# CHIAKI_CONFIG_DIR; delete the folder for a fresh start).
+# HOTARU_CONFIG_DIR; delete the folder for a fresh start).
 #
 # Needs `brew install sdl2`; LVGL is fetched into third_party/ by ./build.sh.
 #
@@ -16,8 +16,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$ROOT/out/sim"
-export CHIAKI_CONFIG_DIR="${CHIAKI_CONFIG_DIR:-$BUILD/config}"
+export HOTARU_CONFIG_DIR="${HOTARU_CONFIG_DIR:-$BUILD/config}"
 
 cmake -S "$ROOT/sim" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release -Wno-dev >/dev/null
 cmake --build "$BUILD" -j"$(sysctl -n hw.ncpu)"
-exec "$BUILD/chiaki-sim" "$@"
+exec "$BUILD/hotaru-sim" "$@"

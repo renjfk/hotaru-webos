@@ -28,9 +28,9 @@ static int g_cached;
 static const char *assets_dir(void) {
     static char dir[512];
     if (dir[0]) return dir;
-    const char *env = getenv("CHIAKI_ASSETS_DIR");
-#ifdef CHIAKI_ASSETS_DIR
-    if (!env || !*env) env = CHIAKI_ASSETS_DIR;
+    const char *env = getenv("HOTARU_ASSETS_DIR");
+#ifdef HOTARU_ASSETS_DIR
+    if (!env || !*env) env = HOTARU_ASSETS_DIR;
 #endif
     if (env && *env) {
         snprintf(dir, sizeof(dir), "%s", env);

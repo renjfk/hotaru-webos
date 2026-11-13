@@ -5,8 +5,8 @@
  * opengles2 renderer presents. (lv_draw_sdl is not used: the streaming texture
  * is the path proven on this TV and avoids letterboxing.)
  */
-#ifndef CHIAKI_WEBOS_DISPLAY_H
-#define CHIAKI_WEBOS_DISPLAY_H
+#ifndef HOTARU_DISPLAY_H
+#define HOTARU_DISPLAY_H
 
 #include <stdbool.h>
 #include <lvgl.h>

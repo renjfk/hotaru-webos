@@ -5,8 +5,8 @@
  * what the recorder plays to produce the gallery clips and screenshots. Concepts are grouped in
  * studies (main.c): the main menu, the "Add a console" flow and the update notice.
  */
-#ifndef CHIAKI_WEBOS_CONCEPT_H
-#define CHIAKI_WEBOS_CONCEPT_H
+#ifndef HOTARU_CONCEPT_H
+#define HOTARU_CONCEPT_H
 
 #include "kit.h"
 

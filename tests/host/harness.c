@@ -6,7 +6,7 @@
  * the session, the stream menu (see-through, adjust, restart, Share + Options, Disconnect),
  * right-stick scrolling, hotplug, every step of Add a console, simulated registrations, the
  * confirm and passcode dialogs and the empty host list. The config lives in an isolated dir
- * (CHIAKI_CONFIG_DIR), wiped on every run. Run with tests/host/run.sh. */
+ * (HOTARU_CONFIG_DIR), wiped on every run. Run with tests/host/run.sh. */
 #include <SDL.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -336,7 +336,7 @@ static void test_persistence(void) {
     expect(!config_load() && config_host_count() == 0 && !config_psn()->linked,
            "no config file: defaults, no consoles, no PSN account");
     expect(strncmp(config_path(), CONFIG_DIR "/", strlen(CONFIG_DIR) + 1) == 0,
-           "the config file is in CHIAKI_CONFIG_DIR");
+           "the config file is in HOTARU_CONFIG_DIR");
     char duid[CONFIG_DUID_LEN + 1];
     snprintf(duid, sizeof(duid), "%s", config_device_uid());
     config_t *c = config_get();
@@ -513,7 +513,7 @@ int main(void) {
     lv_disp_t *disp = lv_disp_drv_register(&drv);
 
     if (system("rm -rf " DEV " " CONFIG_DIR) != 0) return 1; /* NOLINT(cert-env33-c): fixed paths, a fresh run */
-    setenv("CHIAKI_CONFIG_DIR", CONFIG_DIR, 1);              /* never the developer's own settings */
+    setenv("HOTARU_CONFIG_DIR", CONFIG_DIR, 1);              /* never the developer's own settings */
     pad_plug("event9");
     fake_sysfs();
     theme_init(disp);
@@ -1466,15 +1466,15 @@ int main(void) {
     pump(600);
     bool waited = splash_active() && !home_update_note()[0] && !strcmp(app_update_version(), "99.0");
     pump(1600);
-    lv_obj_t *note = find_btn(home_root(), "github.com/renjfk/chiaki-webos");
-    expect(waited && !splash_active() && !strcmp(home_update_note(), "Chiaki webOS 99.0 is available") && note &&
+    lv_obj_t *note = find_btn(home_root(), "github.com/renjfk/hotaru-webos");
+    expect(waited && !splash_active() && !strcmp(home_update_note(), "Hotaru 99.0 is available") && note &&
                visible(note),
            "a newer release: once the splash is gone, a notice names the version and where to get it");
     lv_area_t row;
     lv_obj_get_coords(home_row(HOME_CONSOLES), &row);
     expect(note && note->coords.y2 < row.y1 && note->coords.x2 < W && note->coords.y1 >= 0,
            "the notice sits in the top bar, above the tile row");
-    expect(find_btn(home_root(), "Version 99.0 is available at github.com/renjfk/chiaki-webos") != NULL,
+    expect(find_btn(home_root(), "Version 99.0 is available at github.com/renjfk/hotaru-webos") != NULL,
            "Settings > About names the new version too");
     fails0 = g_fail;
     home_check("home-update");

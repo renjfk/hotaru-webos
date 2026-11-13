@@ -10,8 +10,8 @@
  * Back = ui_dialog_back = cancel). A callback runs after the dialog is gone, through an async
  * call, so it may change app state (which can rebuild the UI).
  */
-#ifndef CHIAKI_WEBOS_DIALOG_H
-#define CHIAKI_WEBOS_DIALOG_H
+#ifndef HOTARU_DIALOG_H
+#define HOTARU_DIALOG_H
 
 #include <stdbool.h>
 #include <stdint.h>
