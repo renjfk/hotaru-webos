@@ -133,6 +133,16 @@ Install a newer build over the installed one (same app id).
 - **It decides** `TODO(path)` in `src/config/config.h`: if they are lost, the config needs a place outside the app
   directory.
 
+### 13. The update notice
+
+Launch a build older than the latest release (the repository must be public): a local build is `appinfo.json`'s
+version, below every release.
+
+- **Look for** `ui: [UPDATE] Chiaki webOS <version> is out` and, once the splash is gone, the notice over the top
+  bar's right end for 9 s; Settings > About names the version too. An `update: GitHub not reached` line means the TV
+  was not on its network yet: the check tries 4 times, 15 s apart.
+- **It decides** whether GitHub's API is reachable over the TV's CA bundle like PSN is (`src/net/update.c`).
+
 ## Recording the results
 
 Update the table in [STATUS.md](STATUS.md), keep raw evidence next to it (like

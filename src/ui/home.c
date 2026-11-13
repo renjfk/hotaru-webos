@@ -14,6 +14,7 @@
 #include "logo.h"
 #include "motion.h"
 #include "register.h"
+#include "splash.h"
 
 #define TILE_S      176                     /* resting tile */
 #define TILE_F      256                     /* focused tile */
@@ -45,6 +46,18 @@
 #define TILE_ADD_LOW 0x101626
 #define TILE_SET_LOW 0x0c1424
 #define SET_LIFT     0x101010
+/* the update notice: the app mark beside two lines, over the top bar's right end (its controller,
+ * avatar and clock take no keys), centred on the top bar's 52 px row */
+#define UPDATE_MS     9000 /* long enough to read the address */
+#define UPDATE_WAIT   500  /* how often a waiting notice looks whether Home is free */
+#define UPDATE_LOGO   48   /* as tall as the two lines */
+#define UPDATE_PAD    18   /* above and below them */
+#define UPDATE_SIDE   SP_XL
+#define UPDATE_GAP    20
+#define UPDATE_BORDER 2
+#define UPDATE_H      (UPDATE_LOGO + 2 * UPDATE_PAD + 2 * UPDATE_BORDER)
+#define UPDATE_Y      (HOME_SAFE_Y - 4 + 26 - UPDATE_H / 2)
+#define UPDATE_RISE   24 /* it drops in from above and rises away */
 
 enum { SEC__N = 2 };
 enum { ACT__N = 3 };
@@ -70,7 +83,8 @@ static struct {
     lv_obj_t *pad_box, *pad_img, *pad_dot, *avatar, *avatar_lbl, *clock;
     lv_obj_t *conn, *conn_art_box, *conn_title, *conn_bar, *conn_pct, *conn_hints;
     lv_obj_t *toast, *toast_lbl;
-    lv_timer_t *clock_timer, *toast_timer;
+    lv_obj_t *update, *update_title, *update_addr;
+    lv_timer_t *clock_timer, *toast_timer, *update_wait, *update_hide;
     ctl_menu_t menu;
     int menu_kind;
     art_id_t pad_art;
@@ -120,12 +134,16 @@ static void toast_hide_cb(lv_timer_t *t) {
     motion_to(g.toast, MO_OPA, LV_OPA_TRANSP, 300, 0, NULL);
 }
 
-/* width from the text: a content-sized parent with a centred child is not resolved by LVGL 8 */
-static void fit_width(lv_obj_t *box, lv_obj_t *label, lv_coord_t pad) {
+static lv_coord_t text_width(lv_obj_t *label) {
     lv_point_t sz;
     lv_txt_get_size(&sz, lv_label_get_text(label), lv_obj_get_style_text_font(label, 0), 0, 0, LV_COORD_MAX,
                     LV_TEXT_FLAG_NONE);
-    lv_obj_set_width(box, sz.x + 2 * pad);
+    return sz.x;
+}
+
+/* width from the text: a content-sized parent with a centred child is not resolved by LVGL 8 */
+static void fit_width(lv_obj_t *box, lv_obj_t *label, lv_coord_t pad) {
+    lv_obj_set_width(box, text_width(label) + 2 * pad);
 }
 
 static void toast(const char *text, uint32_t col) {
@@ -137,6 +155,65 @@ static void toast(const char *text, uint32_t col) {
     if (g.toast_timer) lv_timer_del(g.toast_timer);
     g.toast_timer = lv_timer_create(toast_hide_cb, TOAST_MS, NULL);
     lv_timer_set_repeat_count(g.toast_timer, 1);
+}
+
+/* ---------- the update notice ---------- */
+
+static void update_hidden_cb(lv_obj_t *o) {
+    if (!g.update_hide) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void update_hide_cb(lv_timer_t *t) {
+    (void)t;
+    g.update_hide = NULL;
+    motion_to(g.update, MO_TY, -UPDATE_RISE, 320, 0, lv_anim_path_ease_in);
+    motion_then(g.update, MO_OPA, LV_OPA_TRANSP, 280, lv_anim_path_ease_in, update_hidden_cb);
+}
+
+/* a newer release: the notice waits until Home is in front and idle (the splash is gone, no dialog,
+ * no session), so it is seen */
+static void update_wait_cb(lv_timer_t *t) {
+    if (lv_obj_has_flag(g.root, LV_OBJ_FLAG_HIDDEN) || app_conn_state() != CONN_IDLE || splash_active() ||
+        ui_dialog_active())
+        return;
+    lv_timer_del(t);
+    g.update_wait = NULL;
+    if (!app_update_version()[0]) return;
+    lv_label_set_text_fmt(g.update_title, "Chiaki webOS %s is available", app_update_version());
+    lv_coord_t x = UPDATE_SIDE + UPDATE_LOGO + UPDATE_GAP;
+    lv_obj_set_width(g.update, x + LV_MAX(text_width(g.update_title), text_width(g.update_addr)) + UPDATE_SIDE +
+                                   2 * UPDATE_BORDER);
+    lv_obj_clear_flag(g.update, LV_OBJ_FLAG_HIDDEN);
+    motion_from(g.update, MO_TY, -UPDATE_RISE, 0, 360, 0, NULL);
+    motion_to(g.update, MO_OPA, LV_OPA_COVER, 240, 0, NULL);
+    if (g.update_hide) lv_timer_del(g.update_hide);
+    g.update_hide = lv_timer_create(update_hide_cb, UPDATE_MS, NULL);
+    lv_timer_set_repeat_count(g.update_hide, 1);
+}
+
+static void update_changed(void) {
+    home_settings_refresh(); /* About names the new version too */
+    if (!app_update_version()[0] || g.update_wait) return;
+    g.update_wait = lv_timer_create(update_wait_cb, UPDATE_WAIT, NULL);
+    lv_timer_ready(g.update_wait);
+}
+
+static void build_update(void) {
+    g.update = ctl_rect(g.root, 400, UPDATE_H, 26, COL_SHEET, LV_OPA_COVER); /* opaque: it hides what it covers */
+    lv_obj_set_style_border_width(g.update, UPDATE_BORDER, 0);
+    lv_obj_set_style_border_color(g.update, lv_color_white(), 0);
+    lv_obj_set_style_border_opa(g.update, LV_OPA_20, 0);
+    lv_obj_set_style_shadow_width(g.update, 50, 0);
+    lv_obj_set_style_shadow_opa(g.update, LV_OPA_40, 0);
+    lv_obj_align(g.update, LV_ALIGN_TOP_RIGHT, -HOME_SAFE_X + SP_L, UPDATE_Y);
+    lv_obj_set_pos(ui_logo(g.update, UPDATE_LOGO), UPDATE_SIDE, UPDATE_PAD);
+    lv_coord_t x = UPDATE_SIDE + UPDATE_LOGO + UPDATE_GAP;
+    g.update_title = ctl_label(g.update, FONT_BODY, COL_TEXT, "");
+    lv_obj_set_pos(g.update_title, x, UPDATE_PAD - 5);
+    g.update_addr = ctl_label(g.update, FONT_CAPTION, COL_MUTED, HOME_SOURCE_URL);
+    lv_obj_set_pos(g.update_addr, x, UPDATE_PAD + 27);
+    lv_obj_set_style_opa(g.update, LV_OPA_TRANSP, 0);
+    lv_obj_add_flag(g.update, LV_OBJ_FLAG_HIDDEN);
 }
 
 /* ---------- tiles ---------- */
@@ -948,6 +1025,7 @@ void home_app_changed(app_change_t what) {
         case APP_CHANGED_STATE:
             if (g.sec == HOME_CONSOLES && !on_add_tile() && focused_host()) hero_state(focused_host());
             break;
+        case APP_CHANGED_UPDATE: update_changed(); break;
         case APP_CHANGED_PIN: break;
     }
 }
@@ -1041,6 +1119,7 @@ void home_create(lv_obj_t *parent) {
     g.toast_lbl = ctl_label(g.toast, FONT_BODY, COL_TEXT, "");
     lv_obj_center(g.toast_lbl);
     lv_obj_set_style_opa(g.toast, LV_OPA_TRANSP, 0);
+    build_update();
     build_connecting();
 
     int sel = app_selected();
@@ -1069,6 +1148,7 @@ int home_item(void) { return g.item; }
 bool home_menu_open(void) { return ctl_menu_is_open(&g.menu); }
 bool home_connecting(void) { return g.root && !lv_obj_has_flag(g.conn, LV_OBJ_FLAG_HIDDEN); }
 lv_obj_t *home_root(void) { return g.root; }
+const char *home_update_note(void) { return g.update_hide ? lv_label_get_text(g.update_title) : ""; }
 lv_obj_t *home_row(int section) { return section >= 0 && section < SEC__N ? g.row[section] : NULL; }
 const char *home_pad_battery(void) { /* "" when the controller reports no battery */
     return g.card_pad_batt && !lv_obj_has_flag(g.card_pad_batt, LV_OBJ_FLAG_HIDDEN) ? lv_label_get_text(g.card_pad_batt)

@@ -24,6 +24,7 @@
 #include "log.h"
 #include "media/feeder.h"
 #include "media/pacer.h"
+#include "net/update.h"
 #include "ui/dialog.h"
 #include "ui/home.h"
 #include "ui/qr.h"
@@ -466,6 +467,18 @@ static void test_pacer(void) {
     expect(p.restarts == before + 1, "a stall longer than the delay restarts the cadence");
 }
 
+/* net/update.c: the latest release's tag (vMAJOR.MINOR) against the installed version (three numbers) */
+static void test_update_versions(void) {
+    expect(update_newer("v0.3", "0.2.0") && update_newer("v1.0", "0.9.0") && update_newer("0.2.1", "0.2.0") &&
+               update_newer("v0.10", "0.9.0"),
+           "a higher release is newer, part by part as numbers (the v is optional, a missing part is 0)");
+    expect(!update_newer("v0.2", "0.2.0") && !update_newer("v0.1", "0.2.0"), "the same or a lower release is not");
+    expect(!update_newer("v0.2", "0.2.57") && update_newer("v0.3", "0.2.57"),
+           "a prerelease build (<base>.<run>) is newer than its base release, not the release after it");
+    expect(!update_newer("nightly", "0.2.0") && !update_newer("", "0.2.0") && !update_newer(NULL, "0.2.0"),
+           "a tag that is no version is never newer");
+}
+
 int main(void) {
     log_init("/dev/stdout");
     SDL_Init(SDL_INIT_TIMER);
@@ -493,6 +506,7 @@ int main(void) {
     test_psn_account_id();
     test_feeder();
     test_pacer();
+    test_update_versions();
     /* No demo consoles any more: seed three registered ones (not saved) so the Hosts list, the
      * D-pad focus and the connect test below have something to act on. */
     static const struct {
@@ -1423,6 +1437,32 @@ int main(void) {
     shot("splash");
     pump(1800);
     expect(!splash_active(), "splash auto-dismisses");
+
+    /* a newer release (as at startup): the notice waits for the splash, then names the version and where it is,
+     * in the top bar's right end, above the tile row; it goes after 9 s */
+    splash_show();
+    update_fake("v99.0");
+    pump(600);
+    bool waited = splash_active() && !home_update_note()[0] && !strcmp(app_update_version(), "99.0");
+    pump(1600);
+    lv_obj_t *note = find_btn(home_root(), "github.com/renjfk/chiaki-webos");
+    expect(waited && !splash_active() && !strcmp(home_update_note(), "Chiaki webOS 99.0 is available") && note &&
+               visible(note),
+           "a newer release: once the splash is gone, a notice names the version and where to get it");
+    lv_area_t row;
+    lv_obj_get_coords(home_row(HOME_CONSOLES), &row);
+    expect(note && note->coords.y2 < row.y1 && note->coords.x2 < W && note->coords.y1 >= 0,
+           "the notice sits in the top bar, above the tile row");
+    expect(find_btn(home_root(), "Version 99.0 is available at github.com/renjfk/chiaki-webos") != NULL,
+           "Settings > About names the new version too");
+    fails0 = g_fail;
+    home_check("home-update");
+    expect(g_fail == fails0, "the update notice fits Home");
+    pump(9000);
+    expect(!home_update_note()[0] && note && !visible(note), "the notice goes after 9 s");
+    update_fake("v0.0.1");
+    pump(100);
+    expect(!app_update_version()[0], "an older release is no update");
 
     printf("== %d failure(s)\n", g_fail);
     return g_fail ? 1 : 0;

@@ -95,6 +95,11 @@ directory is not writable the app falls back to `/tmp/chiaki-webos`, which a reb
 
 ## Constraints
 
+- One `.ipk` for every TV: the binary is 32-bit ARM (EABI5, soft float), what webOS TVs run even on 64-bit chips
+  (moonlight-tv ships one `_arm.ipk` for all of them), needs glibc 2.12 at most and links only the TV's SDL2 and
+  `libNDL_directmedia`. Its NDL calls are the v2 API, which ss4s (moonlight-tv's media layer) uses from webOS 5 on;
+  a webOS 4 TV has the v1 API only, so reaching it takes a second media backend picked at runtime, not a second
+  package
 - OpenSSL must be linked statically: a dynamic `libssl.so.1.1` fails to load and the app is relaunched in a loop
 - ~340 MB of free RAM; the two LVGL draw buffers take ~16 MB
 - Wi-Fi: the bitrate must suit the link, and the stalls above need Smooth playback; on Ethernet they are gone

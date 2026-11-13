@@ -36,6 +36,7 @@ src/
                     (CHIAKI_HAVE_LIBCHIAKI), session.c the simulation (host tests, simulator)
   media/            ndl.[ch] NDL hardware video + PCM audio; feeder.[ch] media worker threads;
                     pacer.[ch] even playout cadence for "Smooth playback"
+  net/              update.[ch]: is a newer release out (GitHub's latest release, once per launch)
   vendor/           qrcodegen.[ch]: Nayuki's QR encoder, unmodified
 tests/host/         macOS behaviour tests (shim/ fakes <linux/input.h>)
 sim/                macOS simulator: the whole app in a window
@@ -62,8 +63,8 @@ assets/             app icons; devices/ the console and pad art the app loads at
   backends queue events for `session_poll()` / `session_reg_poll()` and copy discovery's list under a lock; all are
   drained in `app_tick()`. `log_event()` from another thread is queued for `log_pump()` (also in `app_tick()`)
 - Public functions carry their module prefix (`input_`, `ui_`, `home_`, `stream_menu_`, `ctl_`, `motion_`, `art_`,
-  `app_`, `config_`, `session_`, `ndl_`, `log_`); everything else is `static`; file globals are `g_*` (or one
-  struct); shared styles are `st_*` from `ui/theme.h`
+  `app_`, `config_`, `session_`, `ndl_`, `update_`, `log_`); everything else is `static`; file globals are `g_*`
+  (or one struct); shared styles are `st_*` from `ui/theme.h`
 - New module: `src/<dir>/<name>.[ch]` (CMake globs `src/**/*.c`), init/tick it from `main.c`. Every screen is built
   from `ui/controls.h`, animated with `ui/motion.h` and takes its keys from `ui.c`'s sink: no LVGL group of its own,
   nothing clickable. A new settings panel: a `SET_*` entry in `ui/home_internal.h`, built in `home_settings.c`

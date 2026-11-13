@@ -15,6 +15,7 @@
 #include "config/config.h"
 #include "input/input.h"
 #include "log.h"
+#include "net/update.h"
 
 #define SETTINGS_SAVE_MS 800  /* quiet time after the last settings edit before it is written */
 #define PSN_CODE_SHARE   40   /* PSN path: the code exchange is the first 40% of the progress */
@@ -385,6 +386,7 @@ void app_init(app_listener_t listener) {
     hosts_sync();
     probe_apply();
     disc_set(true);
+    update_start();
 }
 bool app_running(void) { return g_running; }
 void app_quit(void) {
@@ -400,6 +402,8 @@ void app_settings_changed(void) {
     g_save_at = SDL_GetTicks() + SETTINGS_SAVE_MS;
     if (!g_save_at) g_save_at = 1;
 }
+
+const char *app_update_version(void) { return update_latest(); }
 
 int app_host_count(void) { return g_host_count; }
 const app_host_t *app_host(int index) { return index >= 0 && index < g_host_count ? &g_hosts[index] : NULL; }
@@ -989,6 +993,7 @@ void app_tick(void) {
     while (session_reg_poll(&rev)) reg_event(&rev);
     if (g_save_at && (Sint32)(SDL_GetTicks() - g_save_at) >= 0) save_pending();
     if (g_restart_at && (Sint32)(SDL_GetTicks() - g_restart_at) >= 0) restart_attempt();
+    if (update_poll()) notify(APP_CHANGED_UPDATE);
 
     /* while streaming (and the menu is not up), forward the pad to the console (~120 Hz) */
     bool fwd = g_conn == CONN_STREAMING && input_streaming();

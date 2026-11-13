@@ -14,6 +14,9 @@
 #define HOME_PROW_H   92
 #define HOME_PROW_GAP 10
 
+/* where the source of what runs is (AGPL-3.0 section 6), and its releases */
+#define HOME_SOURCE_URL "github.com/renjfk/chiaki-webos"
+
 enum { SET_STREAM, SET_PAD, SET_ACCOUNT, SET_LOG, SET_ABOUT, SET__N };
 
 /* home_settings.c: the panels under the Settings row, one per tile */

@@ -26,6 +26,9 @@
  * state/progress change is announced as APP_CHANGED_REG. On success the
  * console is stored in config (and saved), selected, and the list changes
  * (APP_CHANGED_HOSTS).
+ *
+ * Updates: app_init() starts the one release check of the run (net/update.h); its answer is
+ * announced as APP_CHANGED_UPDATE.
  */
 #ifndef CHIAKI_WEBOS_APP_H
 #define CHIAKI_WEBOS_APP_H
@@ -60,6 +63,7 @@ typedef enum {
     APP_CHANGED_REG,      /* registration state, progress or result changed */
     APP_CHANGED_PIN,      /* the console asked for the Remote Play login PIN */
     APP_CHANGED_STATE,    /* discovery: a console's state, firmware or running app changed */
+    APP_CHANGED_UPDATE,   /* the release check answered: app_update_version() */
 } app_change_t;
 
 typedef void (*app_listener_t)(app_change_t what);
@@ -100,6 +104,9 @@ void app_login_pin_submit(const char *pin);
 
 /* the UI edited config_get(): save shortly (debounced, sliders fire on every step) */
 void app_settings_changed(void);
+
+/* a release newer than this build: its version ("0.3"), "" while none is known */
+const char *app_update_version(void);
 
 /* probe mode (log.h log_probe): on while Settings > About > Diagnostics is, or for this whole run
  * once forced (a launch parameter, CHIAKI_PROBE=1 or the flag file; see main.c) */

@@ -41,6 +41,7 @@ int home_item(void);        /* the focused action, card or settings row */
 bool home_menu_open(void);  /* the route or options pop-up */
 bool home_connecting(void); /* the "Connecting" screen is up */
 lv_obj_t *home_root(void);
+const char *home_update_note(void); /* the update notice's first line while it is up, "" otherwise */
 lv_obj_t *home_row(int section);    /* the tile row: tiles past the screen edge are by design */
 const char *home_pad_battery(void); /* the quick card's battery line, "" when the pad reports none */
 

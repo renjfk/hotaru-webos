@@ -23,7 +23,6 @@
 #include "motion.h"
 #include "register.h"
 
-#define SOURCE_URL "github.com/renjfk/chiaki-webos" /* where the source of what runs is (AGPL-3.0 section 6) */
 #define MAX_ROWS   5
 #define SUM_X      (HOME_PROW_W + 40)
 #define SUM_W      (HOME_PANEL_W - SUM_X)
@@ -67,7 +66,7 @@ static struct {
     lv_obj_t *pad_batt, *pad_batt_fill, *pad_batt_pct;                       /* Controller: the battery gauge */
     lv_obj_t *acc_avatar, *acc_initials, *acc_name, *acc_state, *acc_status; /* PSN account */
     lv_obj_t *log_card, *log;                                                /* Log */
-    lv_obj_t *about_net;                                                     /* About */
+    lv_obj_t *about_ver, *about_net;                                         /* About */
     art_id_t pad_art_id;
     int shown;
 } g = { .shown = -1 };
@@ -256,8 +255,9 @@ static void build_about(void) {
     char ver[64];
     snprintf(ver, sizeof(ver), "LVGL %d.%d.%d, SDL2, libchiaki from chiaki-ng", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
              LVGL_VERSION_PATCH);
-    add_row(SET_ABOUT, "Chiaki webOS " CHIAKI_WEBOS_VERSION, "PlayStation Remote Play for LG webOS TVs")->kind =
-        ROW_INFO;
+    prow_t *app = add_row(SET_ABOUT, "Chiaki webOS " CHIAKI_WEBOS_VERSION, "");
+    app->kind = ROW_INFO;
+    g.about_ver = app->caption;
     add_row(SET_ABOUT, "Remote Play",
             session_available() ? "libchiaki: real sessions and registration"
                                 : "Simulated sessions (libchiaki not linked)")
@@ -275,7 +275,7 @@ static void build_about(void) {
     lv_obj_set_pos(n, 0, 220);
     lv_obj_t *d = ctl_label(c, FONT_CAPTION, COL_MUTED,
                             "Open source (AGPL-3.0), built on chiaki-ng. "
-                            "Source: " SOURCE_URL);
+                            "Source: " HOME_SOURCE_URL);
     lv_obj_set_width(d, SUM_CW);
     lv_label_set_long_mode(d, LV_LABEL_LONG_WRAP);
     lv_obj_set_pos(d, 0, 266);
@@ -373,6 +373,10 @@ void home_settings_refresh(void) {
     refresh_stream();
     refresh_pad();
     refresh_account();
+    const char *update = app_update_version();
+    if (update[0]) lv_label_set_text_fmt(g.about_ver, "Version %s is available at " HOME_SOURCE_URL, update);
+    else lv_label_set_text(g.about_ver, "PlayStation Remote Play for LG webOS TVs");
+    lv_obj_set_style_text_color(g.about_ver, C(update[0] ? COL_ACCENT_HI : COL_MUTED), 0);
     char ifname[32], ip[64];
     if (app_local_ip(ifname, sizeof(ifname), ip, sizeof(ip))) lv_label_set_text_fmt(g.about_net, "%s  %s", ifname, ip);
     else lv_label_set_text(g.about_net, "No network");
