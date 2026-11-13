@@ -185,7 +185,8 @@ scripts/tv.sh install && scripts/tv.sh launch --probe && scripts/tv.sh log -f
 
 - `ci.yml` (push to `main`, PRs): lint (the `mise.toml` tools), host tests and the simulator on macOS, and the
   TV build (`actions/build-ipk`)
-- `release.yml` (dispatched with a tag and notes, see [RELEASE_PROCESS.md](RELEASE_PROCESS.md)): tags, builds the
-  `.ipk` on a macOS arm64 runner and publishes it with its checksum
+- `release.yml` (dispatched with a tag whose `release-notes/<tag>.md` is committed, see
+  [RELEASE_PROCESS.md](RELEASE_PROCESS.md)): tags, builds the `.ipk` on a macOS arm64 runner and publishes it with
+  its checksum and the Homebrew repo manifest, the notes read from the tag
 - `prerelease.yml` / `slash-command.yml`: `/prerelease` on a PR builds and publishes a test `.ipk`
 - Run `mise run lint:workflows` (actionlint) after editing workflows

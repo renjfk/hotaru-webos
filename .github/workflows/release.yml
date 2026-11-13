@@ -4,11 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag (e.g., v0.2, or v0.2.0-rc1 for a release candidate)"
-        required: true
-        type: string
-      release_notes:
-        description: "Release notes content (markdown supported)"
+        description: "Release tag to ship (e.g. v0.2, or v0.2.0-rc1); release-notes/<tag>.md must be committed"
         required: true
         type: string
       prerelease:
@@ -38,6 +34,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # the notes are the repository's, not an input: the tag must carry them, so what the
+      # release page shows is what the tagged commit reviewed (RELEASE_PROCESS.md)
+      - name: The release notes are committed for this tag
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          notes="release-notes/${RELEASE_TAG}.md"
+          [ -f "$notes" ] || {
+            echo "$notes is missing: commit the curated notes before releasing (RELEASE_PROCESS.md)" >&2; exit 1; }
+          [ -s "$notes" ] || { echo "$notes is empty" >&2; exit 1; }
+          echo "notes: $notes, $(wc -l <"$notes" | tr -d ' ') lines"
 
       - name: Version from the tag
         id: version
@@ -76,17 +84,6 @@ jobs:
             echo "Tag $RELEASE_TAG already exists"
           fi
 
-      - name: Save release notes
-        env:
-          RELEASE_NOTES: ${{ inputs.release_notes }}
-        run: printf '%s\n' "$RELEASE_NOTES" > release_notes.md
-
-      - name: Upload release notes
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-notes
-          path: release_notes.md
-
   build:
     name: Build
     runs-on: macos-latest
@@ -119,23 +116,24 @@ jobs:
     needs: [prepare, build]
 
     steps:
+      - name: Checkout the tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 1
+
       - name: Download the package
         uses: actions/download-artifact@v4
         with:
           name: ipk
           path: dist
 
-      - name: Download release notes
-        uses: actions/download-artifact@v4
-        with:
-          name: release-notes
-
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag }}
           name: ${{ inputs.release_tag }}
-          body_path: release_notes.md
+          body_path: release-notes/${{ inputs.release_tag }}.md
           draft: ${{ inputs.draft }}
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: false
