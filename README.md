@@ -38,9 +38,7 @@ The screens were designed as interactive previews first ([design/menu](design/me
 the TV in one take: Home, Settings, the steps of adding a console, waking a PS5 from rest mode, the game with the
 menu over it, and connecting again over PSN. Recorded with a phone, with only the game's sound kept.
 
-<p align="center">
- <a href="https://github.com/user-attachments/assets/2f0ec008-1a7f-4be6-9569-af8d2be790aa"><img width="720" alt="Chiaki webOS on the TV, a three-minute demo" src="screenshots/demo.webp"></a>
-</p>
+https://github.com/user-attachments/assets/2f0ec008-1a7f-4be6-9569-af8d2be790aa
 
 ## Motivation
 
