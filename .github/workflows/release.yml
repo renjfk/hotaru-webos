@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag (e.g., v0.2)"
+        description: "Release tag (e.g., v0.2, or v0.2.0-rc1 for a release candidate)"
         required: true
         type: string
       release_notes:
@@ -31,12 +31,36 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Version from the tag
+        id: version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          RC=false
+          # a release candidate builds the app version it is a candidate for: v0.1.0-rc1 is 0.1.0
+          if [[ "$VERSION" =~ ^(.+)-rc[0-9]+$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            RC=true
+          fi
+          # webOS wants three numbers: v0.2 is 0.2.0
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+$ ]] && VERSION="$VERSION.0"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Tag $RELEASE_TAG is not vMAJOR.MINOR, vMAJOR.MINOR.PATCH or one of them as -rcN"; exit 1; }
+          # an RC is never published as a full release, whatever the input says
+          if [[ "$RC" == true || "$PRERELEASE" == true ]]; then PRE=true; else PRE=false; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION (prerelease: $PRE)"
 
       - name: Create and push release tag
         env:
@@ -51,18 +75,6 @@ jobs:
           else
             echo "Tag $RELEASE_TAG already exists"
           fi
-
-      - name: Version from the tag
-        id: version
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: |
-          VERSION="${RELEASE_TAG#v}"
-          # webOS wants three numbers: v0.2 is 0.2.0
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+$ ]] && VERSION="$VERSION.0"
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Tag $RELEASE_TAG is not vMAJOR.MINOR"; exit 1; }
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Version: $VERSION"
 
       - name: Save release notes
         env:
@@ -124,7 +136,7 @@ jobs:
           name: ${{ inputs.release_tag }}
           body_path: release_notes.md
           draft: ${{ inputs.draft }}
-          prerelease: ${{ inputs.prerelease }}
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: false
           files: |
             dist/*.ipk

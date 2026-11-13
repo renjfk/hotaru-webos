@@ -103,6 +103,13 @@ opencode will:
 The released `.ipk` is built from the tag, so its Corresponding Source (AGPL-3.0) is this repository at that tag;
 the app's About panel points here.
 
+### Release candidates
+
+Tag a run `v<major>.<minor>[.<patch>]-rc<N>` (e.g. `v0.1.0-rc1`) to publish a release candidate: it builds the
+version it is a candidate for (`0.1.0`) and the release is always marked as a pre-release, whatever the
+`prerelease` input says. The tag keeps the final `v0.1.0` free for the release itself, and prerelease builds ignore
+candidates when they pick the base release they build on, since a candidate is a pre-release.
+
 ## Features
 
 - **Automatic filtering** of technical commits (docs, tests, CI, etc.)
