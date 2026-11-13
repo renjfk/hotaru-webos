@@ -279,6 +279,17 @@ static void key(SDL_Keycode k) {
     input_remote_key(k, KMOD_NONE);
     pump(90);
 }
+/* Typed keys queue up and LVGL drains one key per indev period (30 ms), which a loaded runner's
+ * slow frames stretch: wait for the field to hold what was typed instead of guessing the time */
+static bool wait_text(const char *want) {
+    for (int i = 0; i < 300 && strcmp(ui_register_text(), want) != 0; i++) pump(20);
+    return strcmp(ui_register_text(), want) == 0;
+}
+/* the same for the passcode sheet */
+static bool wait_passcode(const char *want) {
+    for (int i = 0; i < 300 && strcmp(ui_passcode_text(), want) != 0; i++) pump(20);
+    return strcmp(ui_passcode_text(), want) == 0;
+}
 /* Add a console's step: it fits 1080p and its focus rings are not clipped */
 static void reg_check(const char *name) {
     pump(500);
@@ -818,9 +829,9 @@ int main(void) {
            "Cross on the field brings the keyboard up from the bottom");
     key(SDLK_RETURN);        /* the highlighted key, q */
     input_remote_text("x!"); /* a USB keyboard types on meanwhile */
-    pump(400);
+    bool typed = wait_text("qx!");
     reg_check("add-keyboard");
-    expect(!strcmp(ui_register_text(), "qx!"), "the D-pad types on the keyboard, a USB keyboard straight in");
+    expect(typed, "the D-pad types on the keyboard, a USB keyboard straight in");
     pad_btn(0x137); /* R2 */
     key(SDLK_RETURN);
     pad_btn(0x136); /* L2 */
@@ -849,23 +860,23 @@ int main(void) {
     key(SDLK_LEFT);
     for (int i = 0; i < 4; i++) key(SDLK_BACKSPACE);
     input_remote_text("AQIDBAUGBwg=");
-    pump(700);
+    bool id_typed = wait_text("AQIDBAUGBwg=");
     key(SDLK_RIGHT);
     key(SDLK_RETURN);
-    expect(ui_register_step() == REG_ADDR && config_psn_has_account_id() && config_psn()->account_id[0] == 1 &&
-               !config_psn()->linked,
+    expect(id_typed && ui_register_step() == REG_ADDR && config_psn_has_account_id() &&
+               config_psn()->account_id[0] == 1 && !config_psn()->linked,
            "a valid account ID is stored, and the flow goes on to the address");
     expect(!strcmp(ui_register_text(), "192.168.1.240") && ui_register_focus() == 1,
            "the PS5 discovery found unpaired has its address filled in, Next focused");
     for (int i = 0; i < 12; i++) key(SDLK_BACKSPACE);
-    input_remote_text("192.168.1.007"); /* the remote's digits and dot type straight in */
-    pump(1000);                         /* a key a press and a release: ~60 ms each */
-    expect(!strcmp(ui_register_text(), "192.168.1.7"), "an octet takes no leading zeros: 0 then 7 is 7");
+    input_remote_text("192.168.1.007");    /* the remote's digits and dot type straight in */
+    bool zeros = wait_text("192.168.1.7"); /* a key a press and a release, so octets land one by one */
+    expect(zeros, "an octet takes no leading zeros: 0 then 7 is 7");
     for (int i = 0; i < 1; i++) key(SDLK_BACKSPACE);
     input_remote_text("77");
-    pump(700);
+    bool octets = wait_text("192.168.1.77");
     reg_check("add-address");
-    expect(!strcmp(ui_register_text(), "192.168.1.77"), "the address takes digits and dots, octet by octet");
+    expect(octets, "the address takes digits and dots, octet by octet");
     key(SDLK_LEFT);
     key(SDLK_LEFT);
     key(SDLK_RETURN);
@@ -875,8 +886,8 @@ int main(void) {
     key(SDLK_RIGHT);
     key(SDLK_RETURN); /* 8, on the pad */
     input_remote_text("7654321");
-    pump(700);
-    expect(!strcmp(ui_register_text(), "87654321") && ui_register_focus() == 1,
+    bool pin = wait_text("87654321");
+    expect(pin && ui_register_focus() == 1,
            "the PIN: the pad and the digits type it, Pair takes the focus once it is complete");
     reg_check("add-pin");
     int hosts1 = app_host_count();
@@ -906,15 +917,16 @@ int main(void) {
     expect(ui_register_step() == REG_ADDR, "with the account ID stored, the PIN path skips the account step");
     for (int i = 0; i < 12; i++) key(SDLK_BACKSPACE);
     input_remote_text("192.168.1.78");
-    pump(700);
+    bool wrong_addr = wait_text("192.168.1.78");
     key(SDLK_LEFT);
     key(SDLK_LEFT);
     key(SDLK_RETURN);
     input_remote_text("00000000");
-    pump(700);
+    bool wrong_pin = wait_text("00000000");
     key(SDLK_RETURN);
     pump(2800);
-    expect(ui_register_step() == REG_PIN && app_reg_state() == APP_REG_FAILED && app_reg_error()[0],
+    expect(wrong_addr && wrong_pin && ui_register_step() == REG_PIN && app_reg_state() == APP_REG_FAILED &&
+               app_reg_error()[0],
            "a refused PIN comes back to the PIN step with the reason");
     shot("add-pin-error");
 
@@ -957,13 +969,13 @@ int main(void) {
     expect(ui_register_step() == REG_PSN, "the account step's sign-in opens the PSN sign-in");
     reg_check("add-psn");
     input_remote_text("SIM-CODE-123");
-    pump(1000);
+    bool code = wait_text("SIM-CODE-123");
     hosts1 = app_host_count();
     int entries1 = config_host_count();
     key(SDLK_RIGHT);
     key(SDLK_RETURN);
     pump(400);
-    expect(ui_register_step() == REG_LINKING, "Link signs in");
+    expect(code && ui_register_step() == REG_LINKING, "Link signs in");
     pump(3600);
     expect(ui_register_step() == REG_ADDR && config_psn()->linked && config_host_count() == entries1 + 2 &&
                app_host_count() == hosts1 + 1,
@@ -982,12 +994,12 @@ int main(void) {
     key(SDLK_RETURN);
     expect(ui_register_step() == REG_PSN, "the PSN way in opens the sign-in");
     input_remote_text("xX1ZwP");
-    pump(600);
+    bool psn_typed = wait_text("xX1ZwP");
     key(SDLK_RETURN);
     key(SDLK_RETURN); /* q */
     pad_btn(0x132);
     pump(300);
-    expect(!strcmp(ui_register_text(), "xX1ZwPq") && !ui_register_typing() && ui_register_active(),
+    expect(psn_typed && wait_text("xX1ZwPq") && !ui_register_typing() && ui_register_active(),
            "the code types from a USB keyboard and the on-screen keys; Circle types nothing");
     shot("add-psn-typed");
     key(SDLK_RIGHT);
@@ -1346,8 +1358,7 @@ int main(void) {
     input_remote_text("2");
     input_remote_key(SDLK_KP_3, KMOD_NONE);
     input_remote_text("4"); /* text alone: a USB keyboard */
-    pump(500);
-    bool pin_typed = !strcmp(ui_passcode_text(), "1234") && ui_dialog_focus() == 1;
+    bool pin_typed = wait_passcode("1234") && ui_dialog_focus() == 1;
     key(SDLK_RETURN);
     pump(300);
     expect(pin_typed && !ui_passcode_active() && !app_login_pin_pending(),
