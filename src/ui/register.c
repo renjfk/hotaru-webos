@@ -551,11 +551,74 @@ static void done_show(void) {
 
 /* ----- PSN sign-in ----- */
 
+/* The redirect page's address, drawn as the browser window it is. The code ends where the cid
+ * starts, so both boundaries stay on screen and only the code is lit. The values are examples;
+ * the phone shows the live ones. */
+#define PSN_ADDR_URL  "remoteplay.dl.playstation.net/...redirect?"
+#define PSN_ADDR_CODE "zYN9Ds"
+#define PSN_ADDR_TAIL "&cid=051f9386-..."
+
+/* a padlock, drawn: an arch over a body, as a browser shows a secure page */
+static lv_obj_t *psn_lock(lv_obj_t *parent) {
+    lv_obj_t *o = ctl_obj(parent);
+    lv_obj_set_size(o, 22, 27);
+    lv_obj_t *sh = ctl_obj(o);
+    lv_obj_set_size(sh, 15, 15);
+    lv_obj_set_pos(sh, 3, 0);
+    lv_obj_set_style_radius(sh, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(sh, 3, 0);
+    lv_obj_set_style_border_color(sh, C(COL_MUTED), 0);
+    lv_obj_set_style_border_side(sh, LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_RIGHT, 0);
+    lv_obj_set_pos(ctl_rect(o, 22, 15, 5, COL_MUTED, LV_OPA_COVER), 0, 12);
+    return o;
+}
+
+/* the address bar: the address, code= and the code, then the cid that follows it */
+static lv_obj_t *psn_addr_bar(lv_obj_t *parent) {
+    lv_obj_t *bar = ctl_rect(parent, MAIN_W - 44, 70, 35, COL_SHADE, 150);
+    lv_obj_set_style_border_width(bar, 2, 0);
+    lv_obj_set_style_border_color(bar, lv_color_white(), 0);
+    lv_obj_set_style_border_opa(bar, 28, 0);
+    lv_obj_t *lock = psn_lock(bar);
+    lv_obj_align(lock, LV_ALIGN_LEFT_MID, 22, 1);
+    lv_obj_t *url = ctl_label(bar, FONT_SMALL, COL_MUTED, PSN_ADDR_URL);
+    lv_obj_align_to(url, lock, LV_ALIGN_OUT_RIGHT_MID, 12, 0);
+    lv_obj_t *eq = ctl_label(bar, FONT_SMALL, COL_SUBTLE, "code=");
+    lv_obj_align_to(eq, url, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+    lv_obj_t *code = ctl_label(bar, FONT_HEADING, COL_ON_FROST, PSN_ADDR_CODE);
+    lv_obj_set_style_bg_color(code, C(COL_PSN_HI), 0);
+    lv_obj_set_style_bg_opa(code, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(code, 6, 0);
+    lv_obj_set_style_pad_hor(code, 6, 0);
+    lv_obj_align_to(code, eq, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
+    lv_obj_t *tail = ctl_label(bar, FONT_SMALL, COL_MUTED, PSN_ADDR_TAIL);
+    lv_obj_align_to(tail, code, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
+    return bar;
+}
+
+/* the browser window: its dots, the tab, the address bar, and the line that says what to type */
+static void psn_browser(lv_obj_t *m) {
+    lv_obj_t *win = ctl_rect(m, MAIN_W, 176, 22, COL_SHEET, 225);
+    frost(win, LV_OPA_20);
+    lv_obj_set_style_shadow_width(win, 40, 0);
+    lv_obj_set_style_shadow_opa(win, LV_OPA_40, 0);
+    static const uint32_t dots[3] = { 0xff5f57, 0xffbd2e, 0x28c840 };
+    for (int i = 0; i < 3; i++)
+        lv_obj_set_pos(ctl_rect(win, 12, 12, LV_RADIUS_CIRCLE, dots[i], LV_OPA_COVER), 22 + i * 20, 20);
+    lv_obj_set_pos(ctl_label(win, FONT_SMALL, COL_MUTED, "Sign in to PlayStation Network"), 96, 15);
+    lv_obj_set_pos(psn_addr_bar(win), 22, 48);
+    lv_obj_set_pos(ctl_label(win, FONT_CAPTION, COL_SUBTLE,
+                             "Only the teal part is the code: after code=, before &cid=. Type it below."),
+                   24, 136);
+    lv_obj_t *cp = ctl_label(win, FONT_HEADING, COL_PSN_HI, LV_SYMBOL_COPY);
+    lv_obj_align(cp, LV_ALIGN_BOTTOM_RIGHT, -28, -16);
+}
+
 static void build_psn(void) {
     lv_obj_t *m = col(REG_PSN);
     title(m, "Sign in with your phone");
     static const char *const steps[3] = { "Scan the code with your phone's camera", "Sign in to PlayStation Network",
-                                          "The last page stays blank: copy the code= value from its address bar" };
+                                          "The last page stays blank. Copy the code from its address bar" };
     for (int i = 0; i < 3; i++) {
         lv_obj_t *r = ctl_obj(m);
         lv_obj_set_size(r, MAIN_W, LV_SIZE_CONTENT);
@@ -565,6 +628,8 @@ static void build_psn(void) {
         lv_obj_set_pos(wrap(r, FONT_BODY, COL_SUBTLE, steps[i], MAIN_W - 72), 72, 9);
     }
     space(m, 6);
+    psn_browser(m);
+    space(m, 2);
     field_row(m, "Code", 64, &R.code_ta, &R.link_btn, "Link");
     R.psn_msg = wrap(m, FONT_BODY, COL_DANGER_TEXT, "", MAIN_W);
     lv_coord_t s = 470;
