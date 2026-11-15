@@ -21,7 +21,7 @@
 
 #define DEFAULT_CONFIG                                                                                                 \
     .stream = { .codec = CODEC_H265, .width = 1920, .height = 1080, .fps = 60, .bitrate_kbps = 15000, .hdr = false },  \
-    .input = { .rumble = true, .touchpad = true }
+    .input = { .rumble = true, .touchpad = true }, .session = { .sleep_on_disconnect = false }
 
 static const config_t g_defaults = { DEFAULT_CONFIG };
 static config_t g_config = { DEFAULT_CONFIG };
@@ -116,6 +116,7 @@ static void write_all(FILE *f) {
     put_int(f, "stream.smooth_ms", c->stream.smooth_ms);
     put_int(f, "input.rumble", c->input.rumble);
     put_int(f, "input.touch", c->input.touchpad);
+    put_int(f, "session.sleep_on_disconnect", c->session.sleep_on_disconnect);
     put_int(f, "debug.probe", c->debug.probe);
     if (g_psn.linked || config_psn_has_account_id()) {
         put_int(f, "psn.linked", g_psn.linked ? 1 : 0);
@@ -262,6 +263,7 @@ static void apply(const char *k, const char *v, config_host_t *hosts, bool *seen
     else if (!strcmp(k, "stream.smooth_ms")) get_int(v, 0, 300, &s->smooth_ms);
     else if (!strcmp(k, "input.rumble")) get_bool(v, &in->rumble);
     else if (!strcmp(k, "input.touch")) get_bool(v, &in->touchpad);
+    else if (!strcmp(k, "session.sleep_on_disconnect")) get_bool(v, &g_config.session.sleep_on_disconnect);
     else if (!strcmp(k, "debug.probe")) get_bool(v, &g_config.debug.probe);
     else if (!strcmp(k, "psn.linked")) get_bool(v, &g_psn.linked);
     else if (!strcmp(k, "psn.account_id")) get_hex(v, g_psn.account_id, sizeof(g_psn.account_id));

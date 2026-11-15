@@ -6,8 +6,10 @@
  * Disconnect. The Controller card shows the pad in use and, when the pad reports one, its
  * battery beside the art. LEFT/RIGHT move; Cross on a setting card enters adjust mode, where
  * LEFT/RIGHT change it (quality restarts the stream when the menu closes, app_restart_stream;
- * smoothing and rumble apply at once). It covers the bottom ~37% of the screen, which also keeps
- * the repaint cheap while the menu is up.
+ * smoothing and rumble apply at once). The Disconnect card also chooses whether ending the
+ * session puts the console in rest mode; the choice is remembered (config session settings),
+ * and Cross in its adjust mode ends the session. It covers the bottom ~37% of the screen, which
+ * also keeps the repaint cheap while the menu is up.
  */
 #ifndef HOTARU_STREAM_MENU_H
 #define HOTARU_STREAM_MENU_H

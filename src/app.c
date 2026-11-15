@@ -556,6 +556,12 @@ void app_disconnect(void) {
     g_restart_tries = 0;
     g_conn_error[0] = '\0';
     if (g_conn == CONN_IDLE) return;
+    if (g_conn == CONN_STREAMING && config_get()->session.sleep_on_disconnect) {
+        const app_host_t *h = app_host(g_conn_host);
+        const char *name = h ? h->name : (g_conn_cfg.nickname[0] ? g_conn_cfg.nickname : "the console");
+        if (session_sleep()) log_event(LOG_INFO, "NET", "Asked %s to go to rest mode", name);
+        else log_event(LOG_WARN, "NET", "Could not ask %s to go to rest mode", name);
+    }
     conn_close();
     log_event(LOG_WARN, "NET", "Session closed");
 }

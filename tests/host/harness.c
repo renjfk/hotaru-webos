@@ -347,6 +347,7 @@ static void test_persistence(void) {
     c->stream.custom = true;
     c->input.rumble = false;
     c->input.touchpad = false;
+    c->session.sleep_on_disconnect = true;
     config_host_t h = { .nickname = "Round \\ trip\nPS5",
                         .addr = "10.0.0.7",
                         .is_ps5 = true,
@@ -367,9 +368,9 @@ static void test_persistence(void) {
     const config_host_t *r = config_host(0);
     const config_psn_t *p = config_psn();
     expect(loaded && c->stream.codec == CODEC_H264 && c->stream.height == 720 && c->stream.bitrate_kbps == 23000 &&
-               c->stream.custom && !c->input.rumble && !c->input.touchpad && config_host_count() == 1 && r &&
-               !strcmp(r->nickname, h.nickname) && !strcmp(r->addr, h.addr) && r->is_ps5 &&
-               !memcmp(r->server_mac, h.server_mac, 6) && !memcmp(r->rp_regist_key, h.rp_regist_key, 16) &&
+               c->stream.custom && !c->input.rumble && !c->input.touchpad && c->session.sleep_on_disconnect &&
+               config_host_count() == 1 && r && !strcmp(r->nickname, h.nickname) && !strcmp(r->addr, h.addr) &&
+               r->is_ps5 && !memcmp(r->server_mac, h.server_mac, 6) && !memcmp(r->rp_regist_key, h.rp_regist_key, 16) &&
                r->via_psn && !memcmp(r->psn_uid, h.psn_uid, 32) && !memcmp(r->rp_key, h.rp_key, 16) && p->linked &&
                !memcmp(p->account_id, acc, 8) && !strcmp(p->online_id, "tester") &&
                !strcmp(p->access_token, "access=token") && !strcmp(p->refresh_token, "refresh-token") &&
@@ -386,7 +387,7 @@ static void test_persistence(void) {
     fputs("\ninput.touch=0\n", f);
     fclose(f);
     expect(config_load() && c->stream.bitrate_kbps == 15000 && c->stream.fps == 60 && config_host_count() == 0 &&
-               !c->input.touchpad,
+               !c->input.touchpad && !c->session.sleep_on_disconnect,
            "a corrupt file: bad lines and unknown keys are skipped, good ones kept, the rest defaults");
     unlink(config_path());
     config_load();
@@ -1366,16 +1367,38 @@ int main(void) {
            "closing the menu restarts the stream with the new video settings");
     st->fps = 60;
 
-    /* Disconnect in the stream menu ends the session and Home comes back */
+    /* the Disconnect card remembers the action: Cross enters adjust mode, LEFT/RIGHT choose,
+     * and the choice is saved; Cross again ends the session and asks the console to rest */
     ui_overlay_toggle();
     pump(600);
     for (int i = 0; i < 4; i++) key(SDLK_RIGHT);
     key(SDLK_RETURN);
-    pump(600);
-    expect(app_conn_state() == CONN_IDLE && !session_active_host() && !ui_overlay_open() &&
+    expect(stream_menu_focus() == 4 && stream_menu_adjusting() && !config_get()->session.sleep_on_disconnect,
+           "Cross on Disconnect enters adjust mode with the saved action");
+    key(SDLK_RIGHT);
+    bool sleep_on = config_get()->session.sleep_on_disconnect;
+    key(SDLK_LEFT);
+    bool sleep_off = !config_get()->session.sleep_on_disconnect;
+    key(SDLK_RIGHT);
+    pump(400); /* let the value's roll animation settle before the shot */
+    lv_disp_get_default()->driver->screen_transp = 1;
+    shot_ex("stream-menu-sleep", true);
+    lv_disp_get_default()->driver->screen_transp = 0;
+    key(SDLK_RETURN);
+    pump(1200);
+    expect(sleep_on && sleep_off && app_conn_state() == CONN_IDLE && !session_active_host() && !ui_overlay_open() &&
                !lv_obj_has_flag(home_root(), LV_OBJ_FLAG_HIDDEN) &&
                lv_obj_get_style_bg_opa(lv_scr_act(), 0) == LV_OPA_COVER,
            "Disconnect in the stream menu stops the session and brings Home back");
+    expect(app_host(sel_streaming) && app_host(sel_streaming)->state == HOST_STANDBY,
+           "... and the console is heard in rest mode");
+    pump(900); /* the settings save debounce */
+    bool saved_sleep = config_get()->session.sleep_on_disconnect;
+    config_load();
+    expect(saved_sleep && config_get()->session.sleep_on_disconnect,
+           "the Disconnect card remembers End and sleep across a config reload");
+    config_get()->session.sleep_on_disconnect = false;
+    config_save();
 
     /* a console that asks for the login PIN gets the passcode sheet mid-connect: the pad or the
      * remote's digits type it, OK submits it and the handshake carries on */
@@ -1403,8 +1426,11 @@ int main(void) {
            "the passcode typed on the pad and the remote's digits; OK takes the focus and submits it");
     pump(1600);
     expect(app_conn_state() == CONN_STREAMING, "the session reaches Streaming after the PIN");
+    int pin_host = app_selected();
     app_disconnect();
     pump(600);
+    expect(app_host(pin_host) && app_host(pin_host)->state != HOST_STANDBY,
+           "End the session leaves the console on (no rest request)");
 
     /* the options menu: Wake up, and Forget behind a confirmation */
     int n_before = app_host_count();

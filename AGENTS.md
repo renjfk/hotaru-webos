@@ -77,8 +77,9 @@ assets/             app icons; devices/ the console and pad art the app loads at
   discovery hears other consoles) goes over PSN at once, a MAC at a new address updates the entry. It is paused
   while streaming
 - The simulation (`chiaki/session.c`) has conventions the tests rely on: PIN `00000000` and the code `fail` fail,
-  an address ending in ".99" asks for the login PIN, ".98" never answers, ".97" sleeps until woken, and an unpaired
-  "PS5-240" answers at 192.168.1.240 (an entry with its MAC has moved there)
+  an address ending in ".99" asks for the login PIN, ".98" never answers, ".97" sleeps until woken, a console asked
+  to rest stays in standby until woken, and an unpaired "PS5-240" answers at 192.168.1.240 (an entry with its MAC
+  has moved there)
 - Config mutators only change memory: save afterwards (`config_save()`, or `app_settings_changed()` for debounced
   settings edits); `app_*` re-reads the host list after its own changes
 

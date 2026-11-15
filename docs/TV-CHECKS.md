@@ -146,6 +146,16 @@ those answers like one with no release at all.
   switched on may not be on its network yet).
 - **It decides** whether GitHub's API is reachable over the TV's CA bundle like PSN is (`src/net/update.c`).
 
+### 14. Rest mode on disconnect
+
+While a game streams, open the menu, focus **Disconnect** and press Cross, choose **End and sleep** with Left/Right,
+then press Cross again. Repeat with **End the session**.
+
+- **Look for** the stream to end and Home to come back; with End and sleep the console goes to rest mode, and with
+  End the session it stays on. The card keeps the last choice after a restart.
+- **It decides** whether `chiaki_session_goto_bed` reaches the console before `session_stop` tears the control channel
+  down on webOS; the host tests only simulate the request.
+
 ## Recording the results
 
 Update the table in [STATUS.md](STATUS.md), keep raw evidence next to it (like

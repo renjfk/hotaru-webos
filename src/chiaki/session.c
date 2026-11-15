@@ -177,6 +177,7 @@ static uint32_t fnv1a(const void *data, size_t n) {
 #define SIM_WAKE_MS    2500            /* a woken console answers ready this much later */
 #define SIM_FOUND_ADDR "192.168.1.240" /* a PS5 on the network that is not paired yet */
 #define SIM_WOKEN_MAX  8
+#define SIM_SLEPT_MAX  8
 
 static bool g_disc_on;
 static Uint32 g_disc_since;
@@ -185,18 +186,51 @@ static struct {
     Uint32 ready_at;
 } g_woken[SIM_WOKEN_MAX];
 static int g_woken_n;
+static char g_slept[SIM_SLEPT_MAX][64];
+static int g_slept_n;
+
+static int slept_find(const char *addr) {
+    for (int i = 0; i < g_slept_n; i++)
+        if (!strcmp(g_slept[i], addr)) return i;
+    return -1;
+}
+
+static void slept_add(const char *addr) {
+    if (!addr || !addr[0] || slept_find(addr) >= 0 || g_slept_n == SIM_SLEPT_MAX) return;
+    snprintf(g_slept[g_slept_n++], sizeof(g_slept[0]), "%s", addr);
+}
+
+static void slept_remove(const char *addr) {
+    int i = addr ? slept_find(addr) : -1;
+    if (i < 0) return;
+    if (i != g_slept_n - 1) memcpy(g_slept[i], g_slept[g_slept_n - 1], sizeof(g_slept[0]));
+    g_slept_n--;
+}
+
+static void woken_remove(const char *addr) {
+    for (int i = 0; i < g_woken_n; i++) {
+        if (strcmp(g_woken[i].addr, addr) != 0) continue;
+        if (i != g_woken_n - 1) g_woken[i] = g_woken[g_woken_n - 1];
+        g_woken_n--;
+        return;
+    }
+}
 
 static bool sim_awake(const char *addr) {
-    if (!sim_addr_is(addr, ".97")) return true; /* ".97" sleeps until woken */
+    if (slept_find(addr) >= 0) return false;
     for (int i = 0; i < g_woken_n; i++)
         if (!strcmp(g_woken[i].addr, addr)) return (Sint32)(SDL_GetTicks() - g_woken[i].ready_at) >= 0;
-    return false;
+    if (sim_addr_is(addr, ".97")) return false; /* ".97" sleeps until woken */
+    return true;
 }
 
 /* a console in standby is woken with a UDP broadcast; needs a known address */
 bool session_wakeup(const config_host_t *host) {
     if (!host || !host->addr[0]) return false;
     log_msg("session: simulated wake-up packet to %s", host->addr);
+    bool asleep = slept_find(host->addr) >= 0 || sim_addr_is(host->addr, ".97");
+    slept_remove(host->addr);
+    if (!asleep) return true;
     int i = 0;
     while (i < g_woken_n && strcmp(g_woken[i].addr, host->addr) != 0) i++;
     if (i == g_woken_n) {
@@ -205,6 +239,15 @@ bool session_wakeup(const config_host_t *host) {
         snprintf(g_woken[i].addr, sizeof(g_woken[i].addr), "%s", host->addr);
         g_woken[i].ready_at = SDL_GetTicks() + SIM_WAKE_MS;
     }
+    return true;
+}
+
+/* the session asks its console to go to rest: discovery then hears it in standby until woken */
+bool session_sleep(void) {
+    if (!g_session.active) return false;
+    log_msg("session: simulated rest request to %s", g_session.host.nickname);
+    slept_add(g_session.host.addr);
+    if (g_session.host.addr[0]) woken_remove(g_session.host.addr);
     return true;
 }
 

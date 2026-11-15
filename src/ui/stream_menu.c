@@ -62,6 +62,9 @@ static const char *card_value(int i) {
             else snprintf(v, sizeof(v), "Off");
             break;
         case C_PAD: snprintf(v, sizeof(v), "Rumble %s", c->input.rumble ? "on" : "off"); break;
+        case C_DISCONNECT:
+            snprintf(v, sizeof(v), "%s", c->session.sleep_on_disconnect ? "End and sleep" : "End the session");
+            break;
         default: return "End the session";
     }
     if (g.adjusting && i == g.focus) snprintf(buf, sizeof(buf), LV_SYMBOL_LEFT "   %s   " LV_SYMBOL_RIGHT, v);
@@ -191,6 +194,18 @@ static void adjust(int dir) {
     } else if (g.focus == C_PAD) {
         config_get()->input.rumble = dir > 0;
         if (dir < 0) input_rumble(0, 0); /* a motor that is running stops now */
+    } else if (g.focus == C_DISCONNECT) {
+        bool sleep = dir > 0;
+        session_settings_t *sess = &config_get()->session;
+        if (sleep == sess->sleep_on_disconnect) {
+            motion_from(g.cards[g.focus], MO_TX, dir * 14, 0, 380, 0, motion_shake);
+            return;
+        }
+        sess->sleep_on_disconnect = sleep;
+        motion_roll_text(g.note,
+                         sleep ? "The console goes to rest mode; Cross ends the stream"
+                               : "The console stays on; Cross ends the stream",
+                         dir);
     } else {
         return;
     }
@@ -203,8 +218,17 @@ void stream_menu_key(uint32_t k) {
     if (!g.open) return;
     if (g.adjusting) {
         if (k == LV_KEY_LEFT || k == LV_KEY_RIGHT) adjust(k == LV_KEY_RIGHT ? 1 : -1);
-        else if (k == LV_KEY_ENTER || k == LV_KEY_ESC) {
+        else if (k == LV_KEY_ENTER) {
+            if (g.focus == C_DISCONNECT) {
+                app_disconnect();
+                return;
+            }
             g.adjusting = false;
+            values_refresh();
+            paint();
+        } else if (k == LV_KEY_ESC) {
+            g.adjusting = false;
+            if (g.focus == C_DISCONNECT) lv_label_set_text(g.note, "");
             values_refresh();
             paint();
         }
@@ -217,11 +241,8 @@ void stream_menu_key(uint32_t k) {
             ui_overlay_toggle();
             return;
         }
-        if (g.focus == C_DISCONNECT) {
-            app_disconnect();
-            return;
-        }
         g.adjusting = true;
+        if (g.focus == C_DISCONNECT) motion_roll_text(g.note, "Left / Right chooses; Cross ends the stream", 1);
         values_refresh();
     } else if (k == LV_KEY_ESC) {
         ui_overlay_toggle();
@@ -233,6 +254,7 @@ void stream_menu_key(uint32_t k) {
 bool stream_menu_back(void) {
     if (!g.open || !g.adjusting) return false;
     g.adjusting = false;
+    if (g.focus == C_DISCONNECT) lv_label_set_text(g.note, "");
     values_refresh();
     paint();
     return true;

@@ -27,6 +27,7 @@
  *   device_uid=0000000700410080<32 hex>
  *   stream.codec=1
  *   input.rumble=1
+ *   session.sleep_on_disconnect=0
  *   psn.account_id=<16 hex>
  *   host.0.nickname=PS5-123
  *   host.0.rp_key=<32 hex>
@@ -58,12 +59,17 @@ typedef struct {
 } input_settings_t;
 
 typedef struct {
+    bool sleep_on_disconnect; /* ending a stream from the menu asks the console to go to rest mode */
+} session_settings_t;
+
+typedef struct {
     bool probe; /* Settings > About > Diagnostics: log what the TV checks need (log.h log_probe) */
 } debug_settings_t;
 
 typedef struct {
     stream_settings_t stream;
     input_settings_t input;
+    session_settings_t session;
     debug_settings_t debug;
 } config_t;
 

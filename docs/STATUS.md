@@ -33,6 +33,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | HDR10 (`NDL_DirectVideoSetHDRInfo` with the VUI codes) | wired, not yet looked at on the TV |
 | DualSense: the button map (the DualShock 4's); no rumble or touches reach the app | TV (probe) + host |
 | Remote number keys, Magic Remote, launch parameters | wired for both possibilities; the probe decides |
+| Rest mode on disconnect (the Disconnect card's End and sleep) | host (simulated console); the real goto-bed request needs the TV |
 
 ## Proven on the TV
 

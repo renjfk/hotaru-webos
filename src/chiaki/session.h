@@ -119,6 +119,11 @@ bool session_stats(session_stats_t *out);
 /* wake a console in standby (chiaki_discovery_wakeup, UDP broadcast works on this TV) */
 bool session_wakeup(const config_host_t *host);
 
+/* ask the running session's console to go to rest mode (chiaki_session_goto_bed). The request
+ * goes over the control channel and is fire-and-forget: no acknowledgement comes back. Call it
+ * before session_stop(), while the session is still up. */
+bool session_sleep(void);
+
 /* ---------- discovery ----------
  * chiaki_discovery_service at chiaki-ng's pace: a search every 500 ms to 255.255.255.255 and
  * every interface's broadcast address, on the PS4 (987) and the PS5 (9302) port; a console that

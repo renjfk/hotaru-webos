@@ -878,6 +878,17 @@ bool session_wakeup(const config_host_t *host) {
     return true;
 }
 
+bool session_sleep(void) {
+    if (!g_session_active) return false;
+    ChiakiErrorCode err = chiaki_session_goto_bed(&g_session);
+    if (err != CHIAKI_ERR_SUCCESS) {
+        log_msg("session: rest request to %s failed: %s", g_host.nickname, chiaki_error_string(err));
+        return false;
+    }
+    log_msg("session: rest request sent to %s", g_host.nickname);
+    return true;
+}
+
 /* ---------- discovery ---------- */
 
 #define DISC_PING_MS   500 /* chiaki-ng gui/src/discoverymanager.cpp: PING_MS, HOSTS_MAX, DROP_PINGS */
