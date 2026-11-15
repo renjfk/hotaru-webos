@@ -48,6 +48,7 @@ typedef struct {
     int fps;           /* 30 or 60 */
     int bitrate_kbps;
     bool hdr;
+    bool custom;   /* the Stream panel's Custom mode: show the fine rows, the values are not a preset */
     int smooth_ms; /* playout buffer that hides Wi-Fi stalls: 0 (off) .. 300; applies live */
 } stream_settings_t;
 

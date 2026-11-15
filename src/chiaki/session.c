@@ -10,6 +10,7 @@
 #ifndef HOTARU_HAVE_LIBCHIAKI
 
 #include <SDL.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -149,6 +150,19 @@ bool session_poll(session_event_t *out) {
 }
 
 const config_host_t *session_active_host(void) { return g_session.active ? &g_session.host : NULL; }
+
+bool session_stats(session_stats_t *out) {
+    if (!out) return false;
+    *out = (session_stats_t){ 0 };
+    if (!g_session.active || !g_session.connected_sent) return false;
+    /* made up from the settings, wobbling slowly like a real stream's rate control does */
+    double t = (SDL_GetTicks() - g_session.start) / 1000.0;
+    double target = g_session.stream.bitrate_kbps / 1000.0;
+    double fps = g_session.stream.fps >= 60 ? 60.0 : 30.0;
+    out->mbps = target * (0.92 + 0.08 * sin(t * 0.7));
+    out->fps = fps * (0.97 + 0.02 * sin(t * 1.3));
+    return true;
+}
 
 static uint32_t fnv1a(const void *data, size_t n) {
     const uint8_t *p = data;

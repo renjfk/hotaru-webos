@@ -1,7 +1,8 @@
 /* ui/stream_menu.h - the menu over a running stream: a Control Center sheet from the bottom.
  *
  * The game keeps playing above it (the app surface is transparent, ui.c). A header with the
- * console and the session, then cards: Resume, Stream quality, Smooth playback, Controller,
+ * console, the session (clock, the live rate and frame rate session_stats() reports) and chips
+ * for what the console is set to, then cards: Resume, Stream quality, Smooth playback, Controller,
  * Disconnect. The Controller card shows the pad in use and, when the pad reports one, its
  * battery beside the art. LEFT/RIGHT move; Cross on a setting card enters adjust mode, where
  * LEFT/RIGHT change it (quality restarts the stream when the menu closes, app_restart_stream;
@@ -24,7 +25,8 @@ void stream_menu_refresh(void);     /* connection or settings changed */
 /* for tests */
 int stream_menu_focus(void);
 bool stream_menu_adjusting(void);
-lv_obj_t *stream_menu_card(int i);         /* 0 Resume .. 4 Disconnect */
-const char *stream_menu_pad_battery(void); /* the Controller card's level, "" when the pad reports none */
+lv_obj_t *stream_menu_card(int i);          /* 0 Resume .. 4 Disconnect */
+const char *stream_menu_pad_battery(void);  /* the Controller card's level, "" when the pad reports none */
+const char *stream_menu_session_text(void); /* the session line: clock, live Mbps and fps */
 
 #endif

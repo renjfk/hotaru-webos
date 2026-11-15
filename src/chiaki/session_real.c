@@ -61,6 +61,8 @@
 #define AUDIO_SLOTS   64                /* 0.64 s of 10 ms Opus packets */
 #define STREAM_RCVBUF (4 * 1024 * 1024) /* Linux caps it at net.core.rmem_max (512 KB on the TV) */
 #define STATS_MS      10000
+#define LIVE_MS       1000 /* the live rate the stream menu shows: a window this long, */
+#define LIVE_SMOOTH   0.35 /* smoothed into the value it displayed before (session_stats) */
 
 /* Sony's OAuth endpoint, exactly as chiaki-ng gui/include/psnaccountid.h builds it */
 #define PSN_CLIENT_ID "ba495a24-818c-472b-b12d-ff231c1b5745"
@@ -168,6 +170,12 @@ static struct {
     unsigned push_max_ms;      /* the longest NDL_DirectVideoPlay call */
     int vbuf_max, abuf_max_ms; /* NDL's render queue (frames) and unplayed audio, -1 unknown */
     unsigned pace_restarts;    /* smoothing: stalls longer than the delay (pacer_t.restarts) */
+    /* session_stats(): monotonic totals and the live window over them, for the stream menu */
+    uint64_t total_frames, total_bytes;
+    uint32_t live_ms; /* when the live window started, 0 = not yet */
+    uint64_t live_bytes, live_frames;
+    bool live_valid; /* at least one window has closed */
+    double live_mbps, live_fps;
 } g_stats;
 
 /* ---------- media: off libchiaki's receive thread (media/feeder.h) ---------- */
@@ -325,6 +333,8 @@ static bool video_sample_cb(uint8_t *buf, size_t buf_size, int32_t frames_lost, 
     g_stats.last_frame_ms = now;
     g_stats.frames++;
     g_stats.bytes += buf_size;
+    g_stats.total_frames++;
+    g_stats.total_bytes += buf_size;
     if (frames_lost > 0) g_stats.frames_lost += (unsigned)frames_lost;
     if (frame_recovered) g_stats.recovered++;
     if (g_lock) SDL_UnlockMutex(g_lock);
@@ -706,6 +716,28 @@ static void stats_tick(void) {
         if (start) sock_drops_prev = stream_socket_drops();
         return;
     }
+    /* the live rate session_stats() hands the menu: a LIVE_MS window over the totals, smoothed */
+    if (!g_stats.live_ms) {
+        g_stats.live_ms = now ? now : 1;
+        g_stats.live_bytes = g_stats.total_bytes;
+        g_stats.live_frames = g_stats.total_frames;
+    } else if (now - g_stats.live_ms >= LIVE_MS) {
+        double secs = (double)(now - g_stats.live_ms) / 1000.0;
+        double mbps = (double)(g_stats.total_bytes - g_stats.live_bytes) * 8.0 / secs / 1e6;
+        double fps = (double)(g_stats.total_frames - g_stats.live_frames) / secs;
+        if (g_stats.live_valid) {
+            g_stats.live_mbps += (mbps - g_stats.live_mbps) * LIVE_SMOOTH;
+            g_stats.live_fps += (fps - g_stats.live_fps) * LIVE_SMOOTH;
+        } else {
+            g_stats.live_mbps = mbps;
+            g_stats.live_fps = fps;
+            g_stats.live_valid = true;
+        }
+        g_stats.live_ms = now;
+        g_stats.live_bytes = g_stats.total_bytes;
+        g_stats.live_frames = g_stats.total_frames;
+    }
+
     uint32_t dt = now - g_stats.since_ms;
     if (dt < STATS_MS) {
         SDL_UnlockMutex(g_lock);
@@ -807,6 +839,18 @@ void session_set_pad(const session_pad_t *pad) {
 }
 
 const session_pad_t *session_last_pad(void) { return &g_last_pad; }
+
+bool session_stats(session_stats_t *out) {
+    if (!out) return false;
+    *out = (session_stats_t){ 0 };
+    if (!g_session_active || !g_lock) return false;
+    SDL_LockMutex(g_lock);
+    bool valid = g_stats.live_valid;
+    out->mbps = g_stats.live_mbps;
+    out->fps = g_stats.live_fps;
+    SDL_UnlockMutex(g_lock);
+    return valid;
+}
 
 void session_set_login_pin(const char *pin) {
     if (!g_session_active || !pin) return;

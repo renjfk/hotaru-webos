@@ -105,6 +105,17 @@ void session_set_pad(const session_pad_t *pad);
 void session_set_login_pin(const char *pin);
 const session_pad_t *session_last_pad(void); /* the last state handed to the console (tests/diagnostics) */
 
+/* live stream stats for the menu over the game: what the console is actually sending, as the
+ * last second (smoothed) saw it. false when there is nothing to average yet, e.g. during the
+ * first second after connecting, so the UI can show a placeholder. The real backend counts the
+ * video payload libchiaki delivered (FEC parity and retransmits are not in it); the simulation
+ * makes the numbers up from the stream settings. */
+typedef struct {
+    double mbps; /* video payload, Mbit/s */
+    double fps;  /* frames per second */
+} session_stats_t;
+bool session_stats(session_stats_t *out);
+
 /* wake a console in standby (chiaki_discovery_wakeup, UDP broadcast works on this TV) */
 bool session_wakeup(const config_host_t *host);
 

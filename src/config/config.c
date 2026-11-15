@@ -112,6 +112,7 @@ static void write_all(FILE *f) {
     put_int(f, "stream.fps", c->stream.fps);
     put_int(f, "stream.bitrate_kbps", c->stream.bitrate_kbps);
     put_int(f, "stream.hdr", c->stream.hdr);
+    put_int(f, "stream.custom", c->stream.custom);
     put_int(f, "stream.smooth_ms", c->stream.smooth_ms);
     put_int(f, "input.rumble", c->input.rumble);
     put_int(f, "input.touch", c->input.touchpad);
@@ -257,6 +258,7 @@ static void apply(const char *k, const char *v, config_host_t *hosts, bool *seen
     else if (!strcmp(k, "stream.fps")) get_int(v, 30, 60, &s->fps);
     else if (!strcmp(k, "stream.bitrate_kbps")) get_int(v, 2000, 50000, &s->bitrate_kbps);
     else if (!strcmp(k, "stream.hdr")) get_bool(v, &s->hdr);
+    else if (!strcmp(k, "stream.custom")) get_bool(v, &s->custom);
     else if (!strcmp(k, "stream.smooth_ms")) get_int(v, 0, 300, &s->smooth_ms);
     else if (!strcmp(k, "input.rumble")) get_bool(v, &in->rumble);
     else if (!strcmp(k, "input.touch")) get_bool(v, &in->touchpad);

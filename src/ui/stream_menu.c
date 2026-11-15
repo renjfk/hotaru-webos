@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../app.h"
+#include "../chiaki/session.h"
 #include "../config/config.h"
 #include "../input/input.h"
 #include "art.h"
@@ -111,8 +112,12 @@ static void paint(void) {
 static void tick_cb(lv_timer_t *t) {
     (void)t;
     uint32_t s = lv_tick_elaps(g.started) / 1000;
-    lv_label_set_text_fmt(g.time, "Streaming" BULLET "%02u:%02u:%02u", (unsigned)(s / 3600), (unsigned)(s / 60 % 60),
-                          (unsigned)(s % 60));
+    char rate[64];
+    session_stats_t st;
+    if (session_stats(&st)) snprintf(rate, sizeof(rate), BULLET "%.1f Mbps" BULLET "%.0f fps", st.mbps, st.fps);
+    else snprintf(rate, sizeof(rate), BULLET "-- Mbps" BULLET "-- fps");
+    lv_label_set_text_fmt(g.time, "Streaming" BULLET "%02u:%02u:%02u%s", (unsigned)(s / 3600), (unsigned)(s / 60 % 60),
+                          (unsigned)(s % 60), rate);
 }
 
 /* the Controller card shows the pad in use (a DualSense or a DualShock 4) */
@@ -328,6 +333,7 @@ void stream_menu_create(lv_obj_t *parent) {
 int stream_menu_focus(void) { return g.focus; }
 bool stream_menu_adjusting(void) { return g.adjusting; }
 lv_obj_t *stream_menu_card(int i) { return i >= 0 && i < C__N ? g.cards[i] : NULL; }
+const char *stream_menu_session_text(void) { return g.time ? lv_label_get_text(g.time) : ""; }
 const char *stream_menu_pad_battery(void) {
     return g.batt && !lv_obj_has_flag(g.batt, LV_OBJ_FLAG_HIDDEN) ? lv_label_get_text(g.batt_pct) : "";
 }

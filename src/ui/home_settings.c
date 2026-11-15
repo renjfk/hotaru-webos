@@ -52,10 +52,31 @@ typedef struct {
 static const char *const g_names[SET__N] = { "Stream", "Controller", "PSN account", "Log", "About" };
 static const uint32_t g_tints[SET__N] = { 0x1d4f9c, 0x58308f, 0x0e6b78, 0x334055, 0x27406a };
 static const int g_smooth_ms[] = { 0, 100, 150, 200 };
-static const char *const g_res_opts[] = { "720p", "1080p" };
-static const char *const g_fps_opts[] = { "30 fps", "60 fps" };
 static const char *const g_codec_opts[] = { "H.264", "H.265", "HDR" };
 static const char *const g_smooth_opts[] = { "Off", "100 ms", "150 ms", "200 ms" };
+
+/* The curated choices, as the official Remote Play clients have: one row picks the picture and
+ * the bandwidth together. Balanced is the app's default and the official app's default rate.
+ * Custom is a fourth segment but a state, not a choice: it is shown when the values match no
+ * preset, and it is what reveals the fine rows (Quality and Bitrate). Codec and smoothing are
+ * not part of a preset, so they stay where they are. */
+typedef struct {
+    const char *name;
+    int width, height, fps, bitrate_kbps;
+} stream_preset_t;
+
+static const stream_preset_t g_presets[] = {
+    { "Data saver", 1280, 720, 60, 8000 },
+    { "Balanced", 1920, 1080, 60, 15000 },
+    { "High quality", 1920, 1080, 60, 30000 },
+};
+#define PRESET_N      ((int)(sizeof(g_presets) / sizeof(g_presets[0])))
+#define PRESET_CUSTOM PRESET_N
+static const char *const g_preset_opts[] = { "Data saver", "Balanced", "High quality", "Custom" };
+static const char *const g_quality_opts[] = { "720p30", "720p60", "1080p30", "1080p60" };
+
+/* the stream panel's rows, in the order they are built */
+enum { ST_PRESET, ST_QUALITY, ST_CODEC, ST_BITRATE, ST_SMOOTH };
 
 static struct {
     lv_obj_t *panel[SET__N];
@@ -84,25 +105,86 @@ static int smooth_index(int ms) {
     return best;
 }
 
-/* "HDR" is the H.265 HDR profile; the old separate HDR switch meant the same */
+/* "HDR" is the H.265 HDR profile; the old separate HDR switch meant the same. The TV is an
+ * HDR10 set and the PS5 sends HDR10, so it stays a first-class choice; a PS4 streams H.264/SDR
+ * whatever is picked here (session_real.c). */
 static int codec_index(const stream_settings_t *s) {
     return s->hdr || s->codec == CODEC_H265_HDR ? 2 : s->codec == CODEC_H264 ? 0 : 1;
+}
+
+static int quality_index(const stream_settings_t *s) { return (s->height >= 1080) * 2 + (s->fps >= 60); }
+
+static void quality_values(int i, int *w, int *h, int *fps) {
+    *w = i >= 2 ? 1920 : 1280;
+    *h = i >= 2 ? 1080 : 720;
+    *fps = i % 2 ? 60 : 30;
+}
+
+static int preset_index(const stream_settings_t *s) {
+    if (s->custom) return PRESET_CUSTOM;
+    for (int i = 0; i < PRESET_N; i++)
+        if (s->width == g_presets[i].width && s->height == g_presets[i].height && s->fps == g_presets[i].fps &&
+            s->bitrate_kbps == g_presets[i].bitrate_kbps)
+            return i;
+    return PRESET_CUSTOM;
+}
+
+static bool stream_custom(const stream_settings_t *s) { return preset_index(s) == PRESET_CUSTOM; }
+
+/* "Custom" when the values are not a preset (a state, so the caption can say it too) */
+static const char *preset_name(const stream_settings_t *s) {
+    int i = preset_index(s);
+    return i < PRESET_N ? g_presets[i].name : "Custom";
+}
+
+/* the panel follows the values: every control's selection, and whether the fine rows (Quality and
+ * Bitrate) are shown at all, which is what Custom means here */
+static void stream_controls_refresh(void) {
+    const stream_settings_t *s = &config_get()->stream;
+    prow_t *r = g.rows[SET_STREAM];
+    bool custom = stream_custom(s);
+    ctl_seg_select(&r[ST_PRESET].seg, preset_index(s));
+    ctl_seg_select(&r[ST_QUALITY].seg, quality_index(s));
+    ctl_seg_select(&r[ST_CODEC].seg, codec_index(s));
+    ctl_meter_set(&r[ST_BITRATE].meter, s->bitrate_kbps / 1000);
+    ctl_seg_select(&r[ST_SMOOTH].seg, smooth_index(s->smooth_ms));
+    lv_coord_t y = 0;
+    for (int i = 0; i < g.nrows[SET_STREAM]; i++) {
+        bool fine = i == ST_QUALITY || i == ST_BITRATE;
+        if (fine && !custom) lv_obj_add_flag(r[i].row, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_clear_flag(r[i].row, LV_OBJ_FLAG_HIDDEN);
+        if (lv_obj_has_flag(r[i].row, LV_OBJ_FLAG_HIDDEN)) continue;
+        lv_obj_set_y(r[i].row, y);
+        y += HOME_PROW_H + HOME_PROW_GAP;
+    }
 }
 
 static void stream_apply(int row, int v) {
     stream_settings_t *s = &config_get()->stream;
     switch (row) {
-        case 0:
-            s->width = v ? 1920 : 1280;
-            s->height = v ? 1080 : 720;
+        case ST_PRESET:
+            s->custom = v >= PRESET_N;
+            if (v < PRESET_N) {
+                s->width = g_presets[v].width;
+                s->height = g_presets[v].height;
+                s->fps = g_presets[v].fps;
+                s->bitrate_kbps = g_presets[v].bitrate_kbps;
+            }
             break;
-        case 1: s->fps = v ? 60 : 30; break;
-        case 2:
+        case ST_QUALITY:
+            s->custom = true;
+            quality_values(v, &s->width, &s->height, &s->fps);
+            break;
+        case ST_CODEC:
             s->codec = v == 0 ? CODEC_H264 : v == 1 ? CODEC_H265 : CODEC_H265_HDR;
             s->hdr = v == 2;
             break;
-        case 3: s->bitrate_kbps = v * 1000; break;
-        case 4: s->smooth_ms = g_smooth_ms[v]; break;
+        case ST_BITRATE:
+            s->custom = true;
+            s->bitrate_kbps = v * 1000;
+            break;
+        case ST_SMOOTH: s->smooth_ms = g_smooth_ms[v]; break;
+        default: return;
     }
     app_settings_changed();
 }
@@ -157,8 +239,10 @@ static lv_obj_t *summary(int p, const char *over) {
 
 static void build_stream(void) {
     const stream_settings_t *s = &config_get()->stream;
-    row_seg(add_row(SET_STREAM, "Resolution", "Higher needs more bandwidth"), g_res_opts, 2, s->height >= 1080, 150);
-    row_seg(add_row(SET_STREAM, "Frame rate", "60 fps feels smoother in games"), g_fps_opts, 2, s->fps >= 60, 150);
+    row_seg(add_row(SET_STREAM, "Preset", "Picture and bandwidth in one choice"), g_preset_opts, 4, preset_index(s),
+            160);
+    row_seg(add_row(SET_STREAM, "Quality", "Resolution and frame rate together"), g_quality_opts, 4, quality_index(s),
+            140);
     row_seg(add_row(SET_STREAM, "Codec", "Decoded in hardware; HDR needs an HDR picture mode"), g_codec_opts, 3,
             codec_index(s), 150);
     prow_t *r = add_row(SET_STREAM, "Bitrate", "Lower it if the picture stutters");
@@ -167,6 +251,7 @@ static void build_stream(void) {
     lv_obj_align(r->meter.box, LV_ALIGN_RIGHT_MID, -36, 0);
     row_seg(add_row(SET_STREAM, "Smooth playback", "Hides Wi-Fi stalls, adds this much delay"), g_smooth_opts, 4,
             smooth_index(s->smooth_ms), 130);
+    stream_controls_refresh();
 
     lv_obj_t *c = summary(SET_STREAM, "WHAT THE CONSOLE SENDS");
     g.sum_big = ctl_label(c, FONT_HERO, COL_TEXT, "");
@@ -302,6 +387,7 @@ void home_settings_build(lv_obj_t *parent) {
 static void refresh_stream(void) {
     const stream_settings_t *s = &config_get()->stream;
     int kbps = s->bitrate_kbps;
+    stream_controls_refresh();
     lv_label_set_text_fmt(g.sum_big, "%dp%d", s->height, s->fps);
     lv_label_set_text_fmt(g.sum_txt, "%s" BULLET "%s" BULLET "%d Mbps", s->codec == CODEC_H264 ? "H.264" : "H.265",
                           codec_index(s) == 2 ? "HDR" : "SDR", kbps / 1000);
@@ -522,9 +608,11 @@ bool home_settings_key(int panel, int *row, uint32_t key) {
         }
         return true;
     }
-    if (key == LV_KEY_UP || key == LV_KEY_DOWN) { /* the next row that is not an info row */
+    if (key == LV_KEY_UP || key == LV_KEY_DOWN) { /* the next row that is not an info or a hidden row */
         int d = key == LV_KEY_UP ? -1 : 1, r = *row + d;
-        while (r >= 0 && r < g.nrows[panel] && g.rows[panel][r].kind == ROW_INFO) r += d;
+        while (r >= 0 && r < g.nrows[panel] &&
+               (g.rows[panel][r].kind == ROW_INFO || lv_obj_has_flag(g.rows[panel][r].row, LV_OBJ_FLAG_HIDDEN)))
+            r += d;
         if (r < 0) return false;
         if (r < g.nrows[panel]) *row = r;
     } else if (key == LV_KEY_LEFT || key == LV_KEY_RIGHT || key == LV_KEY_ENTER) {
@@ -540,8 +628,8 @@ const char *home_settings_caption(int panel) {
     const stream_settings_t *s = &config_get()->stream;
     switch (panel) {
         case SET_STREAM:
-            snprintf(buf, sizeof(buf), "%dp" BULLET "%d fps" BULLET "%d Mbps", s->height, s->fps,
-                     s->bitrate_kbps / 1000);
+            snprintf(buf, sizeof(buf), "%s" BULLET "%dp" BULLET "%d fps" BULLET "%d Mbps", preset_name(s), s->height,
+                     s->fps, s->bitrate_kbps / 1000);
             return buf;
         case SET_PAD: return input_pad_state() == PAD_ONLINE ? input_pad_name() : "No controller";
         case SET_ACCOUNT: return psn->linked ? (psn->online_id[0] ? psn->online_id : "Signed in") : "Not signed in";
@@ -549,4 +637,9 @@ const char *home_settings_caption(int panel) {
         case SET_ABOUT: return "Versions, network, diagnostics";
     }
     return "";
+}
+
+/* for the host tests: whether a Stream row is shown at all (Quality and Bitrate only in Custom) */
+bool home_stream_row_visible(int row) {
+    return row >= 0 && row < g.nrows[SET_STREAM] && !lv_obj_has_flag(g.rows[SET_STREAM][row].row, LV_OBJ_FLAG_HIDDEN);
 }

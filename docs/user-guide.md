@@ -87,7 +87,9 @@ Play**.
 
 While playing, the controller drives the console. The TV remote's **Back**, or **Share + Options** together on the
 controller (**Create + Options** on a DualSense; the Connecting screen reminds you), opens the menu over the game: stream quality, smooth playback, the controller, and **Disconnect**. Back
-or Circle closes it. Changing the video settings there restarts the stream when the menu closes.
+or Circle closes it. Changing the video settings there restarts the stream when the menu closes. Under the
+console's name the menu shows the session clock and what the stream is actually doing right now (the video rate
+and the frame rate the console is sending), so you can tell a stutter from a setting that is too high.
 
 A console that asks for its user's login passcode shows a 4-digit passcode sheet while connecting.
 
@@ -96,8 +98,12 @@ Settings. The TV remote's arrows, OK and Back do the same.
 
 ## Settings
 
-- **Stream**: resolution, frame rate, codec (H.264, H.265, or HDR on a PS5), bitrate, and **Smooth playback**: a
-  short delay that hides Wi-Fi hiccups. If the picture stutters, try 100 or 150 ms, or a lower bitrate.
+- **Stream**: a **Preset** picks the picture and the bandwidth together: **Data saver** (720p60, 8 Mbps),
+  **Balanced** (1080p60, 15 Mbps, the default) or **High quality** (1080p60, 30 Mbps). **Custom** adds the fine
+  settings, Quality (resolution and frame rate) and Bitrate. The **Codec** row is always there: H.264, H.265, or
+  **HDR** on a PS5 (an HDR TV switches to HDR10; a PS4 always sends H.264 without HDR). **Smooth playback** adds a
+  short delay that hides Wi-Fi hiccups. If the picture stutters, try a lower preset, 100 or 150 ms of Smooth
+  playback, or Custom with a lower bitrate.
 - **Controller**: rumble (turning it on gives a short buzz), whether the touchpad's touches reach the console, and
   the controller in use. On LG TVs a DualSense works for every button, stick and trigger, but webOS passes no
   rumble, adaptive trigger effects or touchpad touches through; a DualShock 4 rumbles and its touchpad works.

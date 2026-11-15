@@ -344,6 +344,7 @@ static void test_persistence(void) {
     c->stream.width = 1280;
     c->stream.height = 720;
     c->stream.bitrate_kbps = 23000;
+    c->stream.custom = true;
     c->input.rumble = false;
     c->input.touchpad = false;
     config_host_t h = { .nickname = "Round \\ trip\nPS5",
@@ -366,7 +367,7 @@ static void test_persistence(void) {
     const config_host_t *r = config_host(0);
     const config_psn_t *p = config_psn();
     expect(loaded && c->stream.codec == CODEC_H264 && c->stream.height == 720 && c->stream.bitrate_kbps == 23000 &&
-               !c->input.rumble && !c->input.touchpad && config_host_count() == 1 && r &&
+               c->stream.custom && !c->input.rumble && !c->input.touchpad && config_host_count() == 1 && r &&
                !strcmp(r->nickname, h.nickname) && !strcmp(r->addr, h.addr) && r->is_ps5 &&
                !memcmp(r->server_mac, h.server_mac, 6) && !memcmp(r->rp_regist_key, h.rp_regist_key, 16) &&
                r->via_psn && !memcmp(r->psn_uid, h.psn_uid, 32) && !memcmp(r->rp_key, h.rp_key, 16) && p->linked &&
@@ -679,8 +680,9 @@ int main(void) {
     stream_settings_t *st = &config_get()->stream;
     key(SDLK_RIGHT);
     expect(st->smooth_ms == 100, "RIGHT on Smooth playback raises it");
-    key(SDLK_UP);
-    key(SDLK_UP);
+    key(SDLK_UP); /* Codec: the fine rows Quality and Bitrate are Custom-only */
+    expect(home_item() == 2 && !home_stream_row_visible(1) && !home_stream_row_visible(3),
+           "the default preset (Balanced) shows Preset, Codec and Smooth playback only");
     int codec0 = (int)st->codec;
     key(SDLK_RIGHT);
     bool to_hdr = st->codec == CODEC_H265_HDR && st->hdr;
@@ -691,30 +693,53 @@ int main(void) {
     bool to_h264 = st->codec == CODEC_H264 && !st->hdr;
     expect(codec0 == CODEC_H265 && to_hdr && stays && to_h264,
            "the codec row steps H.264 / H.265 / HDR with LEFT/RIGHT (HDR = the H.265 HDR profile)");
-    key(SDLK_RIGHT);
+    key(SDLK_RIGHT); /* back to H.265 */
+    key(SDLK_UP);
+    expect(home_item() == 0, "UP from Codec reaches the Preset row, the hidden Quality row is skipped");
+    key(SDLK_RIGHT); /* Balanced -> High quality */
+    expect(st->height == 1080 && st->fps == 60 && st->bitrate_kbps == 30000 && !st->custom,
+           "RIGHT on Preset picks High quality: 1080p60 at 30 Mbps");
+    key(SDLK_RIGHT); /* -> Custom */
+    expect(st->custom && home_stream_row_visible(1) && home_stream_row_visible(3),
+           "RIGHT again reaches Custom, which shows Quality and Bitrate");
     key(SDLK_DOWN);
     key(SDLK_LEFT);
-    expect(st->codec == CODEC_H265 && st->bitrate_kbps == 14000, "LEFT on the bitrate bar lowers it by 1 Mbps");
+    expect(home_item() == 1 && st->fps == 30 && st->height == 1080, "LEFT on Quality drops to 1080p30");
+    key(SDLK_RIGHT);
+    key(SDLK_DOWN);
+    key(SDLK_DOWN);
+    key(SDLK_LEFT);
+    expect(st->codec == CODEC_H265 && st->bitrate_kbps == 29000, "LEFT on the bitrate bar lowers it by 1 Mbps");
     key(SDLK_RIGHT);
     pump(500);
     for (int i = 0; i < 12; i++) key(SDLK_RIGHT); /* held: the remote repeats faster than 400 ms */
     int held_up = st->bitrate_kbps;
     pump(500);
     for (int i = 0; i < 12; i++) key(SDLK_LEFT);
-    expect(held_up == 40000 && st->bitrate_kbps == 15000,
+    expect(held_up == 50000 && st->bitrate_kbps == 25000,
            "a held key speeds the bitrate up (1, then 2, then 5 Mbps a step), both ways");
+    shot("settings-custom");
     key(SDLK_UP);
     key(SDLK_UP);
     key(SDLK_UP);
-    key(SDLK_LEFT);
-    bool to_720 = st->width == 1280 && st->height == 720;
-    pad_btn(0x131); /* Cross cycles a choice */
-    expect(home_item() == 0 && to_720 && st->width == 1920 && st->height == 1080 && st->bitrate_kbps == 15000,
-           "Resolution: LEFT picks 720p, Cross cycles back to 1080p");
+    key(SDLK_LEFT); /* Custom -> High quality: the fine rows go away again */
+    expect(st->height == 1080 && st->fps == 60 && st->bitrate_kbps == 30000 && !st->custom &&
+               !home_stream_row_visible(1) && !home_stream_row_visible(3),
+           "a preset picked again hides Quality and Bitrate");
+    pad_btn(0x131); /* Cross on Preset cycles to Custom ... */
+    bool custom_again = st->custom && home_stream_row_visible(3);
+    pad_btn(0x131); /* ... and on to Data saver */
+    expect(custom_again && st->width == 1280 && st->height == 720 && st->fps == 60 && st->bitrate_kbps == 8000 &&
+               !home_stream_row_visible(1),
+           "Cross cycles the presets: Custom, then Data saver at 720p60 / 8 Mbps");
+    key(SDLK_RIGHT);
+    expect(!st->custom && st->width == 1920 && st->height == 1080 && st->bitrate_kbps == 15000,
+           "RIGHT from Data saver lands on Balanced again");
     shot("settings-edited");
     pump(1000); /* the debounced save */
     config_load();
-    expect(config_get()->stream.smooth_ms == 100 && config_get()->stream.codec == CODEC_H265,
+    expect(config_get()->stream.smooth_ms == 100 && config_get()->stream.codec == CODEC_H265 &&
+               !config_get()->stream.custom && config_get()->stream.bitrate_kbps == 15000,
            "settings edited on Home are saved");
     pad_btn(0x132);
     key(SDLK_RIGHT);
@@ -1268,6 +1293,9 @@ int main(void) {
     expect(ui_overlay_open() && stream_menu_focus() == 0 && lv_obj_get_style_bg_opa(lv_scr_act(), 0) == LV_OPA_TRANSP,
            "the stream menu opens on Resume, with no screen background");
     expect(strcmp(stream_menu_pad_battery(), "60%") == 0, "its Controller card shows the pad's battery");
+    expect(strstr(stream_menu_session_text(), "Mbps") && strstr(stream_menu_session_text(), "fps") &&
+               !strstr(stream_menu_session_text(), "--"),
+           "the session line shows the live rate and frame rate");
     shot_ex("stream-menu", true);
     expect(fb_alpha(W / 2, 200) == 0 && fb_alpha(20, H - 30) > 200 && fb_alpha(20, H - 30) < 255 &&
                fb_alpha((lv_coord_t)(resume->coords.x1 + 16),
