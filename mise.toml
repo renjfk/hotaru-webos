@@ -65,6 +65,10 @@ run = "scripts/make-device-art.sh"
 description = "Make the README's images from the host tests' and the gallery's renders"
 run = "scripts/make-screenshots.sh"
 
+[tasks."screenshots:check"]
+description = "Render again and report the README's images that are out of date (a release check)"
+run = "tests/host/run.sh && design/menu/capture.sh && scripts/make-screenshots.sh --check"
+
 # ---------- format and lint ----------
 
 [tasks.format]

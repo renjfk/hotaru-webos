@@ -168,6 +168,8 @@ When creating issues, please follow these naming conventions:
   real consoles and PSN; without, sessions and pairing are simulated.
 - **Tests** - `tests/host/run.sh` (macOS, `brew install sdl2`) drives the real modules offscreen with a fake
   controller and writes a screenshot of every screen to `out/host-tests/shots/`.
+- **Screenshots** - the README's images are those renders (`mise run screenshots` remakes them);
+  `mise run screenshots:check` reports the ones that no longer match the app, which a release requires.
 - **Tasks and lint** - [mise](https://mise.jdx.dev) pins the lint tools (`mise install` once) and has every command
   above as a task: `mise tasks` lists them. `mise run format` formats the C sources (clang-format), `mise run lint`
   runs every check CI runs (clang-format, clang-tidy, shellcheck and actionlint), and `mise run libchiaki:update`

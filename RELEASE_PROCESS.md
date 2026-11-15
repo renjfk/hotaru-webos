@@ -24,6 +24,8 @@ The manual release process involves:
 - Familiarity with major.minor versioning (no patch versions)
 - The release candidate checked on a TV (see [docs/TV-CHECKS.md](docs/TV-CHECKS.md)): the host tests and the
   simulator do not prove the hardware
+- The README's screenshots up to date (`mise run screenshots:check`): a release is when the README is read, and a
+  screen changed since the last release leaves its image showing the old app
 
 ## AI-Assisted Release Process
 
@@ -74,7 +76,13 @@ REQUIREMENTS:
 STEP 3: SHOW PREVIEW
 Display the file's content and ask for approval before proceeding.
 
-STEP 4: COMMIT THE NOTES, THEN TRIGGER THE WORKFLOW (after approval)
+STEP 4: CHECK THE README'S SCREENSHOTS
+Run `mise run screenshots:check`. It re-renders every screen the README shows and names each image that no longer
+matches. If it reports any, run `mise run screenshots`, look at the images it wrote in `out/screenshot-check/`
+(and at the git diff), and commit `screenshots/` together with the release work. The release is cut only with the
+check passing.
+
+STEP 5: COMMIT THE NOTES, THEN TRIGGER THE WORKFLOW (after approval)
 1. Commit release-notes/v[VERSION].md (the release workflow refuses a tag whose notes are not in the
    repository, so this has to land on the branch you dispatch from)
 2. Trigger the "Build and Release" workflow with the tag alone:
@@ -96,8 +104,9 @@ opencode will:
 1. **Analyze commits** since last release via `gh` CLI
 2. **Draft `release-notes/<tag>.md`** with proper formatting and categorization
 3. **Show preview** and ask for approval
-4. **Commit the notes** and **trigger the GitHub Actions workflow** with the tag alone
-5. The workflow **refuses a tag with no notes**, then **creates the tag**, and on a macOS arm64 runner installs the
+4. **Check the README's screenshots** and regenerate them when a screen changed since the last release
+5. **Commit the notes** and **trigger the GitHub Actions workflow** with the tag alone
+6. The workflow **refuses a tag with no notes**, then **creates the tag**, and on a macOS arm64 runner installs the
    webOS SDK (`scripts/webos-sdk.sh`), **cross-builds libchiaki** and its static dependencies
    (`scripts/chiaki-lib-build-webos.sh`, cached per chiaki-ng commit), writes the version into `appinfo.json`
    (`v0.2` is `0.2.0`: webOS wants three numbers), **builds and packages** the app (`./build.sh`) and publishes the
@@ -115,6 +124,20 @@ release candidate is no exception: it needs its notes before the run too. Only t
 
 The released `.ipk` is built from the tag, so its Corresponding Source (AGPL-3.0) is this repository at that tag;
 the app's About panel points here.
+
+### The README's screenshots are part of the release
+
+`screenshots/` shows the app as it is: the images are rendered from the host tests' steps and the design gallery's
+stand-in game (`scripts/make-screenshots.sh`), so a release that changed a screen makes them stale. Check them with
+`mise run screenshots:check`, which runs the host tests and the gallery capture, renders every image again and
+names each one that differs; it writes the fresh renders and a side-by-side of each stale image to
+`out/screenshot-check/`. Run `mise run screenshots`, look at those comparisons, and commit `screenshots/` with the
+release work.
+
+The check compares small, slightly blurred frames because the sources differ a little on every run: the committed
+images are lossy WebP, the tests draw the real clock and the PSN sign-in's QR code is a random code. That keeps the
+noise under 0.2% of a frame, so a screen that gained, moved or lost a control is flagged and a screen that only
+reworded a line may not be: read the images the check writes, not just its verdict.
 
 ### Listing in Dev Manager and the Homebrew Channel
 
@@ -143,6 +166,7 @@ candidates when they pick the base release they build on, since a candidate is a
 - **Automatic filtering** of technical commits (docs, tests, CI, etc.)
 - **User-focused** release notes with clear impact descriptions
 - **Notes in the repository** - a release cannot publish without `release-notes/<tag>.md` at the tag
+- **Screenshots checked** - `screenshots:check` proves the README shows the app being released
 - **Smart versioning** - minor for features/fixes, major for breaking changes
 - **Preview before action** - human approval required
 - **Full build pipeline** - toolchain, libchiaki, app, package and release all in one workflow
