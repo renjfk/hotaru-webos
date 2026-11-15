@@ -29,9 +29,10 @@ static const int g_smooth_ms[] = { 0, 100, 150, 200 };
 static struct {
     lv_obj_t *sheet, *art_box, *name, *time, *chips, *chip[4], *cards[C__N], *vals[C__N], *note, *pad_art;
     lv_obj_t *batt, *batt_fill, *batt_pct; /* the Controller card's battery, when the pad reports one */
+    lv_obj_t *hints, *icon[C__N];          /* the bottom hints, and the cards' glyphs */
     art_id_t pad_id;
     int focus;
-    bool open, adjusting;
+    bool open;
     uint32_t started;
     lv_timer_t *tick;
 } g;
@@ -54,20 +55,35 @@ static const char *card_value(int i) {
     static char buf[80];
     const config_t *c = config_get();
     char v[48];
+    bool left = false, right = false; /* the directions the value can still step */
     switch (i) {
         case C_RESUME: return "Back to the game";
-        case C_QUALITY: snprintf(v, sizeof(v), "%dp" BULLET "%d fps", c->stream.height, c->stream.fps); break;
+        case C_QUALITY:
+            snprintf(v, sizeof(v), "%dp" BULLET "%d fps", c->stream.height, c->stream.fps);
+            left = quality_index() > 0;
+            right = quality_index() < 3;
+            break;
         case C_SMOOTH:
             if (c->stream.smooth_ms) snprintf(v, sizeof(v), "%d ms", c->stream.smooth_ms);
             else snprintf(v, sizeof(v), "Off");
+            left = smooth_index() > 0;
+            right = smooth_index() < 3;
             break;
-        case C_PAD: snprintf(v, sizeof(v), "Rumble %s", c->input.rumble ? "on" : "off"); break;
+        case C_PAD:
+            snprintf(v, sizeof(v), "Rumble %s", c->input.rumble ? "on" : "off");
+            left = c->input.rumble;
+            right = !c->input.rumble;
+            break;
         case C_DISCONNECT:
             snprintf(v, sizeof(v), "%s", c->session.sleep_on_disconnect ? "End and sleep" : "End the session");
+            left = c->session.sleep_on_disconnect;
+            right = !c->session.sleep_on_disconnect;
             break;
         default: return "End the session";
     }
-    if (g.adjusting && i == g.focus) snprintf(buf, sizeof(buf), LV_SYMBOL_LEFT "   %s   " LV_SYMBOL_RIGHT, v);
+    if (left && right) snprintf(buf, sizeof(buf), LV_SYMBOL_LEFT "   %s   " LV_SYMBOL_RIGHT, v);
+    else if (left) snprintf(buf, sizeof(buf), LV_SYMBOL_LEFT "   %s", v);
+    else if (right) snprintf(buf, sizeof(buf), "%s   " LV_SYMBOL_RIGHT, v);
     else snprintf(buf, sizeof(buf), "%s", v);
     return buf;
 }
@@ -100,16 +116,32 @@ static void values_refresh(void) {
 
 static void paint(void) {
     for (int i = 0; i < C__N; i++) {
-        bool on = i == g.focus, danger = i == C_DISCONNECT, adj = on && g.adjusting;
+        bool on = i == g.focus, danger = i == C_DISCONNECT;
         motion_to(g.cards[i], MO_BG_OPA, on ? LV_OPA_COVER : LV_OPA_10, 200, 0, NULL);
         lv_obj_set_style_bg_color(g.cards[i], on && danger ? C(COL_ERR) : lv_color_white(), 0);
         motion_color(g.cards[i], LV_STYLE_TEXT_COLOR, on && !danger ? COL_ON_FROST : COL_TEXT, 200);
         motion_to(g.cards[i], MO_GROW, on ? 8 : 0, 320, 0, motion_spring);
         motion_to(g.cards[i], MO_TY, on ? -12 : 0, 320, 0, motion_spring);
-        lv_obj_set_style_border_color(g.cards[i], C(adj ? COL_ACCENT_HI : COL_FROST), 0);
-        lv_obj_set_style_border_width(g.cards[i], adj ? 5 : 2, 0);
-        motion_to(g.cards[i], MO_BORDER_OPA, adj ? LV_OPA_COVER : LV_OPA_10, 160, 0, NULL);
+        lv_obj_set_style_border_color(g.cards[i], C(COL_FROST), 0);
+        lv_obj_set_style_border_width(g.cards[i], 2, 0);
+        motion_to(g.cards[i], MO_BORDER_OPA, LV_OPA_10, 160, 0, NULL);
+        if (danger && g.icon[i]) motion_color(g.icon[i], LV_STYLE_TEXT_COLOR, on ? COL_TEXT : COL_ERR, 200);
+        motion_roll_opa(g.vals[i], on && danger ? LV_OPA_COVER : LV_OPA_70);
     }
+}
+
+/* The bottom hints follow the focused card: only cards with a Cross action show it, and only
+ * Resume has no value to change. The remote's Up/Down change values only when no pad is in use;
+ * otherwise the pad's own D-pad and stick would change them by accident. */
+static void hints_refresh(void) {
+    if (!g.hints) return;
+    const char *change = input_pad_state() == PAD_ONLINE ? "L1/R1" : "Up/Down";
+    lv_obj_clean(g.hints);
+    ctl_hint_key(g.hints, LV_SYMBOL_LEFT " " LV_SYMBOL_RIGHT, "Move");
+    if (g.focus != C_RESUME) ctl_hint_key(g.hints, change, "Change");
+    if (g.focus == C_RESUME) ctl_hint(g.hints, PS_CROSS, "Resume");
+    else if (g.focus == C_DISCONNECT) ctl_hint(g.hints, PS_CROSS, "Disconnect");
+    ctl_hint(g.hints, PS_CIRCLE, "Back to the game");
 }
 
 static void tick_cb(lv_timer_t *t) {
@@ -139,7 +171,6 @@ static void hidden_cb(lv_obj_t *sheet) {
 void stream_menu_open(bool open) {
     if (open == g.open) return;
     g.open = open;
-    g.adjusting = false;
     if (open) {
         g.focus = C_RESUME;
         const app_host_t *h = app_host(app_selected());
@@ -152,6 +183,7 @@ void stream_menu_open(bool open) {
         values_refresh();
         tick_cb(NULL);
         lv_label_set_text(g.note, "");
+        hints_refresh();
         lv_obj_clear_flag(g.sheet, LV_OBJ_FLAG_HIDDEN);
         motion_from(g.sheet, MO_TY, SHEET_H + 60, 0, 420, 0, NULL);
         for (int i = 0; i < C__N; i++) {
@@ -170,6 +202,8 @@ bool stream_menu_visible(void) { return g.sheet && !lv_obj_has_flag(g.sheet, LV_
 
 /* ---------- keys ---------- */
 
+/* changes the focused card's value: L1/Up steps back, R1/Down steps forward. The TV remote's
+ * Up/Down call the same; Cross is left for Resume and Disconnect. */
 static void adjust(int dir) {
     stream_settings_t *s = &config_get()->stream;
     if (g.focus == C_QUALITY) {
@@ -192,8 +226,13 @@ static void adjust(int dir) {
         s->smooth_ms = g_smooth_ms[i];
         motion_roll_text(g.note, "Smooth playback applies right away", 1);
     } else if (g.focus == C_PAD) {
-        config_get()->input.rumble = dir > 0;
-        if (dir < 0) input_rumble(0, 0); /* a motor that is running stops now */
+        bool rumble = dir > 0;
+        if (rumble == config_get()->input.rumble) {
+            motion_from(g.cards[g.focus], MO_TX, dir * 14, 0, 380, 0, motion_shake);
+            return;
+        }
+        config_get()->input.rumble = rumble;
+        if (!rumble) input_rumble(0, 0); /* a motor that is running stops now */
     } else if (g.focus == C_DISCONNECT) {
         bool sleep = dir > 0;
         session_settings_t *sess = &config_get()->session;
@@ -202,10 +241,6 @@ static void adjust(int dir) {
             return;
         }
         sess->sleep_on_disconnect = sleep;
-        motion_roll_text(g.note,
-                         sleep ? "The console goes to rest mode; Cross ends the stream"
-                               : "The console stays on; Cross ends the stream",
-                         dir);
     } else {
         return;
     }
@@ -214,56 +249,47 @@ static void adjust(int dir) {
     chips_refresh();
 }
 
+/* L1/R1 change the focused card; the remote's Up/Down do the same when no pad is in use */
+void stream_menu_adjust(int dir) {
+    if (g.open) adjust(dir);
+}
+
 void stream_menu_key(uint32_t k) {
     if (!g.open) return;
-    if (g.adjusting) {
-        if (k == LV_KEY_LEFT || k == LV_KEY_RIGHT) adjust(k == LV_KEY_RIGHT ? 1 : -1);
-        else if (k == LV_KEY_ENTER) {
-            if (g.focus == C_DISCONNECT) {
-                app_disconnect();
-                return;
-            }
-            g.adjusting = false;
-            values_refresh();
-            paint();
-        } else if (k == LV_KEY_ESC) {
-            g.adjusting = false;
-            if (g.focus == C_DISCONNECT) lv_label_set_text(g.note, "");
-            values_refresh();
-            paint();
-        }
-        return;
-    }
+    int prev = g.focus;
     if (k == LV_KEY_LEFT && g.focus > 0) g.focus--;
     else if (k == LV_KEY_RIGHT && g.focus < C__N - 1) g.focus++;
-    else if (k == LV_KEY_ENTER) {
+    else if (k == LV_KEY_UP || k == LV_KEY_DOWN) {
+        if (input_pad_state() != PAD_ONLINE) stream_menu_adjust(k == LV_KEY_DOWN ? 1 : -1);
+        return;
+    } else if (k == LV_KEY_ENTER) {
         if (g.focus == C_RESUME) {
             ui_overlay_toggle();
             return;
         }
-        g.adjusting = true;
-        if (g.focus == C_DISCONNECT) motion_roll_text(g.note, "Left / Right chooses; Cross ends the stream", 1);
-        values_refresh();
+        if (g.focus == C_DISCONNECT) {
+            app_disconnect();
+            return;
+        }
+        return; /* the setting cards change with L1/R1; Cross has no action there */
     } else if (k == LV_KEY_ESC) {
         ui_overlay_toggle();
         return;
     }
+    if (g.focus != prev) {
+        if (g.focus == C_DISCONNECT || prev == C_DISCONNECT) lv_label_set_text(g.note, "");
+        hints_refresh();
+    }
     paint();
-}
-
-bool stream_menu_back(void) {
-    if (!g.open || !g.adjusting) return false;
-    g.adjusting = false;
-    if (g.focus == C_DISCONNECT) lv_label_set_text(g.note, "");
-    values_refresh();
-    paint();
-    return true;
 }
 
 void stream_menu_refresh(void) {
     if (app_conn_state() == CONN_STREAMING && !g.started) g.started = lv_tick_get();
     if (app_conn_state() == CONN_IDLE) g.started = 0;
-    if (g.open) values_refresh();
+    if (g.open) {
+        values_refresh();
+        hints_refresh();
+    }
 }
 
 /* ---------- building ---------- */
@@ -326,6 +352,7 @@ void stream_menu_create(lv_obj_t *parent) {
             lv_obj_add_flag(g.batt, LV_OBJ_FLAG_HIDDEN);
         } else {
             lv_obj_t *ic = lv_label_create(c);
+            g.icon[i] = ic;
             lv_label_set_text(ic, syms[i]);
             lv_obj_set_style_text_font(ic, FONT_TITLE, 0);
             if (i == C_DISCONNECT) lv_obj_set_style_text_color(ic, C(COL_ERR), 0);
@@ -340,21 +367,29 @@ void stream_menu_create(lv_obj_t *parent) {
         lv_obj_set_style_text_opa(g.vals[i], LV_OPA_70, 0);
         lv_obj_set_pos(g.vals[i], 28, 132);
     }
-    lv_obj_t *hints = ctl_hints(g.sheet);
-    lv_obj_set_pos(hints, x0, 334);
-    ctl_hint_key(hints, LV_SYMBOL_LEFT " " LV_SYMBOL_RIGHT, "Move");
-    ctl_hint(hints, PS_CROSS, "Select / adjust");
-    ctl_hint(hints, PS_CIRCLE, "Back to the game");
+    g.hints = ctl_hints(g.sheet);
+    lv_obj_set_pos(g.hints, x0, 334);
     g.note = ctl_label(g.sheet, FONT_CAPTION, COL_ACCENT_HI, "");
     lv_obj_align(g.note, LV_ALIGN_TOP_RIGHT, -x0, 342);
     g.tick = lv_timer_create(tick_cb, 1000, NULL);
     lv_timer_pause(g.tick);
     values_refresh();
+    hints_refresh();
 }
 
 int stream_menu_focus(void) { return g.focus; }
-bool stream_menu_adjusting(void) { return g.adjusting; }
 lv_obj_t *stream_menu_card(int i) { return i >= 0 && i < C__N ? g.cards[i] : NULL; }
+const char *stream_menu_card_value(int i) { return i >= 0 && i < C__N ? lv_label_get_text(g.vals[i]) : ""; }
+
+static bool label_has(lv_obj_t *o, const char *text) {
+    if (lv_obj_check_type(o, &lv_label_class) && !strcmp(lv_label_get_text(o), text)) return true;
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++)
+        if (label_has(lv_obj_get_child(o, (int32_t)i), text)) return true;
+    return false;
+}
+
+bool stream_menu_hint_has(const char *text) { return g.hints && label_has(g.hints, text); }
+
 const char *stream_menu_session_text(void) { return g.time ? lv_label_get_text(g.time) : ""; }
 const char *stream_menu_pad_battery(void) {
     return g.batt && !lv_obj_has_flag(g.batt, LV_OBJ_FLAG_HIDDEN) ? lv_label_get_text(g.batt_pct) : "";

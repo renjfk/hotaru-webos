@@ -97,8 +97,8 @@ void ui_app_changed(app_change_t what) {
     }
 }
 
-/* Back, one level: a dialog cancels, Add a console steps back; over the stream the menu leaves
- * adjust mode, closes, or opens; else Home steps back. False only at Home's top level. */
+/* Back, one level: a dialog cancels, Add a console steps back; over the stream the menu closes
+ * or opens; else Home steps back. False only at Home's top level. */
 bool ui_back(void) {
     if (ui_dialog_active()) {
         ui_dialog_back();
@@ -109,7 +109,7 @@ bool ui_back(void) {
         return true;
     }
     if (app_conn_state() == CONN_STREAMING) {
-        if (!g_overlay || !stream_menu_back()) ui_overlay_toggle();
+        ui_overlay_toggle();
         return true;
     }
     return home_back();
@@ -121,14 +121,21 @@ void ui_pad_shift(void) {
     if (!ui_dialog_active()) ui_register_shift();
 }
 
-/* L1/R1: Home's sections; nothing while something covers Home or a session streams */
+/* L1/R1: Home's sections; over the stream menu they change the focused card */
 void ui_tab_step(int dir, const char *button) {
     (void)button;
-    if (ui_register_active() || ui_dialog_active() || app_conn_state() == CONN_STREAMING) return;
+    if (ui_register_active() || ui_dialog_active()) return;
+    if (app_conn_state() == CONN_STREAMING) {
+        if (g_overlay) stream_menu_adjust(dir);
+        return;
+    }
     home_section_step(dir);
 }
 
-void ui_set_pad_state(pad_state_t state) { home_set_pad(state); }
+void ui_set_pad_state(pad_state_t state) {
+    home_set_pad(state);
+    stream_menu_refresh(); /* the Change hint names L1/R1 or the remote's Up/Down */
+}
 
 lv_obj_t *ui_scroll_fallback(void) { return home_scroll_target(); }
 

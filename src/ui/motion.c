@@ -200,6 +200,13 @@ void motion_roll_text(lv_obj_t *label, const char *text, int dir) {
     lv_anim_start(&a);
 }
 
+/* the label's rest opacity; a running roll keeps writing the value it saved, so update that too */
+void motion_roll_opa(lv_obj_t *label, lv_opa_t opa) {
+    lv_obj_set_style_text_opa(label, opa, 0);
+    for (int i = 0; i < ROLL_SLOTS; i++)
+        if (g_roll[i].label == label) g_roll[i].opa = opa;
+}
+
 /* ---------- colour fades ---------- */
 
 #define MIX_SLOTS 24

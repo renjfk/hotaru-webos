@@ -43,6 +43,7 @@ int32_t motion_shake(const lv_anim_t *a);  /* a decaying wiggle around 0; start 
 
 void motion_enter(lv_obj_t *o, uint32_t delay, lv_coord_t dy);     /* fade in while sliding up dy px */
 void motion_roll_text(lv_obj_t *label, const char *text, int dir); /* old text rolls out, new in */
+void motion_roll_opa(lv_obj_t *label, lv_opa_t opa);               /* rest opacity, even mid-roll */
 /* prop: a BG, GRAD, TEXT, IMG_RECOLOR or BORDER colour */
 void motion_color(lv_obj_t *o, lv_style_prop_t prop, uint32_t to, uint32_t ms);
 

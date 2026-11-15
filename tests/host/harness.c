@@ -1302,6 +1302,8 @@ int main(void) {
                fb_alpha((lv_coord_t)(resume->coords.x1 + 16),
                         (lv_coord_t)((resume->coords.y1 + resume->coords.y2) / 2)) == LV_OPA_COVER,
            "the video shows above the menu and through its sheet, not through the focused card");
+    expect(stream_menu_hint_has("Resume") && !stream_menu_hint_has("Change"),
+           "Resume's hints have a Cross action and no Change");
     fails0 = g_fail;
     check_overflow(lv_scr_act());
     expect(g_fail == fails0, "no overflow on the stream menu");
@@ -1340,21 +1342,27 @@ int main(void) {
     expect(options_late && options_sent && !(session_last_pad()->buttons & SESSION_PAD_BTN_OPTIONS),
            "a lone Options reaches the console, PAD_CHORD_MS late");
 
-    /* the quality card: Cross adjusts, LEFT/RIGHT change it, Circle leaves adjust mode and then
-     * closes the menu, which restarts the stream with the new settings */
+    /* L1/R1 change the focused card: Stream quality steps from 1080p60 to 1080p30; the change
+     * waits for a restart, and Circle closes the menu, which restarts the stream */
     ui_overlay_toggle();
     pump(600);
-    key(SDLK_RIGHT);
-    key(SDLK_RETURN);
-    key(SDLK_LEFT);
-    expect(stream_menu_focus() == 1 && stream_menu_adjusting() && st->height == 1080 && st->fps == 30 &&
-               app_stream_settings_pending(),
-           "Cross on Stream quality adjusts it with LEFT/RIGHT; the change waits for a restart");
+    key(SDLK_RIGHT); /* focus Stream quality */
+    const char *qv = stream_menu_card_value(1);
+    expect(strstr(qv, LV_SYMBOL_LEFT) && !strstr(qv, LV_SYMBOL_RIGHT),
+           "the last Stream quality shows only the backward arrow");
+    expect(stream_menu_hint_has("Change") && !stream_menu_hint_has("Resume") && !stream_menu_hint_has("Disconnect"),
+           "the Stream quality hints show Change, not a Cross action");
+    key(SDLK_RETURN); /* Cross has no action on a setting card */
+    expect(app_conn_state() == CONN_STREAMING && ui_overlay_open(), "Cross on Stream quality does nothing");
+    pad_btn(0x134); /* L1 steps back to 1080p30 */
+    pump(400);      /* let the value's roll animation settle */
+    qv = stream_menu_card_value(1);
+    expect(stream_menu_focus() == 1 && st->height == 1080 && st->fps == 30 && app_stream_settings_pending() &&
+               strstr(qv, LV_SYMBOL_LEFT) && strstr(qv, LV_SYMBOL_RIGHT),
+           "L1 on Stream quality changes it to a middle choice; both arrows show");
     lv_disp_get_default()->driver->screen_transp = 1;
     shot_ex("stream-menu-adjust", true);
     lv_disp_get_default()->driver->screen_transp = 0;
-    pad_btn(0x132);
-    expect(!stream_menu_adjusting() && ui_overlay_open(), "Circle leaves adjust mode first");
     pad_btn(0x132);
     pump(300);
     bool restarting =
@@ -1367,26 +1375,55 @@ int main(void) {
            "closing the menu restarts the stream with the new video settings");
     st->fps = 60;
 
-    /* the Disconnect card remembers the action: Cross enters adjust mode, LEFT/RIGHT choose,
-     * and the choice is saved; Cross again ends the session and asks the console to rest */
+    /* Disconnect: L1/R1 choose the action, Cross ends the stream at once */
     ui_overlay_toggle();
     pump(600);
     for (int i = 0; i < 4; i++) key(SDLK_RIGHT);
-    key(SDLK_RETURN);
-    expect(stream_menu_focus() == 4 && stream_menu_adjusting() && !config_get()->session.sleep_on_disconnect,
-           "Cross on Disconnect enters adjust mode with the saved action");
-    key(SDLK_RIGHT);
-    bool sleep_on = config_get()->session.sleep_on_disconnect;
-    key(SDLK_LEFT);
-    bool sleep_off = !config_get()->session.sleep_on_disconnect;
-    key(SDLK_RIGHT);
-    pump(400); /* let the value's roll animation settle before the shot */
+    expect(stream_menu_focus() == 4 && !config_get()->session.sleep_on_disconnect,
+           "Disconnect is focused with the saved action");
+    const char *dv = stream_menu_card_value(4);
+    expect(strstr(dv, "End the session") && strstr(dv, LV_SYMBOL_RIGHT) && !strstr(dv, LV_SYMBOL_LEFT),
+           "End the session shows only the forward arrow");
+    expect(stream_menu_hint_has("Change") && stream_menu_hint_has("L1/R1") && stream_menu_hint_has("Disconnect") &&
+               !stream_menu_hint_has("Resume"),
+           "the Disconnect hints show Change and Disconnect");
+    key(SDLK_DOWN);
+    expect(!config_get()->session.sleep_on_disconnect, "with the pad online, Up/Down do not change the action");
+
+    /* with no controller, the remote's Up/Down change the action and the hint names them */
+    pad_unplug();
+    pump(100);
+    expect(input_pad_state() == PAD_OFFLINE && stream_menu_hint_has("Up/Down") && !stream_menu_hint_has("L1/R1"),
+           "with no controller the Change hint names the remote's Up/Down");
+    key(SDLK_DOWN);
+    bool sleep_remote = config_get()->session.sleep_on_disconnect;
+    key(SDLK_UP);
+    bool end_remote = !config_get()->session.sleep_on_disconnect;
+    pad_plug("event12");
+    pump(1800);
+    expect(sleep_remote && end_remote && input_pad_state() == PAD_ONLINE && stream_menu_hint_has("L1/R1"),
+           "the remote's Up/Down choose the action; the pad returns");
+    pad_btn(0x135); /* R1: End and sleep */
+    pump(150);      /* the value text swaps halfway through its roll */
+    bool sleep_r1 = config_get()->session.sleep_on_disconnect;
+    dv = stream_menu_card_value(4);
+    expect(sleep_r1 && strstr(dv, "End and sleep") && strstr(dv, LV_SYMBOL_LEFT) && !strstr(dv, LV_SYMBOL_RIGHT),
+           "R1 chooses End and sleep; only the backward arrow remains");
+    pad_btn(0x134); /* L1: End the session */
+    bool end_l1 = !config_get()->session.sleep_on_disconnect;
+    pad_btn(0x135); /* R1 again: the action Cross will use */
+    pump(400);      /* let the value's roll animation settle before the shot */
+    int fails_d = g_fail;
+    check_overflow(lv_scr_act());
+    expect(g_fail == fails_d, "no overflow on the Disconnect card's hints");
     lv_disp_get_default()->driver->screen_transp = 1;
     shot_ex("stream-menu-sleep", true);
     lv_disp_get_default()->driver->screen_transp = 0;
-    key(SDLK_RETURN);
+    bool still_streaming = app_conn_state() == CONN_STREAMING && ui_overlay_open();
+    key(SDLK_RETURN); /* one Cross ends the stream */
     pump(1200);
-    expect(sleep_on && sleep_off && app_conn_state() == CONN_IDLE && !session_active_host() && !ui_overlay_open() &&
+    expect(sleep_r1 && end_l1, "L1 and R1 choose the two Disconnect actions");
+    expect(still_streaming && app_conn_state() == CONN_IDLE && !session_active_host() && !ui_overlay_open() &&
                !lv_obj_has_flag(home_root(), LV_OBJ_FLAG_HIDDEN) &&
                lv_obj_get_style_bg_opa(lv_scr_act(), 0) == LV_OPA_COVER,
            "Disconnect in the stream menu stops the session and brings Home back");

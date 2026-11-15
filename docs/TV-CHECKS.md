@@ -148,8 +148,9 @@ those answers like one with no release at all.
 
 ### 14. Rest mode on disconnect
 
-While a game streams, open the menu, focus **Disconnect** and press Cross, choose **End and sleep** with Left/Right,
-then press Cross again. Repeat with **End the session**.
+While a game streams, open the menu and focus **Disconnect**. Press R1 (or Down on the remote when no controller is
+connected) for **End and sleep** and L1 (or Up) for **End the session**, then Cross once. Repeat with the other
+action.
 
 - **Look for** the stream to end and Home to come back; with End and sleep the console goes to rest mode, and with
   End the session it stays on. The card keeps the last choice after a restart.

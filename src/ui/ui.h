@@ -20,12 +20,13 @@ void ui_create(void);
 lv_group_t *ui_group(void); /* the main group: the key sink */
 
 void ui_app_changed(app_change_t what);        /* app_listener_t */
-void ui_tab_step(int dir, const char *button); /* input hook: L1/R1, Home's Consoles <-> Settings */
-void ui_set_pad_state(pad_state_t state);      /* input hook: the controller light and art */
+void ui_tab_step(int dir, const char *button); /* input hook: L1/R1, Home's sections or the stream menu's card */
+void ui_set_pad_state(pad_state_t state);      /* input hook: the controller light, art and Change hint */
 lv_obj_t *ui_scroll_fallback(void);            /* input hook: the log console on its panel */
 
 /* the menu over a running stream: the TV remote's Back or the pad's Share + Options (input
  * hook: menu) toggle it over the running stream (video + audio keep going); Disconnect ends it.
+ * L1/R1 (or the remote's Up/Down when no controller is connected) change the focused card.
  * Closing it with edited video settings restarts the stream. */
 void ui_overlay_toggle(void);
 bool ui_overlay_open(void); /* the stream menu is on screen (also while it slides away) */
