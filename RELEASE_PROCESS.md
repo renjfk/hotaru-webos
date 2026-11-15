@@ -63,6 +63,9 @@ Draft release-notes/v[VERSION].md with this EXACT format:
 - Fix description focusing on resolved user issue (abc1234)
 
 REQUIREMENTS:
+- Open with the sections, not a banner: a banner is for breaking changes ([!CAUTION]) or for one sentence the
+  sections cannot carry (a patch release with nothing user-visible, a hardware caveat), never for routine
+  context
 - Focus ONLY on user-facing changes and impact
 - EXCLUDE: docs, build, ci, chore, refactor, test commits
 - Use active voice, present tense
