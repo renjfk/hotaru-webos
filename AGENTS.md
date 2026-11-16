@@ -24,7 +24,8 @@ src/
   main.c            entry: init modules, wire hooks, main loop; probe mode triggers, SDL event probe, frame timing
   log.[ch]          the only logger: /tmp/hotaru.log, the Log panel's feed, probe lines
   app.[ch]          state the UI renders: consoles, discovery, connection, registration; glue to config/session
-  platform/         display.[ch]: SDL window + streaming texture + LVGL display driver
+  platform/         display.[ch]: SDL window + streaming texture + LVGL display driver;
+                    tv.[ch]: the TV's model and webOS version, for the log
   input/            remote + controller -> the LVGL keypad indev: keypad.c, gamepad.c (evdev), scroll.c
   ui/               ui.[ch] screen assembly and the key sink; home.[ch] + home_settings.c the main menu;
                     stream_menu.[ch] the menu over a running stream; register.[ch] "Add a console";
@@ -160,6 +161,10 @@ scripts/tv.sh install && scripts/tv.sh launch --probe && scripts/tv.sh log -f
 - **Overlays** (`register.c`, `dialog.c`) live on `lv_layer_top()` and take keys from the sink (add them to
   `sink_key_cb()` and `ui_back()`, front to back). A full-screen one calls `ui_cover()` once it has faded in. A
   dialog runs its callback after it is gone, through `lv_async_call()`
+- **Errors**: `app.c` keeps the last failure as a what/why pair (`app_conn_error_what`/`_why`). Home says it in
+  the one notice slot in the top bar, shared with the update check (an error wins while it is up), and a TV-wide
+  condition (`app_stream_blocked`, e.g. a webOS 4 TV with no v2 NDL) as the hero's state line, and it is said
+  again in the notice when a connect is refused. The bottom-left toast is for moments ("Wake-up sent") only
 - **Device art** comes from `design/menu/art/`, scaled by `scripts/make-device-art.sh` into `assets/devices/`; the
   ipk installs it next to the binary. The app icon is a checked-in PNG with the glyph only: the launcher draws the
   tile in `appinfo.json` `iconColor`

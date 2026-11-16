@@ -426,6 +426,24 @@ static void regist_cb(ChiakiRegistEvent *event, void *user) {
 
 bool session_available(void) { return true; }
 
+/* The TV's media library is only known at runtime (the app no longer links it): a webOS 4 set
+ * answers with the v1 API, where the v2 calls this app makes do not exist. A build without NDL at
+ * all (the simulator with real libchiaki, or a TV build whose headers were missing) has no answer
+ * to give and streams without a picture, as it did before. */
+const char *session_media_reason(void) {
+#ifdef HOTARU_HAVE_NDL
+    if (ndl_available()) return "";
+    static bool logged;
+    if (!logged) {
+        logged = true;
+        log_msg("media: no v2 NDL (%s): webOS 4 and older have the v1 API only", ndl_unavailable_detail());
+    }
+    return SESSION_MEDIA_WHY;
+#else
+    return "";
+#endif
+}
+
 static ChiakiTarget target_of(bool ps5) { return ps5 ? CHIAKI_TARGET_PS5_1 : CHIAKI_TARGET_PS4_10; }
 
 /* the video profile both the LAN and the PSN path build */

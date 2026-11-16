@@ -46,18 +46,22 @@
 #define TILE_ADD_LOW 0x101626
 #define TILE_SET_LOW 0x0c1424
 #define SET_LIFT     0x101010
-/* the update notice: the app mark beside two lines, over the top bar's right end (its controller,
- * avatar and clock take no keys), centred on the top bar's 52 px row */
-#define UPDATE_MS     9000 /* long enough to read the address */
-#define UPDATE_WAIT   500  /* how often a waiting notice looks whether Home is free */
-#define UPDATE_LOGO   48   /* as tall as the two lines */
-#define UPDATE_PAD    18   /* above and below them */
-#define UPDATE_SIDE   SP_XL
-#define UPDATE_GAP    20
-#define UPDATE_BORDER 2
-#define UPDATE_H      (UPDATE_LOGO + 2 * UPDATE_PAD + 2 * UPDATE_BORDER)
-#define UPDATE_Y      (HOME_SAFE_Y - 4 + 26 - UPDATE_H / 2)
-#define UPDATE_RISE   24 /* it drops in from above and rises away */
+/* the notice: an icon beside two lines, over the top bar's right end (its controller, avatar and
+ * clock take no keys), centred on the top bar's 52 px row. It carries the update check's message
+ * and the last failure: one slot, one shape, one animation. */
+#define NOTICE_MS       9000 /* long enough to read the second line */
+#define NOTICE_ERROR_MS 9000 /* the same, and an error is worth no less */
+#define NOTICE_WAIT     500  /* how often a waiting update notice looks whether Home is free */
+#define NOTICE_ICON     48   /* as tall as the two lines */
+#define NOTICE_PAD      18   /* above and below them */
+#define NOTICE_SIDE     SP_XL
+#define NOTICE_GAP      20
+#define NOTICE_BORDER   2
+#define NOTICE_H        (NOTICE_ICON + 2 * NOTICE_PAD + 2 * NOTICE_BORDER)
+#define NOTICE_Y        (HOME_SAFE_Y - 4 + 26 - NOTICE_H / 2)
+#define NOTICE_RISE     24  /* it drops in from above and rises away */
+#define NOTICE_MAX_W    960 /* a long reason (up to 127 characters) stops short of the tabs */
+#define NOTICE_TEXT_MAX 160 /* the room app.c keeps for a failure's what and why, with an ellipsis */
 
 enum { SEC__N = 2 };
 enum { ACT__N = 3 };
@@ -83,12 +87,14 @@ static struct {
     lv_obj_t *pad_box, *pad_img, *pad_dot, *avatar, *avatar_lbl, *clock;
     lv_obj_t *conn, *conn_art_box, *conn_title, *conn_bar, *conn_pct, *conn_hints;
     lv_obj_t *toast, *toast_lbl;
-    lv_obj_t *update, *update_title, *update_addr;
-    lv_timer_t *clock_timer, *toast_timer, *update_wait, *update_hide;
+    lv_obj_t *notice, *notice_logo, *notice_warn, *notice_title, *notice_detail;
+    bool notice_error; /* an error holds the slot: the update check steps back */
+    lv_timer_t *clock_timer, *toast_timer, *notice_wait, *notice_hide;
     ctl_menu_t menu;
     int menu_kind;
     art_id_t pad_art;
     conn_state_t conn_shown;
+    unsigned err_shown; /* the failure generation last shown, so one is not repeated */
 } g;
 
 static void paint(void);
@@ -157,63 +163,134 @@ static void toast(const char *text, uint32_t col) {
     lv_timer_set_repeat_count(g.toast_timer, 1);
 }
 
-/* ---------- the update notice ---------- */
+/* ---------- the notice ---------- */
 
-static void update_hidden_cb(lv_obj_t *o) {
-    if (!g.update_hide) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+static void notice_hidden_cb(lv_obj_t *o) {
+    if (!g.notice_hide) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
 }
 
-static void update_hide_cb(lv_timer_t *t) {
+static void notice_fade_out(void) {
+    g.notice_hide = NULL;
+    g.notice_error = false; /* the slot is free for the update check again */
+    motion_to(g.notice, MO_TY, -NOTICE_RISE, 320, 0, lv_anim_path_ease_in);
+    motion_then(g.notice, MO_OPA, LV_OPA_TRANSP, 280, lv_anim_path_ease_in, notice_hidden_cb);
+}
+
+static void notice_hide_cb(lv_timer_t *t) {
     (void)t;
-    g.update_hide = NULL;
-    motion_to(g.update, MO_TY, -UPDATE_RISE, 320, 0, lv_anim_path_ease_in);
-    motion_then(g.update, MO_OPA, LV_OPA_TRANSP, 280, lv_anim_path_ease_in, update_hidden_cb);
+    notice_fade_out();
+}
+
+/* a retry started: the old failure's message steps back before its time is up. The update check's
+ * notice keeps its own time, whether or not a session is starting. */
+static void notice_dismiss(void) {
+    if (!g.notice_error) return;
+    if (g.notice_hide) {
+        lv_timer_del(g.notice_hide);
+        g.notice_hide = NULL;
+    }
+    notice_fade_out();
+}
+
+/* One line that fits: a line wider than the notice allows loses its tail and ends in an ellipsis.
+ * (LVGL's own LV_LABEL_LONG_DOT rewrites the label's text in place, which readers then see cut, so
+ * the text kept here is the text shown.) */
+static void fit_line(char *out, size_t cap, const char *in, const lv_font_t *font, lv_coord_t avail) {
+    snprintf(out, cap, "%s", in);
+    lv_point_t sz;
+    lv_txt_get_size(&sz, out, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    if (sz.x <= avail) return;
+    size_t n = strlen(out);
+    for (; n > 0; n--) {
+        if (((unsigned char)out[n] & 0xC0) == 0x80) continue; /* a UTF-8 continuation byte */
+        out[n] = (char)0;
+        snprintf(out + n, cap - n, "...");
+        lv_txt_get_size(&sz, out, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        if (sz.x <= avail) return;
+    }
+    snprintf(out, cap, "...");
+}
+
+/* One message, two lines: what happened, then why. The update check's notice and a failed action
+ * share the slot and the shape; an error wins while it is up, and the update is still named in
+ * Settings > About after it. */
+static void notice_show(bool error, const char *title, const char *detail, uint32_t ms) {
+    /* both lines get the room they need up to the maximum, then an ellipsis */
+    lv_coord_t x = NOTICE_SIDE + NOTICE_ICON + NOTICE_GAP;
+    lv_coord_t avail = NOTICE_MAX_W - x - NOTICE_SIDE - 2 * NOTICE_BORDER;
+    char t[NOTICE_TEXT_MAX], d[NOTICE_TEXT_MAX];
+    fit_line(t, sizeof(t), title, FONT_BODY, avail);
+    fit_line(d, sizeof(d), detail, FONT_CAPTION, avail);
+    lv_label_set_text(g.notice_title, t);
+    lv_label_set_text(g.notice_detail, d);
+    lv_obj_set_style_text_color(g.notice_title, C(error ? COL_DANGER_TEXT : COL_TEXT), 0);
+    if (error) {
+        lv_obj_add_flag(g.notice_logo, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(g.notice_warn, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_clear_flag(g.notice_logo, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(g.notice_warn, LV_OBJ_FLAG_HIDDEN);
+    }
+    g.notice_error = error;
+    lv_obj_set_width(g.notice, x + LV_MAX(text_width(g.notice_title), text_width(g.notice_detail)) + NOTICE_SIDE +
+                                   2 * NOTICE_BORDER);
+    lv_obj_clear_flag(g.notice, LV_OBJ_FLAG_HIDDEN);
+    motion_from(g.notice, MO_TY, -NOTICE_RISE, 0, 360, 0, NULL);
+    motion_to(g.notice, MO_OPA, LV_OPA_COVER, 240, 0, NULL);
+    if (g.notice_hide) lv_timer_del(g.notice_hide);
+    g.notice_hide = lv_timer_create(notice_hide_cb, ms, NULL);
+    lv_timer_set_repeat_count(g.notice_hide, 1);
+}
+
+/* the last failure, from the state app.c keeps, when it is not the one already up */
+static void notice_error(void) {
+    if (!app_conn_error_what()[0]) return;
+    if (app_conn_error_gen() == g.err_shown) return; /* this one is up, or has had its time */
+    notice_show(true, app_conn_error_what(), app_conn_error_why(), NOTICE_ERROR_MS);
+    g.err_shown = app_conn_error_gen();
 }
 
 /* a newer release: the notice waits until Home is in front and idle (the splash is gone, no dialog,
- * no session), so it is seen */
-static void update_wait_cb(lv_timer_t *t) {
+ * no session, no error holding the slot), so it is seen */
+static void notice_wait_cb(lv_timer_t *t) {
     if (lv_obj_has_flag(g.root, LV_OBJ_FLAG_HIDDEN) || app_conn_state() != CONN_IDLE || splash_active() ||
-        ui_dialog_active())
+        ui_dialog_active() || g.notice_error)
         return;
     lv_timer_del(t);
-    g.update_wait = NULL;
+    g.notice_wait = NULL;
     if (!app_update_version()[0]) return;
-    lv_label_set_text_fmt(g.update_title, "Hotaru %s is available", app_update_version());
-    lv_coord_t x = UPDATE_SIDE + UPDATE_LOGO + UPDATE_GAP;
-    lv_obj_set_width(g.update, x + LV_MAX(text_width(g.update_title), text_width(g.update_addr)) + UPDATE_SIDE +
-                                   2 * UPDATE_BORDER);
-    lv_obj_clear_flag(g.update, LV_OBJ_FLAG_HIDDEN);
-    motion_from(g.update, MO_TY, -UPDATE_RISE, 0, 360, 0, NULL);
-    motion_to(g.update, MO_OPA, LV_OPA_COVER, 240, 0, NULL);
-    if (g.update_hide) lv_timer_del(g.update_hide);
-    g.update_hide = lv_timer_create(update_hide_cb, UPDATE_MS, NULL);
-    lv_timer_set_repeat_count(g.update_hide, 1);
+    char title[96];
+    snprintf(title, sizeof(title), "Hotaru %s is available", app_update_version());
+    notice_show(false, title, HOME_SOURCE_URL, NOTICE_MS);
 }
 
 static void update_changed(void) {
     home_settings_refresh(); /* About names the new version too */
-    if (!app_update_version()[0] || g.update_wait) return;
-    g.update_wait = lv_timer_create(update_wait_cb, UPDATE_WAIT, NULL);
-    lv_timer_ready(g.update_wait);
+    if (!app_update_version()[0] || g.notice_wait) return;
+    g.notice_wait = lv_timer_create(notice_wait_cb, NOTICE_WAIT, NULL);
+    lv_timer_ready(g.notice_wait);
 }
 
-static void build_update(void) {
-    g.update = ctl_rect(g.root, 400, UPDATE_H, 26, COL_SHEET, LV_OPA_COVER); /* opaque: it hides what it covers */
-    lv_obj_set_style_border_width(g.update, UPDATE_BORDER, 0);
-    lv_obj_set_style_border_color(g.update, lv_color_white(), 0);
-    lv_obj_set_style_border_opa(g.update, LV_OPA_20, 0);
-    lv_obj_set_style_shadow_width(g.update, 50, 0);
-    lv_obj_set_style_shadow_opa(g.update, LV_OPA_40, 0);
-    lv_obj_align(g.update, LV_ALIGN_TOP_RIGHT, -HOME_SAFE_X + SP_L, UPDATE_Y);
-    lv_obj_set_pos(ui_logo(g.update, UPDATE_LOGO), UPDATE_SIDE, UPDATE_PAD);
-    lv_coord_t x = UPDATE_SIDE + UPDATE_LOGO + UPDATE_GAP;
-    g.update_title = ctl_label(g.update, FONT_BODY, COL_TEXT, "");
-    lv_obj_set_pos(g.update_title, x, UPDATE_PAD - 5);
-    g.update_addr = ctl_label(g.update, FONT_CAPTION, COL_MUTED, HOME_SOURCE_URL);
-    lv_obj_set_pos(g.update_addr, x, UPDATE_PAD + 27);
-    lv_obj_set_style_opa(g.update, LV_OPA_TRANSP, 0);
-    lv_obj_add_flag(g.update, LV_OBJ_FLAG_HIDDEN);
+static void build_notice(void) {
+    g.notice = ctl_rect(g.root, 400, NOTICE_H, 26, COL_SHEET, LV_OPA_COVER); /* opaque: it hides what it covers */
+    lv_obj_set_style_border_width(g.notice, NOTICE_BORDER, 0);
+    lv_obj_set_style_border_color(g.notice, lv_color_white(), 0);
+    lv_obj_set_style_border_opa(g.notice, LV_OPA_20, 0);
+    lv_obj_set_style_shadow_width(g.notice, 50, 0);
+    lv_obj_set_style_shadow_opa(g.notice, LV_OPA_40, 0);
+    lv_obj_align(g.notice, LV_ALIGN_TOP_RIGHT, -HOME_SAFE_X + SP_L, NOTICE_Y);
+    g.notice_logo = ui_logo(g.notice, NOTICE_ICON);
+    lv_obj_set_pos(g.notice_logo, NOTICE_SIDE, NOTICE_PAD);
+    g.notice_warn = ctl_label(g.notice, FONT_TITLE, COL_DANGER_TEXT, LV_SYMBOL_WARNING);
+    lv_obj_set_pos(g.notice_warn, NOTICE_SIDE + 6, NOTICE_PAD + 2);
+    lv_obj_add_flag(g.notice_warn, LV_OBJ_FLAG_HIDDEN);
+    lv_coord_t x = NOTICE_SIDE + NOTICE_ICON + NOTICE_GAP;
+    g.notice_title = ctl_label(g.notice, FONT_BODY, COL_TEXT, "");
+    lv_obj_set_pos(g.notice_title, x, NOTICE_PAD - 5);
+    g.notice_detail = ctl_label(g.notice, FONT_CAPTION, COL_MUTED, HOME_SOURCE_URL);
+    lv_obj_set_pos(g.notice_detail, x, NOTICE_PAD + 27);
+    lv_obj_set_style_opa(g.notice, LV_OPA_TRANSP, 0);
+    lv_obj_add_flag(g.notice, LV_OBJ_FLAG_HIDDEN);
 }
 
 /* ---------- tiles ---------- */
@@ -340,6 +417,13 @@ static void route_text(void) {
 static void hero_state(const app_host_t *h) {
     char buf[160];
     uint32_t col = COL_INFO;
+    const char *blocked = app_stream_blocked();
+    if (blocked[0]) { /* the TV cannot stream at all: that outranks what discovery knows */
+        lv_label_set_text(g.h_meta, blocked);
+        lv_obj_set_style_bg_color(g.h_dot, C(COL_ERR), 0);
+        lv_obj_set_style_shadow_color(g.h_dot, C(COL_ERR), 0);
+        return;
+    }
     switch (h->state) {
         case HOST_READY:
             col = COL_OK;
@@ -688,12 +772,8 @@ static void connecting_refresh(void) {
         if (s == CONN_STREAMING) lv_obj_add_flag(g.conn, LV_OBJ_FLAG_HIDDEN);
         else motion_then(g.conn, MO_OPA, LV_OPA_TRANSP, 300, NULL, conn_hidden_cb);
     }
-    if (s == CONN_IDLE && g.conn_shown != CONN_IDLE && app_conn_error()[0]) { /* failed, or dropped */
-        char msg[192];
-        snprintf(msg, sizeof(msg), LV_SYMBOL_WARNING "   %s: %s",
-                 g.conn_shown == CONN_CONNECTING ? "Could not connect" : "The stream ended", app_conn_error());
-        toast(msg, COL_DANGER_TEXT);
-    }
+    if (s != CONN_IDLE) notice_dismiss(); /* an attempt is running: the last failure steps back */
+    notice_error();                       /* ... and a new one is said whether the screen came up or not */
     g.conn_shown = s;
 }
 
@@ -1014,6 +1094,11 @@ void home_app_changed(app_change_t what) {
             }
             break;
         case APP_CHANGED_CONN:
+            /* a refusal can be a TV-wide condition, which the hero line shows in place of discovery */
+            if (g.sec == HOME_CONSOLES && !on_add_tile() && focused_host()) hero_state(focused_host());
+            connecting_refresh();
+            home_settings_refresh();
+            break;
         case APP_CHANGED_PROGRESS:
             connecting_refresh();
             home_settings_refresh();
@@ -1119,7 +1204,7 @@ void home_create(lv_obj_t *parent) {
     g.toast_lbl = ctl_label(g.toast, FONT_BODY, COL_TEXT, "");
     lv_obj_center(g.toast_lbl);
     lv_obj_set_style_opa(g.toast, LV_OPA_TRANSP, 0);
-    build_update();
+    build_notice();
     build_connecting();
 
     int sel = app_selected();
@@ -1148,7 +1233,15 @@ int home_item(void) { return g.item; }
 bool home_menu_open(void) { return ctl_menu_is_open(&g.menu); }
 bool home_connecting(void) { return g.root && !lv_obj_has_flag(g.conn, LV_OBJ_FLAG_HIDDEN); }
 lv_obj_t *home_root(void) { return g.root; }
-const char *home_update_note(void) { return g.update_hide ? lv_label_get_text(g.update_title) : ""; }
+const char *home_update_note(void) {
+    return g.notice && !g.notice_error && !lv_obj_has_flag(g.notice, LV_OBJ_FLAG_HIDDEN)
+               ? lv_label_get_text(g.notice_title)
+               : "";
+}
+const char *home_notice_text(void) {
+    return g.notice && !lv_obj_has_flag(g.notice, LV_OBJ_FLAG_HIDDEN) ? lv_label_get_text(g.notice_title) : "";
+}
+const char *home_hero_state(void) { return lv_label_get_text(g.h_meta); }
 lv_obj_t *home_row(int section) { return section >= 0 && section < SEC__N ? g.row[section] : NULL; }
 const char *home_pad_battery(void) { /* "" when the controller reports no battery */
     return g.card_pad_batt && !lv_obj_has_flag(g.card_pad_batt, LV_OBJ_FLAG_HIDDEN) ? lv_label_get_text(g.card_pad_batt)

@@ -12,6 +12,7 @@
 #include <SDL.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "../log.h"
@@ -37,6 +38,9 @@
     "&service_logo=ps&layout_type=popup&smcid=remoteplay&prompt=always&PlatformPrivacyWs1=minimal&"
 
 bool session_available(void) { return false; }
+
+/* no hardware media in this build: the host tests walk the refusal through the environment */
+const char *session_media_reason(void) { return getenv("HOTARU_SIM_NO_MEDIA") ? SESSION_MEDIA_WHY : ""; }
 
 /* the simulation does not consume the pad, but records it so the host tests
  * can assert what the app forwarded */

@@ -28,6 +28,11 @@
 #define WAKE_RESEND_MS   1000  /* the one-packet wake-up is resent (chiaki-ng gui/src/qmlbackend.cpp) */
 #define WAKE_PROGRESS    15    /* the share of the progress bar waking takes */
 
+/* The last failure, as the two lines the UI shows: what was attempted and why it did not work */
+#define CONN_ERROR_WHAT 64                          /* "Could not connect", and the like */
+#define CONN_ERROR_WHY  128                         /* one clause, as the console or the TV put it */
+#define STREAM_BLOCKED  "This TV cannot play video" /* the state a TV without the v2 media API shows */
+
 /* app forwards input_pad_t to session_pad_t field by field and copies the button
  * bitmask; the two canonical layouts must stay identical */
 _Static_assert(PAD_BTN_CROSS == SESSION_PAD_BTN_CROSS && PAD_BTN_PS == SESSION_PAD_BTN_PS &&
@@ -42,17 +47,19 @@ static int g_host_count;
 static int g_selected = -1;
 static conn_state_t g_conn = CONN_IDLE;
 static int g_progress;
-static bool g_login_pin;                /* the console asked for the login PIN; the UI shows a prompt */
-static Uint32 g_save_at;                /* 0 = no settings edit pending */
-static Uint32 g_pad_next;               /* throttle for forwarding the pad to a running session */
-static bool g_pad_fwd;                  /* the pad was being forwarded: send it released when that stops */
-static stream_settings_t g_stream_used; /* the video settings the running session started with */
-static int g_conn_host = -1;            /* the console it runs with */
-static config_host_t g_conn_cfg;        /* ... and the entry it was started from (route applied) */
-static bool g_conn_fallback;            /* that entry is the PSN fallback after the local network failed */
-static char g_conn_error[128];          /* why the last session failed or ended on its own */
-static Uint32 g_restart_at;             /* a stream restart is pending: reconnect then (0 = none) */
-static int g_restart_tries;             /* attempts left in a stream restart (0 = not restarting) */
+static bool g_login_pin;                        /* the console asked for the login PIN; the UI shows a prompt */
+static Uint32 g_save_at;                        /* 0 = no settings edit pending */
+static Uint32 g_pad_next;                       /* throttle for forwarding the pad to a running session */
+static bool g_pad_fwd;                          /* the pad was being forwarded: send it released when that stops */
+static stream_settings_t g_stream_used;         /* the video settings the running session started with */
+static int g_conn_host = -1;                    /* the console it runs with */
+static config_host_t g_conn_cfg;                /* ... and the entry it was started from (route applied) */
+static bool g_conn_fallback;                    /* that entry is the PSN fallback after the local network failed */
+static char g_conn_error_what[CONN_ERROR_WHAT]; /* the last failure, "" when nothing failed */
+static char g_conn_error_why[CONN_ERROR_WHY];
+static unsigned g_conn_error_gen; /* counts failures: the UI shows each one once, the same text included */
+static Uint32 g_restart_at;       /* a stream restart is pending: reconnect then (0 = none) */
+static int g_restart_tries;       /* attempts left in a stream restart (0 = not restarting) */
 static struct {
     bool on;
     Uint32 start, until, resend;
@@ -443,7 +450,19 @@ void app_set_route(host_route_t route) {
     notify(APP_CHANGED_HOST);
 }
 
-const char *app_conn_error(void) { return g_conn_error; }
+const char *app_conn_error_what(void) { return g_conn_error_what; }
+const char *app_conn_error_why(void) { return g_conn_error_why; }
+unsigned app_conn_error_gen(void) { return g_conn_error_gen; }
+/* asked live, not cached: the same answer every time on a TV, and the host tests toggle it */
+const char *app_stream_blocked(void) { return session_media_reason()[0] ? STREAM_BLOCKED : ""; }
+
+/* one failure, as the UI shows it: what was attempted, and why it did not work */
+static void conn_fail(const char *what, const char *why) {
+    snprintf(g_conn_error_what, sizeof(g_conn_error_what), "%s", what);
+    snprintf(g_conn_error_why, sizeof(g_conn_error_why), "%s", why ? why : "");
+    g_conn_error_gen++;
+}
+
 bool app_conn_over_psn(void) { return g_conn != CONN_IDLE && !g_conn_cfg.addr[0]; }
 bool app_conn_fallback(void) { return g_conn != CONN_IDLE && g_conn_fallback; }
 bool app_conn_waking(void) { return g_conn == CONN_CONNECTING && g_wake.on; }
@@ -479,7 +498,13 @@ void app_connect(void) {
         log_event(LOG_WARN, "NET", "%s has no address yet", h->name);
         return;
     }
-    g_conn_error[0] = '\0';
+    g_conn_error_what[0] = g_conn_error_why[0] = '\0';
+    if (app_stream_blocked()[0]) { /* a webOS 4 TV has only the v1 media API: no picture at all */
+        conn_fail(STREAM_BLOCKED, session_media_reason());
+        log_event(LOG_ERR, "NET", "Cannot stream on this TV: %s", session_media_reason());
+        notify(APP_CHANGED_CONN);
+        return;
+    }
     g_conn_host = g_selected;
     g_conn_cfg = ch;
     g_conn_fallback = false;
@@ -502,7 +527,7 @@ void app_connect(void) {
     }
     if (!started) {
         log_event(LOG_ERR, "NET", "Could not start the session with %s", h->name);
-        snprintf(g_conn_error, sizeof(g_conn_error), "Could not start the session");
+        conn_fail("Could not connect", "The session could not start");
         notify(APP_CHANGED_CONN);
         return;
     }
@@ -523,13 +548,15 @@ static void wake_tick(void) {
             notify(APP_CHANGED_PROGRESS); /* waking -> connecting */
             return;
         }
-        snprintf(g_conn_error, sizeof(g_conn_error), "Could not start the session");
+        conn_fail("Could not connect", "The session could not start");
         set_conn(CONN_IDLE);
     } else if ((Sint32)(now - g_wake.until) >= 0) {
         g_wake.on = false;
         if (fall_back_to_psn("did not wake up on the local network")) return;
-        snprintf(g_conn_error, sizeof(g_conn_error), "%s did not wake up", h ? h->name : "The console");
-        log_event(LOG_WARN, "NET", "%s", g_conn_error);
+        char why[CONN_ERROR_WHY];
+        snprintf(why, sizeof(why), "%s did not wake up", h ? h->name : "The console");
+        conn_fail("Could not connect", why);
+        log_event(LOG_WARN, "NET", "%s", why);
         set_conn(CONN_IDLE);
     } else {
         if (lan && (Sint32)(now - g_wake.resend) >= 0) {
@@ -554,7 +581,7 @@ static void conn_close(void) {
 void app_disconnect(void) {
     g_restart_at = 0;
     g_restart_tries = 0;
-    g_conn_error[0] = '\0';
+    g_conn_error_what[0] = g_conn_error_why[0] = '\0';
     if (g_conn == CONN_IDLE) return;
     if (g_conn == CONN_STREAMING && config_get()->session.sleep_on_disconnect) {
         const app_host_t *h = app_host(g_conn_host);
@@ -605,7 +632,7 @@ static void restart_attempt(void) {
         return;
     }
     g_restart_tries = 0;
-    snprintf(g_conn_error, sizeof(g_conn_error), "Could not restart the session");
+    conn_fail("Could not restart", "The session did not start again");
     set_conn(CONN_IDLE);
     log_event(LOG_ERR, "NET", "Could not restart the session");
 }
@@ -978,10 +1005,10 @@ static void session_ev(const session_event_t *ev) {
                 session_stop(); /* the console ended it (or an error): release the backend */
                 input_rumble(0, 0);
                 g_login_pin = false;
-                snprintf(g_conn_error, sizeof(g_conn_error), "%s",
-                         ev->reason[0]               ? ev->reason
-                         : g_conn == CONN_CONNECTING ? "The console did not accept the connection"
-                                                     : "The session ended");
+                conn_fail(g_conn == CONN_CONNECTING ? "Could not connect" : "The stream ended",
+                          ev->reason[0]               ? ev->reason
+                          : g_conn == CONN_CONNECTING ? "The console did not answer"
+                                                      : "The console closed the connection");
                 set_conn(CONN_IDLE);
                 log_event(LOG_WARN, "NET", "Session ended%s%s", ev->reason[0] ? ": " : "", ev->reason);
             }

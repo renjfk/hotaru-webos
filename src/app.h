@@ -83,10 +83,18 @@ int app_conn_progress(void); /* 0..100 */
 void app_connect(void);      /* selected host over its route, config_get()->stream */
 void app_disconnect(void);
 void app_set_route(host_route_t route); /* the selected host's route, saved; ignored when it lacks that one */
-const char *app_conn_error(void);       /* why the last session failed or ended on its own; "" otherwise */
-bool app_conn_over_psn(void);           /* the session (or the attempt) runs over PSN */
-bool app_conn_fallback(void);           /* ... because the local network did not reach the console */
-bool app_conn_waking(void);             /* connecting: waiting for a console in rest mode to wake up */
+/* The last failed action, as the two lines a notice shows: what happened, and why. Both are ""
+ * when nothing failed; the technical detail goes to the log only. */
+const char *app_conn_error_what(void);
+const char *app_conn_error_why(void);
+unsigned app_conn_error_gen(void); /* counts failures: the UI shows each one once, repeated text included */
+
+/* A TV-wide condition that stops every stream, as the line Home shows under the console's name
+ * ("" when there is none). It outlives an attempt, so it is a state, not a message. */
+const char *app_stream_blocked(void);
+bool app_conn_over_psn(void); /* the session (or the attempt) runs over PSN */
+bool app_conn_fallback(void); /* ... because the local network did not reach the console */
+bool app_conn_waking(void);   /* connecting: waiting for a console in rest mode to wake up */
 
 /* The console negotiates the video settings when the session starts, so an edit made while
  * connected only applies through a restart: pending = they differ from what the session started

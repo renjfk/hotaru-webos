@@ -42,6 +42,8 @@ bool home_menu_open(void);  /* the route or options pop-up */
 bool home_connecting(void); /* the "Connecting" screen is up */
 lv_obj_t *home_root(void);
 const char *home_update_note(void);    /* the update notice's first line while it is up, "" otherwise */
+const char *home_notice_text(void);    /* the up notice's first line, whatever it is about, "" otherwise */
+const char *home_hero_state(void);     /* the line under the console's name */
 lv_obj_t *home_row(int section);       /* the tile row: tiles past the screen edge are by design */
 const char *home_pad_battery(void);    /* the quick card's battery line, "" when the pad reports none */
 bool home_stream_row_visible(int row); /* a Stream settings row is shown (Quality and Bitrate only in Custom) */
