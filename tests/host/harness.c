@@ -238,6 +238,13 @@ static void check_overflow(lv_obj_t *o) {
     }
     for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) check_overflow(lv_obj_get_child(o, (int32_t)i));
 }
+/* A label resizes to its new text on the next layout pass, so for one refresh its box is still the
+ * old size while the text is not: measuring there reads a few pixels of overflow that is not there
+ * once the layout has run. Roll it on first, so what is measured is what the TV draws. */
+static void overflow_check(lv_obj_t *root) {
+    lv_obj_update_layout(root);
+    check_overflow(root);
+}
 static bool visible(lv_obj_t *o) {
     for (; o; o = lv_obj_get_parent(o))
         if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return false;
@@ -272,7 +279,7 @@ static void rings_fit(lv_obj_t *o) {
 }
 static void home_check(const char *name) {
     pump(450); /* let the focus and layout animations land */
-    check_overflow(lv_scr_act());
+    overflow_check(lv_scr_act());
     rings_fit(lv_scr_act());
     shot(name);
 }
@@ -299,7 +306,7 @@ static bool wait_typing(bool typing) {
 /* Add a console's step: it fits 1080p and its focus rings are not clipped */
 static void reg_check(const char *name) {
     pump(500);
-    check_overflow(ui_register_root());
+    overflow_check(ui_register_root());
     rings_fit(ui_register_root());
     shot(name);
 }
@@ -1363,7 +1370,7 @@ int main(void) {
     expect(stream_menu_hint_has("Resume") && !stream_menu_hint_has("Change"),
            "Resume's hints have a Cross action and no Change");
     fails0 = g_fail;
-    check_overflow(lv_scr_act());
+    overflow_check(lv_scr_act());
     expect(g_fail == fails0, "no overflow on the stream menu");
     ui_overlay_toggle();
     pump(400);
@@ -1472,7 +1479,7 @@ int main(void) {
     pad_btn(0x135); /* R1 again: the action Cross will use */
     pump(400);      /* let the value's roll animation settle before the shot */
     int fails_d = g_fail;
-    check_overflow(lv_scr_act());
+    overflow_check(lv_scr_act());
     expect(g_fail == fails_d, "no overflow on the Disconnect card's hints");
     lv_disp_get_default()->driver->screen_transp = 1;
     shot_ex("stream-menu-sleep", true);
