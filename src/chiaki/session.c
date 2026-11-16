@@ -42,6 +42,9 @@ bool session_available(void) { return false; }
 /* no hardware media in this build: the host tests walk the refusal through the environment */
 const char *session_media_reason(void) { return getenv("HOTARU_SIM_NO_MEDIA") ? SESSION_MEDIA_WHY : ""; }
 
+/* no hardware media in this build: the host tests walk the H.264-only setting through the environment */
+bool session_media_h264_only(void) { return getenv("HOTARU_SIM_H264_ONLY") != NULL; }
+
 /* the simulation does not consume the pad, but records it so the host tests
  * can assert what the app forwarded */
 static session_pad_t g_last_pad;

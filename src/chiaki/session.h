@@ -104,6 +104,11 @@ bool session_available(void); /* true when the real libchiaki backend is linked 
  * library; the simulation answers SESSION_MEDIA_WHY while HOTARU_SIM_NO_MEDIA is set, so the host
  * tests can walk the refusal. */
 const char *session_media_reason(void);
+
+/* true on a TV whose media API has no H.265 or HDR (webOS 4: the v1 NDL API): the session then asks the
+ * console for H.264 SDR whatever the stream settings say. The simulation answers through
+ * HOTARU_SIM_H264_ONLY, so the host tests can walk the setting that follows it. */
+bool session_media_h264_only(void);
 /* start a session: LAN when the host has an address, else over PSN (an async holepunch
  * connect when via_psn; progress/quit arrive through session_poll) */
 bool session_start(const config_host_t *host, const stream_settings_t *stream);

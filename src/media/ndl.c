@@ -19,6 +19,8 @@
 
 #ifdef HOTARU_HAVE_NDL
 
+#include "ndl_v1.h"
+
 #define NDL_DIRECTMEDIA_API_VERSION 2
 #include <NDL_directmedia_v2.h>
 
@@ -40,7 +42,11 @@
  * the same two APIs apart by webOS version.
  *
  * The name is the SONAME, not the SDK's dev symlink: a TV ships libNDL_directmedia.so.1 and .so.1.0.0
- * only, with no unversioned .so to open. */
+ * only, with no unversioned .so to open.
+ *
+ * A webOS 4 TV has only the v1 API, a different shape (media/ndl_v1.[ch]): separate video and audio
+ * open calls, no presentation timestamp and no render-queue query, H.264 SDR only. Which generation a
+ * TV has is decided once, here, by which symbols its library answers to. */
 #define NDL_LIBRARY "libNDL_directmedia.so.1"
 
 typedef struct {
@@ -62,9 +68,12 @@ typedef struct {
     int (*set_hdr)(ndl_hdr_info_t info); /* optional: HDR stays the console's plain HDR10 */
 } ndl_api_t;
 
+typedef enum { NDL_NONE, NDL_V1, NDL_V2 } ndl_kind_t;
+
 static struct {
     ndl_api_t api;
-    bool tried, ok;
+    ndl_kind_t kind;
+    bool tried;
     const char *missing; /* the symbol the TV does not have, for the log */
 } g_api;
 
@@ -75,7 +84,7 @@ static struct {
 } g;
 
 static bool api_load(void) {
-    if (g_api.tried) return g_api.ok;
+    if (g_api.tried) return g_api.kind != NDL_NONE;
     g_api.tried = true;
     void *lib = dlopen(NDL_LIBRARY, RTLD_NOW | RTLD_LOCAL);
     if (!lib) {
@@ -104,16 +113,22 @@ static bool api_load(void) {
     NDL_RESOLVE(audio_total, "NDL_DirectAudioGetTotalBufferSize", false);
     NDL_RESOLVE(set_hdr, "NDL_DirectVideoSetHDRInfo", false);
 #undef NDL_RESOLVE
-    if (missing) {
-        g_api.missing = missing;
-        dlclose(lib);
-        memset(a, 0, sizeof(*a)); /* the handles are gone with the library */
-        log_msg("ndl: %s has no %s (the v1 API: webOS 4 and older)", NDL_LIBRARY, missing);
-        return false;
+    if (!missing) {
+        g_api.kind = NDL_V2;
+        log_msg("ndl: %s has the v2 API", NDL_LIBRARY);
+        return true;
     }
-    log_msg("ndl: %s has the v2 API", NDL_LIBRARY);
-    g_api.ok = true;
-    return true;
+    /* no v2: a webOS 4 TV has the v1 API, which is enough to stream H.264 SDR */
+    memset(a, 0, sizeof(*a));
+    if (ndl_v1_load(lib)) {
+        g_api.kind = NDL_V1;
+        log_msg("ndl: %s has the v1 API only (webOS 4 and older): H.264 SDR at most", NDL_LIBRARY);
+        return true;
+    }
+    g_api.missing = missing;
+    dlclose(lib);
+    log_msg("ndl: %s has no %s and no v1 API", NDL_LIBRARY, missing);
+    return false;
 }
 
 static bool g_hdr, g_hdr_done; /* HDR profile: whether to apply HDR info, and whether done */
@@ -132,9 +147,25 @@ static void load_cb(int type, long long num, const char *str) {
 
 bool ndl_available(void) { return api_load(); }
 
+bool ndl_h264_only(void) {
+    api_load();
+    return g_api.kind == NDL_V1;
+}
+
 const char *ndl_unavailable_detail(void) {
     if (api_load()) return "";
     return g_api.missing ? g_api.missing : NDL_LIBRARY;
+}
+
+/* the v1 plane has to be told where to put the picture: it fits a 16:9 screen, letterboxed or pillar-boxed */
+static void v1_place(int width, int height) {
+    if (width <= 0 || height <= 0) return;
+    int h = 1920 * height / width;
+    if (h <= 1080) ndl_v1_video_area(0, (1080 - h) / 2, 1920, h);
+    else {
+        int w = 1080 * width / height;
+        ndl_v1_video_area((1920 - w) / 2, 0, w, 1080);
+    }
 }
 
 bool ndl_open(const stream_settings_t *stream) {
@@ -151,6 +182,28 @@ bool ndl_open(const stream_settings_t *stream) {
         }
         g.initialized = true;
         log_event(LOG_OK, "NDL", "DirectMediaInit ok (%s)", appid);
+    }
+
+    if (g_api.kind == NDL_V1) { /* no load step: video and audio are opened one by one */
+        int r = ndl_v1_video_open((int)stream->width, (int)stream->height);
+        if (r != 0) {
+            log_event(LOG_ERR, "NDL", "DirectVideoOpen failed (%d)", r);
+            return false;
+        }
+        v1_place((int)stream->width, (int)stream->height);
+        r = ndl_v1_audio_open(2, NDL_AUDIO_RATE);
+        if (r != 0) {
+            log_event(LOG_ERR, "NDL", "DirectAudioOpen failed (%d)", r);
+            ndl_v1_video_close();
+            return false;
+        }
+        g_hdr = false;
+        g_hdr_done = true; /* v1 has no DirectVideoSetHDRInfo: the picture stays SDR */
+        g.loaded = true;
+        g.loaded_ms = now_ms();
+        log_event(LOG_OK, "NDL", "%dx%d H.264 + PCM %d Hz stereo (v1 API)", stream->width, stream->height,
+                  NDL_AUDIO_RATE);
+        return true;
     }
 
     NDL_DIRECTMEDIA_DATA_INFO_T info;
@@ -181,7 +234,11 @@ bool ndl_open(const stream_settings_t *stream) {
 
 void ndl_close(void) {
     const ndl_api_t *a = &g_api.api;
-    if (g.loaded) {
+    if (g.loaded && g_api.kind == NDL_V1) {
+        ndl_v1_audio_close();
+        ndl_v1_video_close();
+        g.loaded = false;
+    } else if (g.loaded) {
         a->unload();
         g.loaded = false;
     }
@@ -329,11 +386,14 @@ bool ndl_push_video(const uint8_t *nal, size_t len, int64_t pts_us) {
             hdr_apply(hdr_default);
         }
     }
-    int r = g_api.api.video_play((void *)nal, (unsigned int)len, (long long)(now_ms() - g.loaded_ms));
+    int r = g_api.kind == NDL_V1
+                ? ndl_v1_video_play(nal, (unsigned int)len)
+                : g_api.api.video_play((void *)nal, (unsigned int)len, (long long)(now_ms() - g.loaded_ms));
     if (r != 0) {
         if (!g.video_error_logged) {
             g.video_error_logged = true;
-            log_event(LOG_ERR, "NDL", "DirectVideoPlay failed: %s", g_api.api.error());
+            if (g_api.kind == NDL_V1) log_event(LOG_ERR, "NDL", "DirectVideoPlay failed (%d)", r);
+            else log_event(LOG_ERR, "NDL", "DirectVideoPlay failed: %s", g_api.api.error());
         }
         return false;
     }
@@ -343,11 +403,14 @@ bool ndl_push_video(const uint8_t *nal, size_t len, int64_t pts_us) {
 bool ndl_push_audio(const uint8_t *pcm, size_t len, int64_t pts_us) {
     (void)pts_us;
     if (!g.loaded || !pcm || !len) return false;
-    int r = g_api.api.audio_play((void *)pcm, (unsigned int)len, (long long)(now_ms() - g.loaded_ms));
+    int r = g_api.kind == NDL_V1
+                ? ndl_v1_audio_play(pcm, (unsigned int)len)
+                : g_api.api.audio_play((void *)pcm, (unsigned int)len, (long long)(now_ms() - g.loaded_ms));
     if (r != 0) {
         if (!g.audio_error_logged) {
             g.audio_error_logged = true;
-            log_event(LOG_ERR, "NDL", "DirectAudioPlay failed: %s", g_api.api.error());
+            if (g_api.kind == NDL_V1) log_event(LOG_ERR, "NDL", "DirectAudioPlay failed (%d)", r);
+            else log_event(LOG_ERR, "NDL", "DirectAudioPlay failed: %s", g_api.api.error());
         }
         return false;
     }
@@ -356,11 +419,13 @@ bool ndl_push_audio(const uint8_t *pcm, size_t len, int64_t pts_us) {
 
 int ndl_video_buffered(void) {
     int n = -1;
+    if (g_api.kind == NDL_V1) return -1; /* v1 has no render-queue query */
     return g.loaded && g_api.api.video_buffered && g_api.api.video_buffered(&n) == 0 ? n : -1;
 }
 
 int ndl_audio_buffered_ms(void) {
     int avail = 0, total = 0;
+    if (g_api.kind == NDL_V1) return -1; /* v1 reports free space only, no total to subtract it from */
     if (!g.loaded || !g_api.api.audio_avail || !g_api.api.audio_total || g_api.api.audio_avail(&avail) != 0 ||
         g_api.api.audio_total(&total) != 0)
         return -1;
@@ -370,6 +435,7 @@ int ndl_audio_buffered_ms(void) {
 #else /* !HOTARU_HAVE_NDL: host tests and the simulator have no NDL */
 
 bool ndl_available(void) { return false; }
+bool ndl_h264_only(void) { return false; }
 const char *ndl_unavailable_detail(void) { return "no NDL in this build"; }
 int ndl_video_buffered(void) { return -1; }
 int ndl_audio_buffered_ms(void) { return -1; }

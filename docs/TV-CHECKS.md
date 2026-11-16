@@ -177,6 +177,20 @@ connect (a webOS 4 TV has only the v1 API there, and a direct call to a v2 entry
 - **It decides** the name in `src/media/ndl.c` (`NDL_LIBRARY`): it must be the SONAME the TV ships, not the
   unversioned dev symlink in the SDK sysroot.
 
+### 16. A webOS 4 TV streams through the v1 API
+
+On a webOS 4 set (2017-2018, e.g. an OLED C8), start a stream. Such a TV has only the v1 NDL API (issue #7), and
+the app then plays H.264 SDR only.
+
+- **Look for** `ndl: libNDL_directmedia.so.1 has the v1 API only (webOS 4 and older): H.264 SDR at most`, then
+  `DirectVideoOpen`/`DirectAudioOpen` success and `H.264 + PCM 48000 Hz stereo (v1 API)`; Settings > Stream > Codec
+  offers H.264 alone, and the console is asked for H.264 SDR even if the saved settings say H.265 or HDR.
+- **Note** the picture's position (the plane is placed with `NDL_DirectVideoSetArea`, letterboxed if the aspect
+  differs), the audio, and whether the first frames arrive. moonlight-tv's compatibility table marks webOS 4.3.0 as
+  broken, so the webOS version (first line of the log) matters.
+- **It decides** whether the v1 path can be declared supported: no release has run it yet, and the calls follow
+  ss4s's `webos4` module rather than a proven run on this set.
+
 ## Recording the results
 
 Update the table in [STATUS.md](STATUS.md), keep raw evidence next to it (like

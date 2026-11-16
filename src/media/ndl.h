@@ -25,8 +25,11 @@
 
 #include "../config/config.h"
 
-bool ndl_available(void);                 /* true when the TV's libNDL_directmedia has the v2 API (webOS 5 and newer) */
+bool ndl_available(void); /* true when the TV's libNDL_directmedia has the v2 API (webOS 5+) or the v1 one */
 const char *ndl_unavailable_detail(void); /* why not, for the log: the missing symbol or library */
+
+/* true on a TV with only the v1 API (webOS 4 and older): H.264 SDR is all it can decode through NDL */
+bool ndl_h264_only(void);
 
 bool ndl_open(const stream_settings_t *stream); /* init + load: codec, size, PCM 48 kHz stereo */
 void ndl_close(void);                           /* unload + quit */

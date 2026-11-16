@@ -104,8 +104,8 @@ directory is not writable the app falls back to `/tmp/hotaru`, which a reboot cl
   `libNDL_directmedia` is opened at runtime and its v2 entry points resolved by name: the v2 API is what ss4s
   (moonlight-tv's media layer) uses from webOS 5 on, a webOS 4 TV has the v1 API only, and a directly linked
   `NDL_DirectMediaLoad()` call there kills the process on the missing symbol (issue #5). Such a TV now gets
-  "This TV cannot play video" as the hero's state line and a notice, and no session starts; reaching it for real
-  would take a second media backend, not a second package
+  "This TV cannot play video" as the hero's state line and a notice, and no session starts; the second backend that
+  would change that (the v1 API, H.264 SDR only) is written but has never run on a v1 TV (issue #7, TV check 16)
 - OpenSSL must be linked statically: a dynamic `libssl.so.1.1` fails to load and the app is relaunched in a loop
 - ~340 MB of free RAM; the two LVGL draw buffers take ~16 MB
 - Wi-Fi: the bitrate must suit the link, and the stalls above need Smooth playback; on Ethernet they are gone

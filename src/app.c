@@ -455,6 +455,7 @@ const char *app_conn_error_why(void) { return g_conn_error_why; }
 unsigned app_conn_error_gen(void) { return g_conn_error_gen; }
 /* asked live, not cached: the same answer every time on a TV, and the host tests toggle it */
 const char *app_stream_blocked(void) { return session_media_reason()[0] ? STREAM_BLOCKED : ""; }
+bool app_stream_h264_only(void) { return session_media_h264_only(); }
 
 /* one failure, as the UI shows it: what was attempted, and why it did not work */
 static void conn_fail(const char *what, const char *why) {

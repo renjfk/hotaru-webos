@@ -1289,6 +1289,15 @@ int main(void) {
     expect(app_conn_error_gen() == gen + 1 && !strcmp(home_notice_text(), "This TV cannot play video"),
            "... and each refusal is a new failure, even while the last one is still up");
     unsetenv("HOTARU_SIM_NO_MEDIA");
+
+    /* a TV with only the v1 media API (webOS 4) plays H.264 SDR only: the session is told so, and the Stream
+     * panel's Codec row is built with that one choice (interval: the row is built once, at startup) */
+    setenv("HOTARU_SIM_H264_ONLY", "1", 1);
+    expect(app_stream_h264_only(), "a v1 media TV is H.264 only, as the session and the settings are told");
+    unsetenv("HOTARU_SIM_H264_ONLY");
+    expect(!app_stream_h264_only() && home_settings_codec_options() == 3,
+           "... and a v2 TV keeps the three codec choices");
+
     app_connect(); /* the same console, with the media API there */
     pump(400);
     expect(app_conn_state() == CONN_CONNECTING && !strcmp(home_notice_text(), "") &&
