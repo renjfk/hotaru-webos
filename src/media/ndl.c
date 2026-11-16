@@ -22,6 +22,7 @@
 #define NDL_DIRECTMEDIA_API_VERSION 2
 #include <NDL_directmedia_v2.h>
 
+#include <dlfcn.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -30,11 +31,90 @@
 
 #define NDL_AUDIO_RATE 48000 /* Remote Play audio is 48 kHz stereo Opus */
 
+/* The TV's libNDL_directmedia comes in two generations: v2 (webOS 5 and newer, what this module
+ * uses) and v1 (webOS 4 and older, which has no NDL_DirectMediaLoad() at all). Linking the v2
+ * calls directly made a v1 TV abort the process at its first one: lazy binding resolves a symbol
+ * only when it is called, and the loader then kills the app on the missing name. Opening the
+ * library here turns that into "this TV has no v2 media API", the reason ndl_unavailable_detail()
+ * reports and the UI shows. The v2 entry points are resolved by name, as moonlight-tv's ss4s picks
+ * the same two APIs apart by webOS version.
+ *
+ * The name is the SONAME, not the SDK's dev symlink: a TV ships libNDL_directmedia.so.1 and .so.1.0.0
+ * only, with no unversioned .so to open. */
+#define NDL_LIBRARY "libNDL_directmedia.so.1"
+
+typedef struct {
+    unsigned int mastering[12]; /* G, B, R x/y, white x/y, max/min luminance, MaxCLL, MaxFALL */
+    unsigned int transfer, primaries, matrix;
+} ndl_hdr_info_t;
+
+typedef struct {
+    int (*init)(const char *app_id, ResourceReleased cb);
+    int (*quit)(void);
+    const char *(*error)(void);
+    int (*load)(NDL_DIRECTMEDIA_DATA_INFO_T *info, NDLMediaLoadCallback cb);
+    int (*unload)(void);
+    int (*video_play)(void *buf, unsigned int size, long long pts);
+    int (*audio_play)(void *buf, unsigned int size, long long pts);
+    int (*video_buffered)(int *n); /* optional: -1 when the TV cannot say */
+    int (*audio_avail)(int *n);    /* optional, with audio_total */
+    int (*audio_total)(int *n);
+    int (*set_hdr)(ndl_hdr_info_t info); /* optional: HDR stays the console's plain HDR10 */
+} ndl_api_t;
+
+static struct {
+    ndl_api_t api;
+    bool tried, ok;
+    const char *missing; /* the symbol the TV does not have, for the log */
+} g_api;
+
 static struct {
     bool initialized, loaded;
     uint64_t loaded_ms;
     bool video_error_logged, audio_error_logged;
 } g;
+
+static bool api_load(void) {
+    if (g_api.tried) return g_api.ok;
+    g_api.tried = true;
+    void *lib = dlopen(NDL_LIBRARY, RTLD_NOW | RTLD_LOCAL);
+    if (!lib) {
+        g_api.missing = NDL_LIBRARY;
+        log_msg("ndl: %s did not open: %s", NDL_LIBRARY, dlerror());
+        return false;
+    }
+    ndl_api_t *a = &g_api.api;
+    memset(a, 0, sizeof(*a));
+    const char *missing = NULL;
+    /* the calls a stream cannot run without */
+#define NDL_RESOLVE(field, name, required)                                                                             \
+    do {                                                                                                               \
+        *(void **)(&a->field) = dlsym(lib, name);                                                                      \
+        if (required && !a->field && !missing) missing = name;                                                         \
+    } while (0)
+    NDL_RESOLVE(init, "NDL_DirectMediaInit", true);
+    NDL_RESOLVE(quit, "NDL_DirectMediaQuit", true);
+    NDL_RESOLVE(error, "NDL_DirectMediaGetError", true);
+    NDL_RESOLVE(load, "NDL_DirectMediaLoad", true);
+    NDL_RESOLVE(unload, "NDL_DirectMediaUnload", true);
+    NDL_RESOLVE(video_play, "NDL_DirectVideoPlay", true);
+    NDL_RESOLVE(audio_play, "NDL_DirectAudioPlay", true);
+    NDL_RESOLVE(video_buffered, "NDL_DirectVideoGetRenderBufferLength", false);
+    NDL_RESOLVE(audio_avail, "NDL_DirectAudioGetAvailableBufferSize", false);
+    NDL_RESOLVE(audio_total, "NDL_DirectAudioGetTotalBufferSize", false);
+    NDL_RESOLVE(set_hdr, "NDL_DirectVideoSetHDRInfo", false);
+#undef NDL_RESOLVE
+    if (missing) {
+        g_api.missing = missing;
+        dlclose(lib);
+        memset(a, 0, sizeof(*a)); /* the handles are gone with the library */
+        log_msg("ndl: %s has no %s (the v1 API: webOS 4 and older)", NDL_LIBRARY, missing);
+        return false;
+    }
+    log_msg("ndl: %s has the v2 API", NDL_LIBRARY);
+    g_api.ok = true;
+    return true;
+}
 
 static bool g_hdr, g_hdr_done; /* HDR profile: whether to apply HDR info, and whether done */
 static int g_hdr_frames;       /* frames fed while waiting for the HDR10 SEI */
@@ -50,17 +130,23 @@ static void load_cb(int type, long long num, const char *str) {
     log_msg("ndl: callback type=0x%02x num=%lld %s", type, num, str ? str : "");
 }
 
-bool ndl_available(void) { return true; }
+bool ndl_available(void) { return api_load(); }
+
+const char *ndl_unavailable_detail(void) {
+    if (api_load()) return "";
+    return g_api.missing ? g_api.missing : NDL_LIBRARY;
+}
 
 bool ndl_open(const stream_settings_t *stream) {
     if (g.loaded) return true;
-    if (!stream) return false;
+    if (!stream || !api_load()) return false;
+    const ndl_api_t *a = &g_api.api;
     if (!g.initialized) {
         const char *appid = getenv("APPID");
         if (!appid || !*appid) appid = "com.renjfk.hotaru";
-        int r = NDL_DirectMediaInit(appid, NULL);
+        int r = a->init(appid, NULL);
         if (r != 0) {
-            log_event(LOG_ERR, "NDL", "DirectMediaInit failed: %s", NDL_DirectMediaGetError());
+            log_event(LOG_ERR, "NDL", "DirectMediaInit failed: %s", a->error());
             return false;
         }
         g.initialized = true;
@@ -78,9 +164,9 @@ bool ndl_open(const stream_settings_t *stream) {
     info.audio.pcm.channelMode = NDL_DIRECTMEDIA_AUDIO_PCM_MODE_STEREO;
     info.audio.pcm.sampleRate = NDL_DIRECTMEDIA_AUDIO_PCM_SAMPLE_RATE_OF(NDL_AUDIO_RATE);
 
-    int r = NDL_DirectMediaLoad(&info, load_cb);
+    int r = a->load(&info, load_cb);
     if (r != 0) {
-        log_event(LOG_ERR, "NDL", "DirectMediaLoad failed: %s", NDL_DirectMediaGetError());
+        log_event(LOG_ERR, "NDL", "DirectMediaLoad failed: %s", a->error());
         return false;
     }
     g_hdr = (stream->hdr || stream->codec == CODEC_H265_HDR);
@@ -94,12 +180,13 @@ bool ndl_open(const stream_settings_t *stream) {
 }
 
 void ndl_close(void) {
+    const ndl_api_t *a = &g_api.api;
     if (g.loaded) {
-        NDL_DirectMediaUnload();
+        a->unload();
         g.loaded = false;
     }
     if (g.initialized) {
-        NDL_DirectMediaQuit();
+        a->quit();
         g.initialized = false;
     }
 }
@@ -118,12 +205,6 @@ void ndl_close(void) {
  * The UI is not touched for HDR: the TV converts its SDR graphics plane into the HDR
  * output itself (the MStar GOP SDR2HDR path in libkadaptor), so PQ-encoding it here would
  * convert it twice. */
-
-typedef struct {
-    unsigned int mastering[12]; /* G, B, R x/y, white x/y, max/min luminance, MaxCLL, MaxFALL */
-    unsigned int transfer, primaries, matrix;
-} ndl_hdr_info_t;
-typedef int (*ndl_set_hdr_fn)(ndl_hdr_info_t info);
 
 /* HDR10 as Remote Play sends it: SMPTE ST 2084 (16), BT.2020 primaries (9), BT.2020 NCL (9) */
 enum { VUI_TRANSFER_PQ = 16, VUI_PRIMARIES_BT2020 = 9, VUI_MATRIX_BT2020_NCL = 9 };
@@ -223,14 +304,17 @@ static void hdr_apply(const int v[12]) {
                             .primaries = VUI_PRIMARIES_BT2020,
                             .matrix = VUI_MATRIX_BT2020_NCL };
     for (int i = 0; i < 12; i++) info.mastering[i] = (unsigned int)v[i];
-    ndl_set_hdr_fn set_hdr = (ndl_set_hdr_fn)(void (*)(void))NDL_DirectVideoSetHDRInfo;
-    int r = set_hdr(info);
+    g_hdr_done = true;
+    if (!g_api.api.set_hdr) { /* a v2 library without it: the console's plain HDR10 still shows */
+        log_event(LOG_WARN, "NDL", "no DirectVideoSetHDRInfo on this TV, HDR metadata not applied");
+        return;
+    }
+    int r = g_api.api.set_hdr(info);
     log_event(r == 0 ? LOG_OK : LOG_ERR, "NDL",
               "HDR %s: prim G(%d,%d) B(%d,%d) R(%d,%d) wp(%d,%d) lum %d..%d cll %d/%d vui %u/%u/%u",
               r == 0 ? "set" : "failed", v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11],
               info.transfer, info.primaries, info.matrix);
     log_msg("ndl: HDR10 output, UI kept sRGB (the TV maps its graphics plane into HDR)");
-    g_hdr_done = true;
 }
 
 bool ndl_push_video(const uint8_t *nal, size_t len, int64_t pts_us) {
@@ -245,11 +329,11 @@ bool ndl_push_video(const uint8_t *nal, size_t len, int64_t pts_us) {
             hdr_apply(hdr_default);
         }
     }
-    int r = NDL_DirectVideoPlay((void *)nal, (unsigned int)len, (long long)(now_ms() - g.loaded_ms));
+    int r = g_api.api.video_play((void *)nal, (unsigned int)len, (long long)(now_ms() - g.loaded_ms));
     if (r != 0) {
         if (!g.video_error_logged) {
             g.video_error_logged = true;
-            log_event(LOG_ERR, "NDL", "DirectVideoPlay failed: %s", NDL_DirectMediaGetError());
+            log_event(LOG_ERR, "NDL", "DirectVideoPlay failed: %s", g_api.api.error());
         }
         return false;
     }
@@ -259,11 +343,11 @@ bool ndl_push_video(const uint8_t *nal, size_t len, int64_t pts_us) {
 bool ndl_push_audio(const uint8_t *pcm, size_t len, int64_t pts_us) {
     (void)pts_us;
     if (!g.loaded || !pcm || !len) return false;
-    int r = NDL_DirectAudioPlay((void *)pcm, (unsigned int)len, (long long)(now_ms() - g.loaded_ms));
+    int r = g_api.api.audio_play((void *)pcm, (unsigned int)len, (long long)(now_ms() - g.loaded_ms));
     if (r != 0) {
         if (!g.audio_error_logged) {
             g.audio_error_logged = true;
-            log_event(LOG_ERR, "NDL", "DirectAudioPlay failed: %s", NDL_DirectMediaGetError());
+            log_event(LOG_ERR, "NDL", "DirectAudioPlay failed: %s", g_api.api.error());
         }
         return false;
     }
@@ -272,13 +356,13 @@ bool ndl_push_audio(const uint8_t *pcm, size_t len, int64_t pts_us) {
 
 int ndl_video_buffered(void) {
     int n = -1;
-    return g.loaded && NDL_DirectVideoGetRenderBufferLength(&n) == 0 ? n : -1;
+    return g.loaded && g_api.api.video_buffered && g_api.api.video_buffered(&n) == 0 ? n : -1;
 }
 
 int ndl_audio_buffered_ms(void) {
     int avail = 0, total = 0;
-    if (!g.loaded || NDL_DirectAudioGetAvailableBufferSize(&avail) != 0 ||
-        NDL_DirectAudioGetTotalBufferSize(&total) != 0)
+    if (!g.loaded || !g_api.api.audio_avail || !g_api.api.audio_total || g_api.api.audio_avail(&avail) != 0 ||
+        g_api.api.audio_total(&total) != 0)
         return -1;
     return total >= avail ? (total - avail) / (NDL_AUDIO_RATE * 2 * (int)sizeof(int16_t) / 1000) : -1;
 }
@@ -286,6 +370,7 @@ int ndl_audio_buffered_ms(void) {
 #else /* !HOTARU_HAVE_NDL: host tests and the simulator have no NDL */
 
 bool ndl_available(void) { return false; }
+const char *ndl_unavailable_detail(void) { return "no NDL in this build"; }
 int ndl_video_buffered(void) { return -1; }
 int ndl_audio_buffered_ms(void) { return -1; }
 

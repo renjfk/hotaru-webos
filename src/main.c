@@ -25,6 +25,7 @@
 #include "input/input.h"
 #include "log.h"
 #include "platform/display.h"
+#include "platform/tv.h"
 #include "ui/splash.h"
 #include "ui/theme.h"
 #include "ui/ui.h"
@@ -163,6 +164,7 @@ static void poll_sdl(void) {
 
 int main(int argc, char **argv) {
     log_init(LOG_PATH);
+    tv_identity_log(); /* model and webOS version first: a report that names them needs no follow-up question */
     log_msg("Hotaru %s starting (LVGL %d.%d.%d)", HOTARU_VERSION, LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
             LVGL_VERSION_PATCH);
     for (int i = 1; i < argc; i++) log_msg("argument %d: %s", i, argv[i]);

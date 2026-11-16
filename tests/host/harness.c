@@ -25,6 +25,7 @@
 #include "media/feeder.h"
 #include "media/pacer.h"
 #include "net/update.h"
+#include "platform/tv.h"
 #include "ui/dialog.h"
 #include "ui/home.h"
 #include "ui/qr.h"
@@ -394,6 +395,36 @@ static void test_persistence(void) {
 }
 
 /* MAC is the identity when both are known; the address is a fallback (DHCP reuses addresses) */
+/* tv identity: webOS publishes the model and its release in two flat JSON files; log-only on a TV, so the
+ * parsing (and the absent-file path) is what the host can prove */
+static void test_tv_identity(void) {
+    const char *dir = CONFIG_DIR "/tv";
+    mkpath(dir);
+    char path[600];
+    snprintf(path, sizeof(path), "%s/device_info.json", dir);
+    FILE *f = fopen(path, "wb");
+    expect(f != NULL, "the TV identity fixture is written");
+    if (f) {
+        fputs("{\n    \"board_type\": \"LM21A_DVB\",\n    \"product_id\": \"50UP75003LF\"\n}\n", f);
+        fclose(f);
+    }
+    snprintf(path, sizeof(path), "%s/os_info.json", dir);
+    f = fopen(path, "wb");
+    if (f) {
+        fputs("{\"webos_release_codename\": \"kisscurl-koli\", \"core_os_release\": \"6.5.3-47\", "
+              "\"webos_name\": \"webOS TV Lite\", \"webos_release\": \"6.5.3\"}\n",
+              f);
+        fclose(f);
+    }
+    tv_identity_t id;
+    tv_identity_read(dir, &id);
+    expect(!strcmp(id.model, "50UP75003LF") && !strcmp(id.board, "LM21A_DVB") && !strcmp(id.os, "webOS TV Lite") &&
+               !strcmp(id.release, "6.5.3"),
+           "the TV identity comes from webOS's device_info.json and os_info.json, by exact key");
+    tv_identity_read(CONFIG_DIR "/no-such-dir", &id);
+    expect(!id.model[0] && !id.board[0] && !id.os[0] && !id.release[0], "no files, no identity: every field is empty");
+}
+
 static void test_host_identity(void) {
     config_host_t a = { .addr = "10.0.0.20", .server_mac = { 0x02, 0, 0, 0, 0, 0x0a } };
     config_host_t b = { .addr = "10.0.0.20", .server_mac = { 0x02, 0, 0, 0, 0, 0x0b } };
@@ -520,6 +551,7 @@ int main(void) {
     fake_sysfs();
     theme_init(disp);
     test_persistence();
+    test_tv_identity();
     test_host_identity();
     test_psn_account_id();
     test_feeder();
@@ -1231,6 +1263,32 @@ int main(void) {
     expect(config_host_count() == entries0 + 1 && !strcmp(config_host(config_host_count() - 1)->addr, "192.168.1.60"),
            "the registered console is in the saved config");
     app_reg_cancel();
+
+    /* a TV whose media library has the v1 API only (webOS 4) is refused before the network, with a
+     * what and a why; the simulation answers through HOTARU_SIM_NO_MEDIA */
+    setenv("HOTARU_SIM_NO_MEDIA", "1", 1);
+    app_connect();
+    expect(app_conn_state() == CONN_IDLE && !strcmp(app_conn_error_what(), "This TV cannot play video") &&
+               !strcmp(app_conn_error_why(), SESSION_MEDIA_WHY) && !session_active_host(),
+           "a TV without the v2 media API refuses a session before the network, with what and why");
+    pump(600);
+    expect(!strcmp(home_hero_state(), "This TV cannot play video") &&
+               !strcmp(home_notice_text(), "This TV cannot play video"),
+           "... and it is said twice: a state under the console's name and a notice above it");
+    home_check("home-no-media"); /* the notice fits the title-safe area like every other step */
+    unsigned gen = app_conn_error_gen();
+    app_connect(); /* the same refusal again, outside play(): a second press must say it again */
+    pump(400);
+    expect(app_conn_error_gen() == gen + 1 && !strcmp(home_notice_text(), "This TV cannot play video"),
+           "... and each refusal is a new failure, even while the last one is still up");
+    unsetenv("HOTARU_SIM_NO_MEDIA");
+    app_connect(); /* the same console, with the media API there */
+    pump(400);
+    expect(app_conn_state() == CONN_CONNECTING && !strcmp(home_notice_text(), "") &&
+               strcmp(home_hero_state(), "This TV cannot play video") != 0,
+           "... and a retry that starts clears the notice and the state line");
+    app_disconnect();
+    pump(400);
 
     /* a console with one route: RIGHT from Start goes straight to its options */
     home_reset();

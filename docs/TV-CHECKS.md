@@ -25,8 +25,10 @@ flag file `/tmp/hotaru-probe`. It adds `probe:` lines to `/tmp/hotaru.log`:
 | `probe: net:` | the interfaces with their addresses and broadcast addresses |
 | `probe: frame:` | every 5 s: frames drawn per second and how much of the screen, LVGL time (average, worst), loops per second, memory, CPU |
 
-libchiaki's debug lines are included too. The log always starts with the version, every command-line argument,
-and whether SDL has text input and a screen keyboard.
+libchiaki's debug lines are included too. The log always starts with the TV's model and webOS version
+(`tv: 50UP75003LF (LM21A_DVB), webOS TV Lite 6.5.3`, read from `/var/run/nyx/`), the app version, every
+command-line argument, and whether SDL has text input and a screen keyboard: paste that head with a report and no
+one has to ask which TV or webOS it was.
 
 ## The checks
 
@@ -156,6 +158,19 @@ action.
   End the session it stays on. The card keeps the last choice after a restart.
 - **It decides** whether `chiaki_session_goto_bed` reaches the console before `session_stop` tears the control channel
   down on webOS; the host tests only simulate the request.
+
+### 15. The media library is found at runtime
+
+Watch the log from launch, then start a stream. The app no longer links `libNDL_directmedia`; it opens
+`libNDL_directmedia.so.1` at launch (Home's hero line asks for the answer) or, with no console to show, on the first
+connect (a webOS 4 TV has only the v1 API there, and a direct call to a v2 entry point killed the app: issue #5).
+
+- **Look for** `ndl: libNDL_directmedia.so.1 has the v2 API` once per launch (a near-miss name such as
+  `libNDL_directmedia.so` would say `did not open`), then the usual `DirectMediaInit ok`. A TV without the v2 API
+  says `has no NDL_DirectMediaLoad (the v1 API: webOS 4 and older)` and refuses the session with
+  "This TV cannot play video".
+- **It decides** the name in `src/media/ndl.c` (`NDL_LIBRARY`): it must be the SONAME the TV ships, not the
+  unversioned dev symlink in the SDK sysroot.
 
 ## Recording the results
 

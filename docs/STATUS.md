@@ -21,6 +21,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | Native app, packaging, sideload, the display (LVGL into an SDL texture, 1080p) | TV |
 | Remote Play with a PS5 on the local network and over PSN (holepunch) | TV |
 | Hardware video (H.264, H.265) and 48 kHz audio through NDL DirectMedia | TV |
+| The media library opened at runtime (`libNDL_directmedia.so.1`, the v2 entry points resolved by name) | TV (webOS 6.5; what a v1-only TV does: [TV-CHECKS](TV-CHECKS.md) 15) |
 | 60 fps with no socket drops or FEC failures; Smooth playback hides the Wi-Fi stalls | TV |
 | PSN sign-in (OAuth code from the phone), the account's console list, token refresh | TV + host |
 | Settings, consoles and the PSN account kept in `conf/hotaru.conf` | TV + host |
@@ -30,10 +31,10 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | Console discovery: state, firmware, waking before connecting, following an address | host (simulated console) |
 | One console with two routes, PSN fallback, the saved route choice | host |
 | PIN pairing | host: the libchiaki path is real but not yet run against a console |
-| HDR10 (`NDL_DirectVideoSetHDRInfo` with the VUI codes) | wired, not yet looked at on the TV |
+| HDR10 (`NDL_DirectVideoSetHDRInfo` with the VUI codes) | TV: a 1080p H.265 HDR stream plays and the call succeeds with the HDR10 defaults (no SEI in the first 120 frames); reading the SEI values is not yet seen on the TV, and the picture is not graded |
 | DualSense: the button map (the DualShock 4's); no rumble or touches reach the app | TV (probe) + host |
 | Remote number keys, Magic Remote, launch parameters | wired for both possibilities; the probe decides |
-| Rest mode on disconnect (the Disconnect card's End and sleep) | host (simulated console); the real goto-bed request needs the TV |
+| Rest mode on disconnect (the Disconnect card's End and sleep) | TV: the console is in rest mode 6 s after the request; host |
 
 ## Proven on the TV
 
@@ -63,7 +64,9 @@ socket buffer raised to `rmem_max` once connected, and LVGL's refresh paused whi
 drops, 0 FEC failures, the main thread at ~1% of a core. A `stats:` line every 10 s shows fps, Mbps, losses and
 queue depths.
 
-**NDL.** `NDL_DirectAudioPlay` blocks once ~80 ms of PCM is queued (which paces the audio feeder);
+**NDL.** `libNDL_directmedia.so.1` is opened at launch and the v2 entry points resolved by name (a webOS 4 TV only
+has the v1 API, and a direct call to `NDL_DirectMediaLoad()` there killed the process: issue #5).
+`NDL_DirectAudioPlay` blocks once ~80 ms of PCM is queued (which paces the audio feeder);
 `NDL_DirectVideoPlay` returns in 2 ms or less in steady state (up to 80 ms right after load); the render queue holds
 5 frames at most. NDL draws on a plane below the app surface, so while streaming the surface is cleared
 transparent and only the menu is drawn on it.
@@ -97,10 +100,12 @@ directory is not writable the app falls back to `/tmp/hotaru`, which a reboot cl
 ## Constraints
 
 - One `.ipk` for every TV: the binary is 32-bit ARM (EABI5, soft float), what webOS TVs run even on 64-bit chips
-  (moonlight-tv ships one `_arm.ipk` for all of them), needs glibc 2.12 at most and links only the TV's SDL2 and
-  `libNDL_directmedia`. Its NDL calls are the v2 API, which ss4s (moonlight-tv's media layer) uses from webOS 5 on;
-  a webOS 4 TV has the v1 API only, so reaching it takes a second media backend picked at runtime, not a second
-  package
+  (moonlight-tv ships one `_arm.ipk` for all of them), needs glibc 2.12 at most and links only the TV's SDL2.
+  `libNDL_directmedia` is opened at runtime and its v2 entry points resolved by name: the v2 API is what ss4s
+  (moonlight-tv's media layer) uses from webOS 5 on, a webOS 4 TV has the v1 API only, and a directly linked
+  `NDL_DirectMediaLoad()` call there kills the process on the missing symbol (issue #5). Such a TV now gets
+  "This TV cannot play video" as the hero's state line and a notice, and no session starts; reaching it for real
+  would take a second media backend, not a second package
 - OpenSSL must be linked statically: a dynamic `libssl.so.1.1` fails to load and the app is relaunched in a loop
 - ~340 MB of free RAM; the two LVGL draw buffers take ~16 MB
 - Wi-Fi: the bitrate must suit the link, and the stalls above need Smooth playback; on Ethernet they are gone

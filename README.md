@@ -91,7 +91,8 @@ What is proven on the TV and what only in the tests is tracked in [docs/STATUS.m
 ### Requirements
 
 - An LG webOS TV in [Developer Mode](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app)
-  (or rooted, with the [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel))
+  (or rooted, with the [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel)); playing a stream
+  needs webOS 5 or newer, since the TV's media API from before that cannot feed this app
 - A PS5 or PS4 with Remote Play on: Settings > System > Remote Play
 - The TV on an Ethernet cable for the smoothest stream (Wi-Fi works, with Smooth playback hiding its hiccups)
 - A DualShock 4 paired with the TV (optional: the TV remote drives everything but the game)
