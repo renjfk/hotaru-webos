@@ -41,6 +41,14 @@ die() { echo "error: $*" >&2; exit 1; }
 HOST_PYTHON="$(command -v python3)" || die "python3 not found"
 HOST_PKG_CONFIG="$(command -v pkg-config || echo "$TOOLCHAIN_DIR/bin/pkgconf")"
 
+# The Linux toolchain's bin/ has a perl and shasum that only run on its build machine, and
+# it goes on PATH below: keep the host's ahead of them (a no-op on macOS)
+HOSTBIN="$WORK/hostbin"
+mkdir -p "$HOSTBIN"
+for tool in perl shasum; do
+    host_tool="$(command -v "$tool")" && ln -sfn "$host_tool" "$HOSTBIN/$tool"
+done
+
 # shellcheck disable=SC1091
 source "$TOOLCHAIN_DIR/environment-setup" >/dev/null
 
@@ -59,7 +67,7 @@ for tool in ar as ld nm objcopy objdump ranlib readelf strip; do
     ln -sfn "$TOOLCHAIN_DIR/bin/$TARGET-$tool" "$WORK/toolchain/$TARGET-$tool"
 done
 CROSS="$WORK/toolchain/$TARGET-"
-export PATH="$WORK/toolchain:$TOOLCHAIN_DIR/bin:$PATH"
+export PATH="$WORK/toolchain:$HOSTBIN:$TOOLCHAIN_DIR/bin:$PATH"
 export CC="${CROSS}gcc" CXX="${CROSS}g++" CPP="${CROSS}cpp" AR="${CROSS}ar" AS="${CROSS}as" LD="${CROSS}ld" \
     NM="${CROSS}nm" RANLIB="${CROSS}ranlib" STRIP="${CROSS}strip" OBJCOPY="${CROSS}objcopy" \
     OBJDUMP="${CROSS}objdump" READELF="${CROSS}readelf"
