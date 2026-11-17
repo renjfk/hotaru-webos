@@ -33,13 +33,13 @@
 
 #define NDL_AUDIO_RATE 48000 /* Remote Play audio is 48 kHz stereo Opus */
 
-/* The TV's libNDL_directmedia comes in two generations: v2 (webOS 5 and newer, what this module
- * uses) and v1 (webOS 4 and older, which has no NDL_DirectMediaLoad() at all). Linking the v2
- * calls directly made a v1 TV abort the process at its first one: lazy binding resolves a symbol
- * only when it is called, and the loader then kills the app on the missing name. Opening the
- * library here turns that into "this TV has no v2 media API", the reason ndl_unavailable_detail()
- * reports and the UI shows. The v2 entry points are resolved by name, as moonlight-tv's ss4s picks
- * the same two APIs apart by webOS version.
+/* The TV's libNDL_directmedia comes in two generations: v2 (webOS 5 and newer) and v1 (webOS 4 and
+ * older, which has no NDL_DirectMediaLoad() at all). Linking the v2 calls directly made a v1 TV
+ * abort the process at its first one: lazy binding resolves a symbol only when it is called, and
+ * the loader then kills the app on the missing name. Opening the library here turns that into "this
+ * TV has no media API this app can use", the reason ndl_unavailable_detail() reports and the UI
+ * shows, unless its v1 calls are there (media/ndl_v1.c). Both generations are resolved by name, as
+ * moonlight-tv's ss4s picks the two APIs apart by webOS version.
  *
  * The name is the SONAME, not the SDK's dev symlink: a TV ships libNDL_directmedia.so.1 and .so.1.0.0
  * only, with no unversioned .so to open.
@@ -54,10 +54,14 @@ typedef struct {
     unsigned int transfer, primaries, matrix;
 } ndl_hdr_info_t;
 
+/* NDL_directmedia_common.h declares these for both generations, so they survive the switch to v1 */
 typedef struct {
     int (*init)(const char *app_id, ResourceReleased cb);
     int (*quit)(void);
     const char *(*error)(void);
+} ndl_common_t;
+
+typedef struct {
     int (*load)(NDL_DIRECTMEDIA_DATA_INFO_T *info, NDLMediaLoadCallback cb);
     int (*unload)(void);
     int (*video_play)(void *buf, unsigned int size, long long pts);
@@ -71,7 +75,8 @@ typedef struct {
 typedef enum { NDL_NONE, NDL_V1, NDL_V2 } ndl_kind_t;
 
 static struct {
-    ndl_api_t api;
+    ndl_common_t common; /* init, quit, error: present in both APIs, so kept when v2 is not */
+    ndl_api_t api;       /* the v2 calls, zeroed when the TV has only the v1 API */
     ndl_kind_t kind;
     bool tried;
     const char *missing; /* the symbol the TV does not have, for the log */
@@ -92,40 +97,50 @@ static bool api_load(void) {
         log_msg("ndl: %s did not open: %s", NDL_LIBRARY, dlerror());
         return false;
     }
+    const char *missing = NULL;
+    /* the calls a stream cannot run without; each struct is filled with the same macro */
+#define NDL_RESOLVE(s, field, name, required)                                                                          \
+    do {                                                                                                               \
+        *(void **)(&(s)->field) = dlsym(lib, name);                                                                    \
+        if (required && !(s)->field && !missing) missing = name;                                                       \
+    } while (0)
+
+    /* init/quit/error are shared (NDL_directmedia_common.h): the v1 path below needs them too, so they
+     * are resolved before the v2 ones and survive a TV that answers to v1 only */
+    ndl_common_t *c = &g_api.common;
+    memset(c, 0, sizeof(*c));
+    NDL_RESOLVE(c, init, "NDL_DirectMediaInit", true);
+    NDL_RESOLVE(c, quit, "NDL_DirectMediaQuit", true);
+    NDL_RESOLVE(c, error, "NDL_DirectMediaGetError", true);
+    bool common = !missing;
+
     ndl_api_t *a = &g_api.api;
     memset(a, 0, sizeof(*a));
-    const char *missing = NULL;
-    /* the calls a stream cannot run without */
-#define NDL_RESOLVE(field, name, required)                                                                             \
-    do {                                                                                                               \
-        *(void **)(&a->field) = dlsym(lib, name);                                                                      \
-        if (required && !a->field && !missing) missing = name;                                                         \
-    } while (0)
-    NDL_RESOLVE(init, "NDL_DirectMediaInit", true);
-    NDL_RESOLVE(quit, "NDL_DirectMediaQuit", true);
-    NDL_RESOLVE(error, "NDL_DirectMediaGetError", true);
-    NDL_RESOLVE(load, "NDL_DirectMediaLoad", true);
-    NDL_RESOLVE(unload, "NDL_DirectMediaUnload", true);
-    NDL_RESOLVE(video_play, "NDL_DirectVideoPlay", true);
-    NDL_RESOLVE(audio_play, "NDL_DirectAudioPlay", true);
-    NDL_RESOLVE(video_buffered, "NDL_DirectVideoGetRenderBufferLength", false);
-    NDL_RESOLVE(audio_avail, "NDL_DirectAudioGetAvailableBufferSize", false);
-    NDL_RESOLVE(audio_total, "NDL_DirectAudioGetTotalBufferSize", false);
-    NDL_RESOLVE(set_hdr, "NDL_DirectVideoSetHDRInfo", false);
+    if (common) {
+        NDL_RESOLVE(a, load, "NDL_DirectMediaLoad", true);
+        NDL_RESOLVE(a, unload, "NDL_DirectMediaUnload", true);
+        NDL_RESOLVE(a, video_play, "NDL_DirectVideoPlay", true);
+        NDL_RESOLVE(a, audio_play, "NDL_DirectAudioPlay", true);
+        NDL_RESOLVE(a, video_buffered, "NDL_DirectVideoGetRenderBufferLength", false);
+        NDL_RESOLVE(a, audio_avail, "NDL_DirectAudioGetAvailableBufferSize", false);
+        NDL_RESOLVE(a, audio_total, "NDL_DirectAudioGetTotalBufferSize", false);
+        NDL_RESOLVE(a, set_hdr, "NDL_DirectVideoSetHDRInfo", false);
+    }
 #undef NDL_RESOLVE
-    if (!missing) {
+    if (common && !missing) {
         g_api.kind = NDL_V2;
         log_msg("ndl: %s has the v2 API", NDL_LIBRARY);
         return true;
     }
+    memset(a, 0, sizeof(*a)); /* no v2 here: none of its handles may be called */
     /* no v2: a webOS 4 TV has the v1 API, which is enough to stream H.264 SDR */
-    memset(a, 0, sizeof(*a));
-    if (ndl_v1_load(lib)) {
+    if (common && ndl_v1_load(lib)) {
         g_api.kind = NDL_V1;
         log_msg("ndl: %s has the v1 API only (webOS 4 and older): H.264 SDR at most", NDL_LIBRARY);
         return true;
     }
-    g_api.missing = missing;
+    g_api.missing = missing;  /* set here: reaching this point means a lookup above failed */
+    memset(c, 0, sizeof(*c)); /* the handles are gone with the library */
     dlclose(lib);
     log_msg("ndl: %s has no %s and no v1 API", NDL_LIBRARY, missing);
     return false;
@@ -172,12 +187,13 @@ bool ndl_open(const stream_settings_t *stream) {
     if (g.loaded) return true;
     if (!stream || !api_load()) return false;
     const ndl_api_t *a = &g_api.api;
+    const ndl_common_t *c = &g_api.common;
     if (!g.initialized) {
         const char *appid = getenv("APPID");
         if (!appid || !*appid) appid = "com.renjfk.hotaru";
-        int r = a->init(appid, NULL);
+        int r = c->init(appid, NULL);
         if (r != 0) {
-            log_event(LOG_ERR, "NDL", "DirectMediaInit failed: %s", a->error());
+            log_event(LOG_ERR, "NDL", "DirectMediaInit failed: %s", c->error());
             return false;
         }
         g.initialized = true;
@@ -219,7 +235,7 @@ bool ndl_open(const stream_settings_t *stream) {
 
     int r = a->load(&info, load_cb);
     if (r != 0) {
-        log_event(LOG_ERR, "NDL", "DirectMediaLoad failed: %s", a->error());
+        log_event(LOG_ERR, "NDL", "DirectMediaLoad failed: %s", c->error());
         return false;
     }
     g_hdr = (stream->hdr || stream->codec == CODEC_H265_HDR);
@@ -243,7 +259,7 @@ void ndl_close(void) {
         g.loaded = false;
     }
     if (g.initialized) {
-        a->quit();
+        g_api.common.quit();
         g.initialized = false;
     }
 }
@@ -393,7 +409,7 @@ bool ndl_push_video(const uint8_t *nal, size_t len, int64_t pts_us) {
         if (!g.video_error_logged) {
             g.video_error_logged = true;
             if (g_api.kind == NDL_V1) log_event(LOG_ERR, "NDL", "DirectVideoPlay failed (%d)", r);
-            else log_event(LOG_ERR, "NDL", "DirectVideoPlay failed: %s", g_api.api.error());
+            else log_event(LOG_ERR, "NDL", "DirectVideoPlay failed: %s", g_api.common.error());
         }
         return false;
     }
@@ -410,7 +426,7 @@ bool ndl_push_audio(const uint8_t *pcm, size_t len, int64_t pts_us) {
         if (!g.audio_error_logged) {
             g.audio_error_logged = true;
             if (g_api.kind == NDL_V1) log_event(LOG_ERR, "NDL", "DirectAudioPlay failed (%d)", r);
-            else log_event(LOG_ERR, "NDL", "DirectAudioPlay failed: %s", g_api.api.error());
+            else log_event(LOG_ERR, "NDL", "DirectAudioPlay failed: %s", g_api.common.error());
         }
         return false;
     }

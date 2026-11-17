@@ -91,7 +91,10 @@ static const char *card_value(int i) {
 static void chips_refresh(void) {
     const stream_settings_t *s = &config_get()->stream;
     lv_label_set_text_fmt(g.chip[0], "%dp" BULLET "%d fps", s->height, s->fps);
-    lv_label_set_text(g.chip[1], s->hdr || s->codec == CODEC_H265_HDR ? "H.265 HDR" : config_codec_name(s->codec));
+    lv_label_set_text(g.chip[1], app_stream_h264_only()
+                                     ? config_codec_name(CODEC_H264) /* a v1 media TV decodes H.264 only */
+                                 : s->hdr || s->codec == CODEC_H265_HDR ? "H.265 HDR"
+                                                                        : config_codec_name(s->codec));
     lv_label_set_text_fmt(g.chip[2], "%d Mbps", s->bitrate_kbps / 1000);
     lv_label_set_text(g.chip[3], app_conn_over_psn() ? "Over PSN" : "Local network");
 }

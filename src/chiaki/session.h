@@ -95,10 +95,10 @@ typedef struct {
 
 bool session_available(void); /* true when the real libchiaki backend is linked */
 
-/* The reason line a TV without the v2 media API gets: webOS 4 and older have the NDL v1 API
- * only, so this app has no way to put a picture on screen there (see media/ndl.h). The app pairs
- * it with its own line saying what the condition is. */
-#define SESSION_MEDIA_WHY "Hotaru needs webOS 5 or newer"
+/* The reason line a TV with no media API at all gets: ss4s's two NDL generations (v2 for webOS 5+,
+ * v1 for webOS 4) are both tried at runtime, so this reaches only a set that answers to neither
+ * (see media/ndl.h). The app pairs it with its own line saying what the condition is. */
+#define SESSION_MEDIA_WHY "Hotaru needs webOS 4 or newer"
 
 /* "" when this TV can play a stream, else SESSION_MEDIA_WHY. The real backend asks the TV's media
  * library; the simulation answers SESSION_MEDIA_WHY while HOTARU_SIM_NO_MEDIA is set, so the host

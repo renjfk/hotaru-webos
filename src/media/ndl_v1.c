@@ -28,6 +28,7 @@ static struct {
         if (!g.field) {                                                                                                \
             log_msg("ndl v1: the library has no %s", name);                                                            \
             memset(&g, 0, sizeof(g));                                                                                  \
+            g.tried = true; /* settled: a TV without the v1 API is not asked again */                                  \
             return false;                                                                                              \
         }                                                                                                              \
     } while (0)
@@ -45,8 +46,6 @@ bool ndl_v1_load(void *lib) {
     g.ok = true;
     return true;
 }
-
-bool ndl_v1_ready(void) { return g.ok; }
 
 int ndl_v1_video_open(int width, int height) {
     NDL_DIRECTVIDEO_DATA_INFO_T info = { .width = width, .height = height, .source = NDL_DIRECTVIDEO_SRC_TYPE_H264 };
@@ -83,7 +82,6 @@ bool ndl_v1_load(void *lib) {
     (void)lib;
     return false;
 }
-bool ndl_v1_ready(void) { return false; }
 int ndl_v1_video_open(int width, int height) {
     (void)width;
     (void)height;

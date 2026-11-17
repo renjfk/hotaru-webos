@@ -250,6 +250,15 @@ static bool visible(lv_obj_t *o) {
         if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return false;
     return true;
 }
+/* a label with this text that is on screen now: the hidden panels hold labels of their own */
+static lv_obj_t *find_visible_text(lv_obj_t *o, const char *txt) {
+    if (lv_obj_check_type(o, &lv_label_class) && visible(o) && !strcmp(lv_label_get_text(o), txt)) return o;
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) {
+        lv_obj_t *r = find_visible_text(lv_obj_get_child(o, (int32_t)i), txt);
+        if (r) return r;
+    }
+    return NULL;
+}
 static lv_obj_t *find_type(lv_obj_t *o, const lv_obj_class_t *cls) {
     if (lv_obj_check_type(o, cls)) return o;
     for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) {
@@ -1271,13 +1280,13 @@ int main(void) {
            "the registered console is in the saved config");
     app_reg_cancel();
 
-    /* a TV whose media library has the v1 API only (webOS 4) is refused before the network, with a
+    /* a TV whose media library has neither NDL generation is refused before the network, with a
      * what and a why; the simulation answers through HOTARU_SIM_NO_MEDIA */
     setenv("HOTARU_SIM_NO_MEDIA", "1", 1);
     app_connect();
     expect(app_conn_state() == CONN_IDLE && !strcmp(app_conn_error_what(), "This TV cannot play video") &&
                !strcmp(app_conn_error_why(), SESSION_MEDIA_WHY) && !session_active_host(),
-           "a TV without the v2 media API refuses a session before the network, with what and why");
+           "a TV with no NDL generation at all refuses a session before the network, with what and why");
     pump(600);
     expect(!strcmp(home_hero_state(), "This TV cannot play video") &&
                !strcmp(home_notice_text(), "This TV cannot play video"),
@@ -1290,14 +1299,6 @@ int main(void) {
            "... and each refusal is a new failure, even while the last one is still up");
     unsetenv("HOTARU_SIM_NO_MEDIA");
 
-    /* a TV with only the v1 media API (webOS 4) plays H.264 SDR only: the session is told so, and the Stream
-     * panel's Codec row is built with that one choice (interval: the row is built once, at startup) */
-    setenv("HOTARU_SIM_H264_ONLY", "1", 1);
-    expect(app_stream_h264_only(), "a v1 media TV is H.264 only, as the session and the settings are told");
-    unsetenv("HOTARU_SIM_H264_ONLY");
-    expect(!app_stream_h264_only() && home_settings_codec_options() == 3,
-           "... and a v2 TV keeps the three codec choices");
-
     app_connect(); /* the same console, with the media API there */
     pump(400);
     expect(app_conn_state() == CONN_CONNECTING && !strcmp(home_notice_text(), "") &&
@@ -1305,6 +1306,14 @@ int main(void) {
            "... and a retry that starts clears the notice and the state line");
     app_disconnect();
     pump(400);
+
+    /* a TV with only the v1 media API (webOS 4) plays H.264 SDR: the session and the settings are told so,
+     * and the Stream panel's Codec row was built with that one choice (the panel is built once, at startup) */
+    setenv("HOTARU_SIM_H264_ONLY", "1", 1);
+    expect(app_stream_h264_only(), "a v1 media TV is H.264 only, as the session and the settings are told");
+    unsetenv("HOTARU_SIM_H264_ONLY");
+    expect(!app_stream_h264_only() && home_settings_codec_options() == 3,
+           "... and a v2 TV has the three codec choices the panel was built with");
 
     /* a console with one route: RIGHT from Start goes straight to its options */
     home_reset();
@@ -1447,6 +1456,22 @@ int main(void) {
     pump(3300);
     expect(restarting && reconnecting && app_conn_state() == CONN_STREAMING && !app_stream_settings_pending(),
            "closing the menu restarts the stream with the new video settings");
+    /* a v1 media TV (webOS 4) is asked for H.264 SDR whatever the saved settings say: the Stream menu's codec
+     * chip says so, and a saved H.265 + HDR is no change to restart a running stream for */
+    int codec_saved = st->codec;
+    bool hdr_saved = st->hdr;
+    setenv("HOTARU_SIM_H264_ONLY", "1", 1);
+    st->codec = CODEC_H265;
+    st->hdr = true;
+    ui_overlay_toggle();
+    pump(400);
+    expect(app_stream_h264_only() && find_visible_text(lv_scr_act(), "H.264") && !app_stream_settings_pending(),
+           "on a v1 media TV the Stream menu says H.264 and a saved H.265 + HDR waits for no restart");
+    st->codec = codec_saved; /* back before closing, so the close is not a restart for the restored values */
+    st->hdr = hdr_saved;
+    ui_overlay_toggle();
+    pump(400);
+    unsetenv("HOTARU_SIM_H264_ONLY");
     st->fps = 60;
 
     /* Disconnect: L1/R1 choose the action, Cross ends the stream at once */

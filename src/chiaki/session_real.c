@@ -428,17 +428,19 @@ bool session_available(void) { return true; }
 
 bool session_media_h264_only(void) { return ndl_h264_only(); }
 
-/* The TV's media library is only known at runtime (the app no longer links it): a webOS 4 set
- * answers with the v1 API, where the v2 calls this app makes do not exist. A build without NDL at
- * all (the simulator with real libchiaki, or a TV build whose headers were missing) has no answer
- * to give and streams without a picture, as it did before. */
+/* The TV's media library is only known at runtime (the app no longer links it): a webOS 5 set
+ * answers with the v2 API and a webOS 4 one with the v1 API, which media/ndl.c picks apart by
+ * symbol. Only a set that answers to neither is refused: the v2 calls this app makes do not exist
+ * there, and the v1 ones do not either. A build without NDL at all (the simulator with real
+ * libchiaki, or a TV build whose headers were missing) has no answer to give and streams without a
+ * picture, as it did before. */
 const char *session_media_reason(void) {
 #ifdef HOTARU_HAVE_NDL
     if (ndl_available()) return "";
     static bool logged;
     if (!logged) {
         logged = true;
-        log_msg("media: no v2 NDL (%s): webOS 4 and older have the v1 API only", ndl_unavailable_detail());
+        log_msg("media: no NDL at all (%s): neither the v2 nor the v1 API", ndl_unavailable_detail());
     }
     return SESSION_MEDIA_WHY;
 #else

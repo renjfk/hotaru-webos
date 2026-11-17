@@ -21,7 +21,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | Native app, packaging, sideload, the display (LVGL into an SDL texture, 1080p) | TV |
 | Remote Play with a PS5 on the local network and over PSN (holepunch) | TV |
 | Hardware video (H.264, H.265) and 48 kHz audio through NDL DirectMedia | TV |
-| The media library opened at runtime (`libNDL_directmedia.so.1`, the v2 entry points resolved by name) | TV (webOS 6.5; what a v1-only TV does: [TV-CHECKS](TV-CHECKS.md) 15) |
+| The media library opened at runtime (`libNDL_directmedia.so.1`, the v2 entry points resolved by name) | TV (webOS 6.5; a v1-only TV: [TV-CHECKS](TV-CHECKS.md) 16) |
 | 60 fps with no socket drops or FEC failures; Smooth playback hides the Wi-Fi stalls | TV |
 | PSN sign-in (OAuth code from the phone), the account's console list, token refresh | TV + host |
 | Settings, consoles and the PSN account kept in `conf/hotaru.conf` | TV + host |
@@ -101,11 +101,12 @@ directory is not writable the app falls back to `/tmp/hotaru`, which a reboot cl
 
 - One `.ipk` for every TV: the binary is 32-bit ARM (EABI5, soft float), what webOS TVs run even on 64-bit chips
   (moonlight-tv ships one `_arm.ipk` for all of them), needs glibc 2.12 at most and links only the TV's SDL2.
-  `libNDL_directmedia` is opened at runtime and its v2 entry points resolved by name: the v2 API is what ss4s
+  `libNDL_directmedia` is opened at runtime and its entry points resolved by name: the v2 API is what ss4s
   (moonlight-tv's media layer) uses from webOS 5 on, a webOS 4 TV has the v1 API only, and a directly linked
-  `NDL_DirectMediaLoad()` call there kills the process on the missing symbol (issue #5). Such a TV now gets
-  "This TV cannot play video" as the hero's state line and a notice, and no session starts; the second backend that
-  would change that (the v1 API, H.264 SDR only) is written but has never run on a v1 TV (issue #7, TV check 16)
+  `NDL_DirectMediaLoad()` call there kills the process on the missing symbol (issue #5). Both generations are
+  used: a webOS 4 TV streams H.264 SDR through the v1 calls, which have never run on such a set (issue #7, TV
+  check 16), and only a TV that answers to neither gets "This TV cannot play video" as the hero's state line and
+  a notice, with no session started
 - OpenSSL must be linked statically: a dynamic `libssl.so.1.1` fails to load and the app is relaunched in a loop
 - ~340 MB of free RAM; the two LVGL draw buffers take ~16 MB
 - Wi-Fi: the bitrate must suit the link, and the stalls above need Smooth playback; on Ethernet they are gone

@@ -2,9 +2,9 @@
  *
  * On the TV (HOTARU_HAVE_NDL, set by CMakeLists.txt when the NDL headers are found in
  * the SDK sysroot; the library itself is opened at runtime) this feeds the stream's H.264/H.265 NAL units and
- * decoded PCM straight into the hardware decoder: NDL_DirectMediaInit/Load,
- * NDL_DirectVideoPlay / NDL_DirectAudioPlay, NDL_DirectMediaUnload. The library is
- * opened at runtime (dlopen) and its v2 entry points resolved by name: a webOS 4 TV
+ * decoded PCM straight into the hardware decoder: NDL_DirectMediaInit, the v2 load and play calls (or the v1
+ * separate video/audio ones), NDL_DirectMediaUnload/Quit. The library is
+ * opened at runtime (dlopen) and its entry points resolved by name: a webOS 4 TV
  * has only the v1 API, where a plain call to NDL_DirectMediaLoad() would abort the
  * process. ndl_available() is the runtime answer and ndl_unavailable_detail() the
  * reason. Elsewhere (host tests, simulator) every call is an honest stub and
@@ -31,7 +31,8 @@ const char *ndl_unavailable_detail(void); /* why not, for the log: the missing s
 /* true on a TV with only the v1 API (webOS 4 and older): H.264 SDR is all it can decode through NDL */
 bool ndl_h264_only(void);
 
-bool ndl_open(const stream_settings_t *stream); /* init + load: codec, size, PCM 48 kHz stereo */
+bool ndl_open(const stream_settings_t *stream); /* init + load (v2) or video/audio open (v1): codec, size,
+                                                   PCM 48 kHz stereo */
 void ndl_close(void);                           /* unload + quit */
 
 bool ndl_push_video(const uint8_t *nal, size_t len, int64_t pts_us);

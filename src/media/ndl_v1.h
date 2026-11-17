@@ -16,7 +16,6 @@
 
 /* resolve the v1 entry points in the already-dlopened library; false when any of them is missing */
 bool ndl_v1_load(void *lib);
-bool ndl_v1_ready(void);
 
 int ndl_v1_video_open(int width, int height);
 void ndl_v1_video_close(void);
