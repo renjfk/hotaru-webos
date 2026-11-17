@@ -111,6 +111,8 @@ static char g_pad_path[300], g_pad_name[160];
 static bool g_pad_seen; /* attached at least once: offline vs never found */
 /* what the node offers: a DualSense on webOS has neither (no EV_FF, no ABS_MT_*), a DualShock 4 both */
 static bool g_can_rumble, g_can_touch;
+/* probe mode: the travel of each axis, read at grab, so a stick at full range logs a few lines and not hundreds */
+static int g_abs_span[ABS_CNT];
 static Uint32 g_pad_next_scan, g_pad_next_health;
 
 pad_state_t gamepad_state(void) { return g_pad_fd >= 0 ? PAD_ONLINE : g_pad_seen ? PAD_OFFLINE : PAD_NONE; }
@@ -128,6 +130,68 @@ static int looks_like_gamepad(int fd) {
     int btn = GETBIT(key, BTN_GAMEPAD) || GETBIT(key, BTN_B) || GETBIT(key, BTN_X) || GETBIT(key, BTN_JOYSTICK);
     int sticks = GETBIT(abs, ABS_X) && GETBIT(abs, ABS_Y);
     return btn && sticks;
+}
+
+/* The names linux/input-event-codes.h gives a raw code, independent of the map above: a probe log
+ * then says which layout the node reports (BTN_SOUTH..BTN_THUMBR is the standard one, see
+ * docs/TV-CHECKS.md) and, next to it, what Hotaru made of it. */
+static const char *linux_key_name(int code) {
+    switch (code) {
+        case 0x130: return "BTN_SOUTH";
+        case 0x131: return "BTN_EAST";
+        case 0x132: return "BTN_C";
+        case 0x133: return "BTN_NORTH";
+        case 0x134: return "BTN_WEST";
+        case 0x135: return "BTN_Z";
+        case 0x136: return "BTN_TL";
+        case 0x137: return "BTN_TR";
+        case 0x138: return "BTN_TL2";
+        case 0x139: return "BTN_TR2";
+        case 0x13a: return "BTN_SELECT";
+        case 0x13b: return "BTN_START";
+        case 0x13c: return "BTN_MODE";
+        case 0x13d: return "BTN_THUMBL";
+        case 0x13e: return "BTN_THUMBR";
+        default: return NULL;
+    }
+}
+
+/* what the webOS map above makes of an axis, for the same log line: a TV whose codes are standard is
+ * exactly where ABS_Z and ABS_RX mean something else. Only the axes gamepad_tick() reads are named. */
+static const char *axis_role(int code) {
+    switch (code) {
+        case ABS_X: return "left stick X";
+        case ABS_Y: return "left stick Y";
+        case DS4_RSTICK_X: return "right stick X";
+        case DS4_RSTICK_Y: return "right stick Y";
+        case ABS_RX: return "L2";
+        case ABS_RY: return "R2";
+        case ABS_HAT0X: return "D-pad X";
+        case ABS_HAT0Y: return "D-pad Y";
+        case ABS_MT_TRACKING_ID:
+        case ABS_MT_POSITION_X:
+        case ABS_MT_POSITION_Y: return "touchpad";
+        default: return NULL;
+    }
+}
+
+static const char *linux_abs_name(int code) {
+    switch (code) {
+        case 0x00: return "ABS_X";
+        case 0x01: return "ABS_Y";
+        case 0x02: return "ABS_Z";
+        case 0x03: return "ABS_RX";
+        case 0x04: return "ABS_RY";
+        case 0x05: return "ABS_RZ";
+        case 0x10: return "ABS_HAT0X";
+        case 0x11: return "ABS_HAT0Y";
+        case 0x2f: return "ABS_MT_SLOT";
+        case 0x35: return "ABS_MT_POSITION_X";
+        case 0x36: return "ABS_MT_POSITION_Y";
+        case 0x39: return "ABS_MT_TRACKING_ID";
+        case 0x3a: return "ABS_MT_PRESSURE";
+        default: return NULL;
+    }
 }
 
 /* probe mode: what the node reports, so a new controller's map can be written from the log */
@@ -160,18 +224,22 @@ static void probe_device(int fd) {
 static void probe_event(int type, int code, int value) {
     if (!log_probe_on()) return;
     if (type == EV_KEY) {
-        const char *what = "unmapped";
+        const char *std = linux_key_name(code), *read = "nothing";
+        const char *verb = value == 1 ? "down" : value == 0 ? "up" : "repeat";
         for (size_t i = 0; i < g_btn_map_n; i++)
-            if (g_btn_map[i].code == code) what = btn_name(g_btn_map[i].btn);
-        log_probe("pad: key 0x%x %s (%s)", code, value == 1 ? "down" : value == 0 ? "up" : "repeat", what);
+            if (g_btn_map[i].code == code) read = btn_name(g_btn_map[i].btn);
+        log_probe("pad: key 0x%x %s %s, Hotaru reads %s", code, verb, std ? std : "unlisted", read);
     } else if (type == EV_ABS && code >= 0 && code < 64) {
         static int last[64];
         static bool seen[64];
-        int step = 32; /* a 0..255 axis; ranges are probed at grab time */
+        int step = g_abs_span[code] / 8; /* ranges are read at grab: 31 on a 0..255 axis, 1 on the hat */
+        if (step < 1) step = 1;
         if (seen[code] && abs(value - last[code]) < step) return;
         seen[code] = true;
         last[code] = value;
-        log_probe("pad: abs 0x%02x = %d", code, value);
+        const char *std = linux_abs_name(code), *read = axis_role(code);
+        log_probe("pad: abs 0x%02x%s%s = %d, Hotaru reads %s", code, std ? " " : "", std ? std : "", value,
+                  read ? read : "nothing");
     }
 }
 
@@ -266,6 +334,12 @@ bool gamepad_try_acquire(void) {
         g_can_rumble = ioctl(fd, EVIOCGBIT(EV_FF, sizeof(ff)), ff) >= 0 && GETBIT(ff, FF_RUMBLE);
         g_can_touch =
             ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs_bits)), abs_bits) >= 0 && GETBIT(abs_bits, ABS_MT_POSITION_X);
+        memset(g_abs_span, 0, sizeof(g_abs_span));
+        for (int c = 0; c < ABS_CNT; c++) {
+            struct input_absinfo ai;
+            if (GETBIT(abs_bits, c) && ioctl(fd, EVIOCGABS(c), &ai) == 0 && ai.maximum > ai.minimum)
+                g_abs_span[c] = ai.maximum - ai.minimum;
+        }
         log_msg("gamepad: rumble %s, touchpad %s", g_can_rumble ? "yes" : "no",
                 g_can_touch ? "touches and click" : "click only");
         probe_device(fd);

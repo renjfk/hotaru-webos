@@ -78,7 +78,10 @@ body:
       description: |
         Turn on Settings -> About -> Diagnostics, reproduce the issue, then copy /tmp/hotaru.log
         from the TV (with Developer Mode: `scripts/tv.sh save`) and paste it here. The logs will
-        render inside a collapsible code block.
+        render inside a collapsible code block. If a controller's buttons or sticks are wrong,
+        follow the press order in the user guide's Troubleshooting
+        (https://github.com/renjfk/hotaru-webos/blob/main/docs/user-guide.md#troubleshooting)
+        first: the `pad:` lines then say which code each press produced.
       render: shell
     validations:
       required: false

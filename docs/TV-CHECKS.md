@@ -93,7 +93,8 @@ with the phone.
 Turn the controller off and on again while the app runs; press every button once.
 
 - **Look for** `gamepad ... lost`, `ui: [INPUT] gamepad offline`, then `gamepad reconnected`; every `pad: key` line
-  names its button (none `unmapped` except 0x136/0x137, the trigger clicks).
+  names the standard Linux code and what Hotaru read from it (`0x134 down BTN_WEST, Hotaru reads L1`), and the trigger
+  clicks (0x136/0x137) read nothing.
 
 ### 8. DualSense
 
@@ -101,11 +102,15 @@ Done on the 50UP75003LF: [dualsense-map-observed.txt](dualsense-map-observed.txt
 version: pair a DualSense with the TV and launch with probe mode.
 
 - **Look for** `pad: ... "DualSense Wireless Controller": a gamepad`, the `pad: keys` list and the `pad: abs` ranges,
-  then press every button and move every stick and trigger.
-- **It decides** `g_dualsense_buttons` in `src/input/gamepad.c`, which assumes the DualShock 4's order. Save the
-  log as `docs/dualsense-map-observed.txt` next to the DualShock 4's, and fix the table if a button lands wrong.
-  Note whether `pad: force feedback rumble` is listed: adaptive triggers, the lightbar and haptics need raw HID
-  output, which evdev does not offer.
+  then press every control in the order the [user guide](user-guide.md#troubleshooting) gives. The `pad: key` lines
+  carry the TV's code and name next to Hotaru's reading, so they say which layout the node reports.
+- **It decides** which of two things to do. A DualSense button that lands wrong on a node whose keys are 0x130..0x13d
+  is a table fix in `g_dualsense_buttons` (a DualShock 4 has its own, `g_ds4_buttons`), saved as
+  `docs/dualsense-map-observed.txt`. A node with BTN_THUMBR (0x13e) but neither BTN_Z nor BTN_C, triggers on ABS_Z/RZ
+  and the right stick on ABS_RX/RY is the standard Linux layout of a TV whose kernel driver (hid-playstation) owns
+  the pad, and needs code rather than a table: save that log as `docs/dualsense-map-linux-observed.txt`. Note whether
+  `pad: force feedback rumble` is listed: adaptive triggers, the lightbar and haptics need raw HID output, which
+  evdev does not offer.
 
 ### 9. HDR10
 

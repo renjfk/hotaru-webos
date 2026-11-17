@@ -124,6 +124,13 @@ Settings. The TV remote's arrows, OK and Back do the same.
   its own.
 - **The picture stutters**: connect the TV with an Ethernet cable if you can: TV Wi-Fi can pause for a moment
   several times a second, which no setting fully hides. On Wi-Fi, raise Smooth playback or lower the bitrate.
+- **A controller's buttons are wrong**: turn Settings > About > **Diagnostics** on, close and reopen Hotaru (the
+  switch is kept, and the fresh log opens with the pad's keys and axis ranges), then open Settings > **Log** with the
+  remote. Press each control once: Cross, Circle, Square, Triangle, L1, R1, L2 and R2 fully down, L3, R3, Create
+  (Share on a DualShock 4), Options, PS, the touchpad click, each D-pad direction in this order (up, down, left,
+  right), the left stick up, the right stick up. Buttons add `pad: key` lines and the D-pad, sticks and triggers add
+  `pad: abs` lines, each naming the code the TV sent and what Hotaru read from it, which is what tells a wrong layout
+  from a broken pad. PS and the touchpad click may not reach the app at all. Attach the log as below.
 - **Reporting a bug**: turn on Settings > About > **Diagnostics**, reproduce the problem, and attach the log to an
   [issue](https://github.com/renjfk/hotaru-webos/issues). The log is `/tmp/hotaru.log` on the TV; with Developer
   Mode, `scripts/tv.sh save` copies it.
