@@ -880,6 +880,15 @@ int main(int argc, char **argv) {
            "a DualSense reports no battery (hid-generic: no power_supply), so the card hides it");
     pad_unplug();
     pump(100);
+    /* webOS 11's virtual "Smart Remote RCU Input" looks like a gamepad to the bitmap check: it is
+     * the TV's own and stays ungrabbed, so a pad on a lower node is still found */
+    setenv("SHIM_PAD_NAME", "Smart Remote RCU Input", 1);
+    pad_plug("event13");
+    pump(1800);
+    bool rcu = input_pad_state() != PAD_ONLINE;
+    pad_unplug();
+    pump(100);
+    expect(rcu, "LG's Smart Remote RCU Input is the TV's own: not grabbed as a gamepad");
     unsetenv("SHIM_PAD_NAME");
     pad_plug("event12");
     pump(1800);
