@@ -893,7 +893,7 @@ int main(int argc, char **argv) {
     pad_plug("event12");
     pump(1800);
     expect(ds && input_pad_rumbles() && input_pad_touches(),
-           "a DualSense on webOS cannot rumble and its touchpad only clicks; a DualShock 4 does both");
+           "a DualSense on webOS 6 cannot rumble and its touchpad only clicks; a DualShock 4 does both");
 
     /* A DualSense on webOS 11 binds hid-playstation: the standard Linux layout. BTN_THUMBR without
      * BTN_C / BTN_Z at grab tells it apart; every code is normalised to LG's uhid order before the
@@ -905,6 +905,8 @@ int main(int argc, char **argv) {
     pad_plug("event13");
     pump(1800);
     input_set_streaming(true); /* the presses below stay out of Home */
+    expect(input_pad_rumbles() && !input_pad_touches(),
+           "standard layout: rumble reaches the app, the touchpad is on its own unread node");
     static const struct {
         int code;
         uint32_t btn;

@@ -112,9 +112,9 @@ or webOS version: pair a DualSense with the TV and launch with probe mode.
   is a table fix in `g_dualsense_buttons` (a DualShock 4 has its own, `g_ds4_buttons`), saved as
   `docs/dualsense-map-observed.txt`. A node with BTN_THUMBR (0x13e) but neither BTN_Z nor BTN_C, triggers on ABS_Z/RZ
   and the right stick on ABS_RX/RY is the standard Linux layout of a TV whose kernel driver (hid-playstation) owns
-  the pad, and needs code rather than a table: save that log as `docs/dualsense-map-linux-observed.txt`. Note whether
-  `pad: force feedback rumble` is listed: adaptive triggers, the lightbar and haptics need raw HID output, which
-  evdev does not offer.
+  the pad; `gamepad.c` normalises it (`std_key()`, `std_abs()`), so a button that lands wrong there is a fix in
+  `std_key()`, and its log belongs beside `docs/dualsense-map-linux-observed.txt`. Note whether `pad: force feedback
+  rumble` is listed: adaptive triggers, the lightbar and haptics need raw HID output, which evdev does not offer.
 
 ### 9. HDR10
 

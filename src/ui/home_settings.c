@@ -436,7 +436,7 @@ static void refresh_pad(void) {
                                                       ? "This controller cannot rumble on this TV"
                                                       : "Vibrate with in-game feedback");
     lv_label_set_text(g.rows[SET_PAD][1].caption, on && !input_pad_touches()
-                                                      ? "Its touchpad does not reach the console on this TV"
+                                                      ? "Its touches do not reach the console on this TV"
                                                       : "Send touches to the console");
 }
 

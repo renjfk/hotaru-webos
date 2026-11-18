@@ -102,7 +102,7 @@ static void chips_refresh(void) {
 static void values_refresh(void) {
     for (int i = 0; i < C__N; i++) lv_label_set_text(g.vals[i], card_value(i));
     chips_refresh();
-    /* the pad's battery, beside its art on the Controller card (a DualSense reports none) */
+    /* the pad's battery, beside its art on the Controller card (a DualSense on webOS 6 reports none) */
     int pct = 0;
     if (input_pad_battery(&pct)) {
         uint32_t col = pct <= BATT_CRIT ? COL_ERR : pct <= BATT_LOW ? COL_WARN : COL_OK;
@@ -343,7 +343,7 @@ void stream_menu_create(lv_obj_t *parent) {
         lv_obj_set_style_text_color(c, C(COL_TEXT), 0);
         if (i == C_PAD) {
             pad_art_set(ART_DS4);
-            /* the pad's battery, top right of its art; hidden when it reports none (a DualSense) */
+            /* the pad's battery, top right of its art; hidden when it reports none (a DualSense on webOS 6) */
             g.batt = ctl_row(c, SP_S);
             lv_obj_align(g.batt, LV_ALIGN_TOP_RIGHT, -SP_XL, 34);
             lv_obj_t *track = ctl_rect(g.batt, BATT_W, BATT_H, R_PILL, COL_FROST, LV_OPA_20);

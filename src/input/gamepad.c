@@ -286,14 +286,16 @@ static void probe_event(int type, int code, int mapped, int value) {
     }
 }
 
-/* ---------- battery (the uhid node's power_supply) ---------- */
+/* ---------- battery (the HID device's power_supply) ---------- */
 
-/* On this TV hid-sony publishes the DualShock 4's level on the pad's uhid node, in
- * <hid device>/power_supply/<name>/capacity. There is no /sys/class/power_supply here to
- * enumerate from, but the pad's own input node leads there: /sys/class/input/eventN/device
- * resolves to inputN, which sits in the HID device's input/ directory, so the HID device that
- * owns the power_supply is two levels up. A DualSense on webOS 6 is only hid-generic, which registers
- * no battery: no node, no reading. See docs/pad-battery-observed.txt. */
+/* On webOS 6 hid-sony publishes the DualShock 4's level on the pad's uhid node, in
+ * <hid device>/power_supply/<name>/capacity; on webOS 11 hid-playstation publishes the DualSense's
+ * battery (ps-controller-battery-<mac>) and the same lookup finds it. Rather than enumerate
+ * /sys/class/power_supply, the pad's own input node leads there: /sys/class/input/eventN/device
+ * resolves to inputN, which sits in the HID device's input/ directory, so the HID device that owns
+ * the power_supply is two levels up. A DualSense on webOS 6 is only hid-generic, which registers no
+ * battery: no node, no reading. See docs/pad-battery-observed.txt and
+ * docs/dualsense-map-linux-observed.txt. */
 bool gamepad_battery(int *pct) {
     if (g_pad_fd < 0 || !pct) return false;
     const char *node = strrchr(g_pad_path, '/');
@@ -397,7 +399,7 @@ bool gamepad_try_acquire(void) {
         }
         log_msg("gamepad: rumble %s, touchpad %s", g_can_rumble ? "yes" : "no",
                 g_can_touch    ? "touches and click"
-                : g_std_layout ? "its own node, not read"
+                : g_std_layout ? "on its own node (not read)"
                                : "click only");
         probe_device(fd);
         memset(&g_pad, 0, sizeof(g_pad));

@@ -81,16 +81,17 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
         errno = ENOTTY;
         return -1;
     }
+    const char *layout = getenv("SHIM_PAD_LAYOUT");
     if (req == 0x1000 + EV_KEY) {
         memset(arg, 0, (KEY_CNT + 7) / 8);
         ((unsigned char *)arg)[0x130 / 8] |= 1 << (0x130 % 8);
-        const char *layout = getenv("SHIM_PAD_LAYOUT");
         if (layout && !strcmp(layout, "linux")) ((unsigned char *)arg)[BTN_THUMBR / 8] |= 1 << (BTN_THUMBR % 8);
         if (layout && !strcmp(layout, "hid"))
             for (int k = 0x130; k <= BTN_THUMBR; k++) ((unsigned char *)arg)[k / 8] |= 1 << (k % 8);
         return 0;
     }
-    /* SHIM_PAD_NAME picks the controller; a DualSense is as webOS shows it: no touches, no rumble */
+    /* SHIM_PAD_NAME picks the controller; a DualSense on webOS 6 has no touches and no rumble, while
+     * SHIM_PAD_LAYOUT=linux gives it webOS 11's hid-playstation rumble */
     const char *name = getenv("SHIM_PAD_NAME") ? getenv("SHIM_PAD_NAME") : "Wireless Controller";
     bool dualsense = strstr(name, "DualSense") != NULL;
     if (req == 0x1000 + EV_ABS) {
@@ -100,7 +101,7 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
         return 0;
     }
     if (req == 0x1000 + EV_FF) {
-        if (dualsense) {
+        if (dualsense && !(layout && !strcmp(layout, "linux"))) {
             errno = EINVAL;
             return -1;
         }
