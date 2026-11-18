@@ -338,7 +338,11 @@ bool gamepad_try_acquire(void) {
         }
         char name[160] = { 0 };
         ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name);
-        bool lg = strncmp(name, "LGE", 3) == 0 || strncmp(name, "LG ", 3) == 0, pad = !lg && looks_like_gamepad(fd);
+        /* the TV's own nodes: "LGE ..." / "LG ..." and, on webOS 11, the virtual "Smart Remote RCU Input"
+         * (keys 0x100..0x153 and ABS_X/Y, so it passes looks_like_gamepad) */
+        bool lg = strncmp(name, "LGE", 3) == 0 || strncmp(name, "LG ", 3) == 0 ||
+                  strcmp(name, "Smart Remote RCU Input") == 0,
+             pad = !lg && looks_like_gamepad(fd);
         log_probe("pad: %s \"%s\": %s", path, name, lg ? "the TV's own, skipped" : pad ? "a gamepad" : "not a gamepad");
         if (!pad) {
             close(fd);
