@@ -104,9 +104,9 @@ version: pair a DualSense with the TV and launch with probe mode.
 - **Look for** `pad: ... "DualSense Wireless Controller": a gamepad`, the `pad: keys` list and the `pad: abs` ranges,
   then press every control in the order the [user guide](user-guide.md#troubleshooting) gives. The `pad: key` lines
   carry the TV's code and name next to Hotaru's reading, so they say which layout the node reports. With the pad off,
-  every node the TV owns (`LGE ...`, `LG ...`, the virtual `Smart Remote RCU Input`) says `the TV's own, skipped`:
-  one that says `a gamepad` is issue #11, an LG node passing the bitmap check, and `gamepad_try_acquire()` skips it
-  by name.
+  every node the TV owns (`LGE ...`, `LG ...`, the virtual `Smart Remote RCU Input`) says `the TV's own, skipped`. A
+  TV node that says `a gamepad` is one `gamepad_try_acquire()` does not know by name and will grab: report its name
+  in a new issue (issue #11 was LG's `Smart Remote RCU Input`, now skipped by name).
 - **It decides** which of two things to do. A DualSense button that lands wrong on a node whose keys are 0x130..0x13d
   is a table fix in `g_dualsense_buttons` (a DualShock 4 has its own, `g_ds4_buttons`), saved as
   `docs/dualsense-map-observed.txt`. A node with BTN_THUMBR (0x13e) but neither BTN_Z nor BTN_C, triggers on ABS_Z/RZ

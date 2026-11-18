@@ -880,8 +880,8 @@ int main(int argc, char **argv) {
            "a DualSense reports no battery (hid-generic: no power_supply), so the card hides it");
     pad_unplug();
     pump(100);
-    /* webOS 11's virtual "Smart Remote RCU Input" passes the bitmap check (keys 0x100..0x153, ABS_X/Y) but is
-     * the TV's own: the scan skips it by name and grabs nothing */
+    /* webOS 11's virtual "Smart Remote RCU Input" is the TV's own and passes the bitmap check on the TV (keys
+     * 0x100..0x153, ABS_X/Y): the scan skips it by name, before the check, and grabs nothing */
     setenv("SHIM_PAD_NAME", "Smart Remote RCU Input", 1);
     pad_plug("event13");
     pump(1800);
