@@ -1,0 +1,79 @@
+Observed DualSense (Sony DualSense, USB id 054c:0ce6) on the LG OLED48C55LA
+(webOS 11.2.0, firmware 43.21.96, kernel 6.12.44 aarch64), paired over Bluetooth.
+Captured with the app's probe mode (Settings > About > Diagnostics), pressing every control in
+a known order, and a root shell. The probe ran before this layout was handled, so the names in
+the excerpt below are LG's table reading the wrong codes.
+
+Unlike webOS 6 (docs/dualsense-map-observed.txt) the TV binds the stock Linux driver:
+  /sys/bus/hid/devices/0005:054C:0CE6.003D -> playstation   (hid-playstation)
+It makes three nodes; the app grabs the first:
+  N: Name="DualSense Wireless Controller"                H: Handlers=js7 event14
+  B: EV=20000b (SYN, KEY, ABS, FF)   B: KEY=7fdb0000 ... (0x130 0x131 0x133 0x134 0x136..0x13e)
+  B: ABS=3003f (0x00..0x05 and the hat 0x10/0x11)   B: FF=1 7030000 0 0 (rumble)
+  N: Name="DualSense Wireless Controller Motion Sensors" H: Handlers=js8 event15
+  B: EV=19   B: ABS=3f
+  N: Name="DualSense Wireless Controller Touchpad"       H: Handlers=event16
+  B: EV=b    B: KEY=2420 0 10000 ... (BTN_LEFT, BTN_TOOL_FINGER, BTN_TOUCH, BTN_TOOL_DOUBLETAP)
+  B: ABS=2608000 3 (ABS_X/Y and ABS_MT_*)
+The battery is published at /sys/class/power_supply/ps-controller-battery-<mac>/capacity.
+
+BUTTONS: the standard Linux gamepad layout, each confirmed by a press
+  Physical          Linux code               LG's uhid order (what the tables use)
+  Cross             0x130 BTN_SOUTH          0x131
+  Circle            0x131 BTN_EAST           0x132
+  Triangle          0x133 BTN_NORTH          0x133
+  Square            0x134 BTN_WEST           0x130
+  L1                0x136 BTN_TL             0x134
+  R1                0x137 BTN_TR             0x135
+  L2 (click)        0x138 BTN_TL2            0x136
+  R2 (click)        0x139 BTN_TR2            0x137
+  Create            0x13a BTN_SELECT         0x138
+  Options           0x13b BTN_START          0x139
+  PS                0x13c BTN_MODE           0x13c
+  L3                0x13d BTN_THUMBL         0x13a
+  R3                0x13e BTN_THUMBR         0x13b
+  Touchpad click    not on the pad node (BTN_LEFT on the Touchpad node)
+  Mute              (nothing reported)
+
+AXES: the directions are LG's; only the codes move
+  Left stick X/Y    ABS_X / ABS_Y      0..255 (flat 15), up = 0
+  Right stick X/Y   ABS_RX / ABS_RY    0..255 (flat 15), up = 0   (LG's order: ABS_Z / ABS_RZ)
+  L2 / R2 analog    ABS_Z / ABS_RZ     0..255 (flat 0), released = 0   (LG's: ABS_RX / ABS_RY)
+  D-pad             ABS_HAT0X / HAT0Y  -1..1
+
+Read with LG's tables this is shifted by one: Cross reads as Square, Circle as Cross, Square
+as L1, L1 / R1 / R3 as nothing, L2 / R2 clicks as Create / Options (so L2 + R2 opens the
+stream menu), Create / Options as L3 / R3, and the right stick and the triggers swap.
+
+Log excerpt (probe), pressing Cross, Circle, Square, Triangle, L1, R1, L2, R2, Create,
+Options, PS, L3, R3, then left stick up, right stick up, L2 and R2 all the way:
+  pad: /dev/input/event16 "DualSense Wireless Controller Touchpad": not a gamepad
+  pad: /dev/input/event15 "DualSense Wireless Controller Motion Sensors": not a gamepad
+  pad: /dev/input/event14 "DualSense Wireless Controller": a gamepad
+  gamepad: rumble yes, touchpad click only
+  pad: keys 0x130 0x131 0x133 0x134 0x136 0x137 0x138 0x139 0x13a 0x13b 0x13c 0x13d 0x13e
+  pad: abs 0x00, 0x01, 0x03, 0x04 0..255 (flat 15); abs 0x02, 0x05 0..255 (flat 0); 0x10, 0x11 -1..1
+  gamepad: battery 45%
+  pad: key 0x130 down (Square)      <- Cross
+  pad: key 0x131 down (Cross)       <- Circle
+  pad: key 0x134 down (L1)          <- Square
+  pad: key 0x133 down (Triangle)    <- Triangle
+  pad: key 0x136 down (unmapped)    <- L1
+  pad: key 0x137 down (unmapped)    <- R1
+  pad: key 0x138 down (Share)       <- L2, with abs 0x02 rising
+  pad: key 0x139 down (Options)     <- R2, with abs 0x05 rising
+  pad: key 0x13a down (L3)          <- Create
+  pad: key 0x13b down (R3)          <- Options
+  pad: key 0x13c down (PS)          <- PS
+  pad: key 0x13d down (Touchpad)    <- L3, with abs 0x01 moving
+  pad: key 0x13e down (unmapped)    <- R3, with abs 0x03 / 0x04 moving
+  pad: abs 0x01 = 100, 60, 28                       <- left stick up
+  pad: abs 0x04 = 87, 34, 0, then back to 134       <- right stick up
+  pad: abs 0x02 = 60 .. 255, then 189 .. 0          <- L2 all the way, released
+  pad: abs 0x05 = 63 .. 255, then 214 .. 0          <- R2 all the way, released
+
+CONCLUSIONS
+- BTN_THUMBR (0x13e) tells the layouts apart at grab: LG's uhid order never sends it.
+  gamepad.c normalises this layout's codes to LG's as they are read; the tables stay.
+- Rumble works through the node's FF_RUMBLE.
+- Touchpad touches and the click are on their own node, which the app does not read.

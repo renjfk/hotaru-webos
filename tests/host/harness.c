@@ -886,6 +886,97 @@ int main(int argc, char **argv) {
     expect(ds && input_pad_rumbles() && input_pad_touches(),
            "a DualSense on webOS cannot rumble and its touchpad only clicks; a DualShock 4 does both");
 
+    /* A DualSense on webOS 11 binds hid-playstation: the standard Linux layout. BTN_THUMBR without
+     * BTN_C / BTN_Z at grab tells it apart; every code is normalised to LG's uhid order before the
+     * tables */
+    pad_unplug();
+    pump(100);
+    setenv("SHIM_PAD_NAME", "DualSense Wireless Controller", 1);
+    setenv("SHIM_PAD_LAYOUT", "linux", 1);
+    pad_plug("event13");
+    pump(1800);
+    input_set_streaming(true); /* the presses below stay out of Home */
+    static const struct {
+        int code;
+        uint32_t btn;
+    } std_btns[] = { { 0x130, PAD_BTN_CROSS },  { 0x131, PAD_BTN_CIRCLE }, { 0x133, PAD_BTN_TRIANGLE },
+                     { 0x134, PAD_BTN_SQUARE }, { 0x136, PAD_BTN_L1 },     { 0x137, PAD_BTN_R1 },
+                     { 0x13c, PAD_BTN_PS },     { 0x13d, PAD_BTN_L3 },     { 0x13e, PAD_BTN_R3 } };
+    bool std_ok = input_pad_state() == PAD_ONLINE;
+    input_pad_t p;
+    for (size_t i = 0; i < sizeof(std_btns) / sizeof(std_btns[0]); i++) {
+        pad_ev(EV_KEY, std_btns[i].code, 1);
+        pump(60);
+        bool got = input_pad_get(&p) && p.buttons == std_btns[i].btn;
+        if (!got) printf("  0x%x -> 0x%x, want 0x%x\n", std_btns[i].code, p.buttons, std_btns[i].btn);
+        std_ok = std_ok && got;
+        pad_ev(EV_KEY, std_btns[i].code, 0);
+        pump(60);
+    }
+    expect(std_ok, "standard layout: Cross, Circle, Triangle, Square, L1, R1, PS, L3, R3 read as themselves");
+    /* each held past PAD_CHORD_MS: the trigger clicks are no buttons (LG's order has Create /
+     * Options there), Create and Options (the menu chord) are themselves */
+    static const struct {
+        int code;
+        uint32_t btn;
+    } std_menu[] = { { 0x138, 0 }, { 0x139, 0 }, { 0x13a, PAD_BTN_SHARE }, { 0x13b, PAD_BTN_OPTIONS } };
+    bool menu = true;
+    for (size_t i = 0; i < sizeof(std_menu) / sizeof(std_menu[0]); i++) {
+        pad_ev(EV_KEY, std_menu[i].code, 1);
+        pump(200);
+        bool got = input_pad_get(&p) && p.buttons == std_menu[i].btn;
+        if (!got) printf("  0x%x -> 0x%x, want 0x%x\n", std_menu[i].code, p.buttons, std_menu[i].btn);
+        menu = menu && got;
+        pad_ev(EV_KEY, std_menu[i].code, 0);
+        pump(60);
+    }
+    expect(menu, "standard layout: the L2 / R2 clicks are not Create / Options, which read as themselves");
+    pad_ev(EV_ABS, ABS_Z, 255); /* triggers on Z / RZ, right stick on RX / RY (up is the minimum) */
+    pad_ev(EV_ABS, ABS_RZ, 128);
+    pad_ev(EV_ABS, ABS_RX, 255);
+    pad_ev(EV_ABS, ABS_RY, 0);
+    pump(60);
+    bool axes = input_pad_get(&p) && p.l2 == 255 && p.r2 > 120 && p.r2 < 136 && p.right_x > 30000 && p.right_y < -30000;
+    pad_ev(EV_ABS, ABS_Z, 0);
+    pad_ev(EV_ABS, ABS_RZ, 0);
+    pad_ev(EV_ABS, ABS_RX, 128);
+    pad_ev(EV_ABS, ABS_RY, 128);
+    pump(60);
+    axes = axes && input_pad_get(&p) && p.l2 == 0 && p.r2 == 0 && p.right_x > -300 && p.right_x < 300;
+    expect(axes, "standard layout: L2 / R2 on ABS_Z / RZ, the right stick on ABS_RX / RY");
+    pad_unplug();
+    pump(100);
+
+    /* A pad on the generic driver in raw HID order sends all of 0x130..0x13e (Mute on 0x13e):
+     * BTN_C and BTN_Z keep it on LG's tables */
+    setenv("SHIM_PAD_LAYOUT", "hid", 1);
+    pad_plug("event13");
+    pump(1800);
+    static const struct {
+        int code;
+        uint32_t btn;
+    } hid_btns[] = {
+        { 0x130, PAD_BTN_SQUARE }, { 0x131, PAD_BTN_CROSS }, { 0x132, PAD_BTN_CIRCLE }, { 0x135, PAD_BTN_R1 }
+    };
+    bool hid_ok = input_pad_state() == PAD_ONLINE;
+    for (size_t i = 0; i < sizeof(hid_btns) / sizeof(hid_btns[0]); i++) {
+        pad_ev(EV_KEY, hid_btns[i].code, 1);
+        pump(60);
+        bool got = input_pad_get(&p) && p.buttons == hid_btns[i].btn;
+        if (!got) printf("  0x%x -> 0x%x, want 0x%x\n", hid_btns[i].code, p.buttons, hid_btns[i].btn);
+        hid_ok = hid_ok && got;
+        pad_ev(EV_KEY, hid_btns[i].code, 0);
+        pump(60);
+    }
+    expect(hid_ok, "raw HID order (0x130..0x13e with BTN_C / BTN_Z) stays on LG's table");
+    input_set_streaming(false);
+    pad_unplug();
+    pump(100);
+    unsetenv("SHIM_PAD_LAYOUT");
+    unsetenv("SHIM_PAD_NAME");
+    pad_plug("event12");
+    pump(1800);
+
     /* Add a console: Cross on the Add tile opens the full-screen flow over Home. It is focus
      * driven (every key comes from the sink, no LVGL group of its own), Home stops drawing under
      * it, and every step fits 1080p with its focus rings unclipped */

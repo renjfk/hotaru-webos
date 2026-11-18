@@ -70,6 +70,46 @@ static const pad_btn_map_t g_dualsense_buttons[] = {
 static const pad_btn_map_t *g_btn_map = g_ds4_buttons;
 static size_t g_btn_map_n = sizeof(g_ds4_buttons) / sizeof(g_ds4_buttons[0]);
 
+/* The tables above are LG's uhid order (webOS 6, docs/ds4-map-observed.txt). Newer TVs bind
+ * the stock hid-playstation driver instead (webOS 11, docs/dualsense-map-linux-observed.txt):
+ * the standard Linux layout, BTN_SOUTH = Cross from 0x130 on, the right stick on ABS_RX/RY and
+ * the triggers on ABS_Z/RZ. That node is told apart at grab by BTN_THUMBR (0x13e) without BTN_C
+ * (0x132) or BTN_Z (0x135), the rule in docs/TV-CHECKS.md: the uhid order never sends 0x13e, and a
+ * pad on the generic driver in raw HID order sends all of 0x130..0x13e (Mute on 0x13e) and stays
+ * on the tables as they are. The standard layout's codes are normalised to the uhid ones as they
+ * are read, so the tables and everything after them stay as they are. */
+static bool g_std_layout;
+
+static int std_key(int code) {
+    switch (code) {
+        case 0x130: return 0x131; /* BTN_SOUTH  Cross    */
+        case 0x131: return 0x132; /* BTN_EAST   Circle   */
+        case 0x133: return 0x133; /* BTN_NORTH  Triangle */
+        case 0x134: return 0x130; /* BTN_WEST   Square   */
+        case 0x136: return 0x134; /* BTN_TL     L1       */
+        case 0x137: return 0x135; /* BTN_TR     R1       */
+        case 0x138: return 0x136; /* BTN_TL2    L2 click */
+        case 0x139: return 0x137; /* BTN_TR2    R2 click */
+        case 0x13a: return 0x138; /* BTN_SELECT Create   */
+        case 0x13b: return 0x139; /* BTN_START  Options  */
+        case 0x13c: return 0x13c; /* BTN_MODE   PS       */
+        case 0x13d: return 0x13a; /* BTN_THUMBL L3       */
+        case 0x13e: return 0x13b; /* BTN_THUMBR R3       */
+        default: return -1;
+    }
+}
+
+/* the right stick and the triggers trade axes; the swap is its own inverse */
+static int std_abs(int code) {
+    switch (code) {
+        case ABS_Z: return ABS_RX;
+        case ABS_RZ: return ABS_RY;
+        case ABS_RX: return ABS_Z;
+        case ABS_RY: return ABS_RZ;
+        default: return code;
+    }
+}
+
 static const char *btn_name(uint32_t b) {
     static const char *const n[] = { "Cross", "Circle", "Square", "Triangle", "Left",    "Right", "Up",       "Down",
                                      "L1",    "R1",     "L3",     "R3",       "Options", "Share", "Touchpad", "PS" };
@@ -221,13 +261,15 @@ static void probe_device(int fd) {
 }
 
 /* probe mode: every button, and an axis whenever it moves an eighth of its range */
-static void probe_event(int type, int code, int value) {
+/* code: as the node sent it, named in Linux's terms; mapped: what the tables are asked about
+ * after the layout's normalisation (the same code on LG's order, -1 for a key they never know) */
+static void probe_event(int type, int code, int mapped, int value) {
     if (!log_probe_on()) return;
     if (type == EV_KEY) {
         const char *std = linux_key_name(code), *read = "nothing";
         const char *verb = value == 1 ? "down" : value == 0 ? "up" : "repeat";
         for (size_t i = 0; i < g_btn_map_n; i++)
-            if (g_btn_map[i].code == code) read = btn_name(g_btn_map[i].btn);
+            if (g_btn_map[i].code == mapped) read = btn_name(g_btn_map[i].btn);
         log_probe("pad: key 0x%x %s %s, Hotaru reads %s", code, verb, std ? std : "unlisted", read);
     } else if (type == EV_ABS && code >= 0 && code < 64) {
         static int last[64];
@@ -237,7 +279,7 @@ static void probe_event(int type, int code, int value) {
         if (seen[code] && abs(value - last[code]) < step) return;
         seen[code] = true;
         last[code] = value;
-        const char *std = linux_abs_name(code), *read = axis_role(code);
+        const char *std = linux_abs_name(code), *read = axis_role(mapped);
         log_probe("pad: abs 0x%02x%s%s = %d, Hotaru reads %s", code, std ? " " : "", std ? std : "", value,
                   read ? read : "nothing");
     }
@@ -302,6 +344,10 @@ bool gamepad_try_acquire(void) {
             close(fd);
             continue;
         }
+        unsigned char keys[(KEY_CNT + 7) / 8] = { 0 };
+        g_std_layout = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) >= 0 && GETBIT(keys, BTN_THUMBR) &&
+                       !GETBIT(keys, BTN_Z) && !GETBIT(keys, BTN_C);
+        log_msg("gamepad %s: %s layout", path, g_std_layout ? "standard Linux (BTN_THUMBR, no BTN_C/Z)" : "LG uhid");
         if (ioctl(fd, EVIOCGRAB, 1) < 0) log_msg("gamepad %s grab FAILED: %s", path, strerror(errno));
         else log_msg("gamepad %s \"%s\" grabbed", path, name);
         struct {
@@ -311,7 +357,8 @@ bool gamepad_try_acquire(void) {
                      { DS4_RSTICK_Y, &g_ry }, { ABS_RX, &g_l2 }, { ABS_RY, &g_r2 } };
         for (size_t i = 0; i < sizeof(axes) / sizeof(axes[0]); i++) {
             struct input_absinfo ai;
-            if (ioctl(fd, EVIOCGABS(axes[i].code), &ai) == 0 && ai.maximum > ai.minimum) {
+            int code = g_std_layout ? std_abs(axes[i].code) : axes[i].code;
+            if (ioctl(fd, EVIOCGABS(code), &ai) == 0 && ai.maximum > ai.minimum) {
                 axes[i].axis->min = ai.minimum;
                 axes[i].axis->max = ai.maximum;
                 axes[i].axis->value = (ai.minimum + ai.maximum) / 2;
@@ -319,8 +366,11 @@ bool gamepad_try_acquire(void) {
         }
         g_l2.value = g_l2.min; /* a released trigger is at the axis minimum, not the middle */
         g_r2.value = g_r2.min;
-        log_msg("pad abs X %d..%d Y %d..%d Z %d..%d RZ %d..%d RX %d..%d RY %d..%d", g_lx.min, g_lx.max, g_ly.min,
-                g_ly.max, g_rx.min, g_rx.max, g_ry.min, g_ry.max, g_l2.min, g_l2.max, g_r2.min, g_r2.max);
+        /* named by the code each range came from: on the standard layout the right stick is RX/RY
+         * and the triggers Z/RZ */
+        log_msg("pad abs X %d..%d Y %d..%d %s %d..%d %s %d..%d %s %d..%d %s %d..%d", g_lx.min, g_lx.max, g_ly.min,
+                g_ly.max, g_std_layout ? "RX" : "Z", g_rx.min, g_rx.max, g_std_layout ? "RY" : "RZ", g_ry.min, g_ry.max,
+                g_std_layout ? "Z" : "RX", g_l2.min, g_l2.max, g_std_layout ? "RZ" : "RY", g_r2.min, g_r2.max);
         snprintf(g_pad_path, sizeof(g_pad_path), "%s", path);
         snprintf(g_pad_name, sizeof(g_pad_name), "%s", name);
         if (strstr(name, "DualSense")) {
@@ -532,7 +582,16 @@ void gamepad_tick(void) {
     struct input_event ev;
     ssize_t n;
     while ((n = read(g_pad_fd, &ev, sizeof(ev))) == (ssize_t)sizeof(ev)) {
-        probe_event(ev.type, ev.code, ev.value);
+        int raw = ev.code;
+        if (g_std_layout && ev.type == EV_KEY) {
+            int code = std_key(ev.code);
+            probe_event(ev.type, raw, code, ev.value);
+            if (code < 0) continue; /* no button the tables know */
+            ev.code = (uint16_t)code;
+        } else {
+            if (g_std_layout && ev.type == EV_ABS) ev.code = (uint16_t)std_abs(ev.code);
+            probe_event(ev.type, raw, ev.code, ev.value);
+        }
         if (ev.type == EV_KEY) gamepad_button(ev.code, ev.value);
         else if (ev.type == EV_ABS) {
             if (ev.code == ABS_X) g_lx.value = ev.value;
