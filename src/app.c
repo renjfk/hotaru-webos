@@ -31,7 +31,7 @@
 /* The last failure, as the two lines the UI shows: what was attempted and why it did not work */
 #define CONN_ERROR_WHAT 64                          /* "Could not connect", and the like */
 #define CONN_ERROR_WHY  128                         /* one clause, as the console or the TV put it */
-#define STREAM_BLOCKED  "This TV cannot play video" /* the state a TV without the v2 media API shows */
+#define STREAM_BLOCKED  "This TV cannot play video" /* the state a TV with no media API at all shows */
 
 /* app forwards input_pad_t to session_pad_t field by field and copies the button
  * bitmask; the two canonical layouts must stay identical */
@@ -455,6 +455,7 @@ const char *app_conn_error_why(void) { return g_conn_error_why; }
 unsigned app_conn_error_gen(void) { return g_conn_error_gen; }
 /* asked live, not cached: the same answer every time on a TV, and the host tests toggle it */
 const char *app_stream_blocked(void) { return session_media_reason()[0] ? STREAM_BLOCKED : ""; }
+bool app_stream_h264_only(void) { return session_media_h264_only(); }
 
 /* one failure, as the UI shows it: what was attempted, and why it did not work */
 static void conn_fail(const char *what, const char *why) {
@@ -499,7 +500,7 @@ void app_connect(void) {
         return;
     }
     g_conn_error_what[0] = g_conn_error_why[0] = '\0';
-    if (app_stream_blocked()[0]) { /* a webOS 4 TV has only the v1 media API: no picture at all */
+    if (app_stream_blocked()[0]) { /* no media API this app can use: no picture at all */
         conn_fail(STREAM_BLOCKED, session_media_reason());
         log_event(LOG_ERR, "NET", "Cannot stream on this TV: %s", session_media_reason());
         notify(APP_CHANGED_CONN);
@@ -596,8 +597,13 @@ void app_disconnect(void) {
 bool app_stream_settings_pending(void) {
     if (g_conn == CONN_IDLE) return false;
     const stream_settings_t *a = &g_stream_used, *b = &config_get()->stream;
-    return a->codec != b->codec || a->width != b->width || a->height != b->height || a->fps != b->fps ||
-           a->bitrate_kbps != b->bitrate_kbps || a->hdr != b->hdr;
+    /* a v1 media TV is asked for H.264 SDR whatever the saved settings say (session_real.c): the
+     * saved codec and HDR switch are no change to restart a running stream for */
+    bool h264 = app_stream_h264_only();
+    int ac = h264 ? CODEC_H264 : a->codec, bc = h264 ? CODEC_H264 : b->codec;
+    bool ah = h264 ? false : a->hdr, bh = h264 ? false : b->hdr;
+    return ac != bc || ah != bh || a->width != b->width || a->height != b->height || a->fps != b->fps ||
+           a->bitrate_kbps != b->bitrate_kbps;
 }
 
 static void restart_after(Uint32 ms) {

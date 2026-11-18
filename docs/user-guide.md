@@ -105,7 +105,8 @@ Settings. The TV remote's arrows, OK and Back do the same.
 - **Stream**: a **Preset** picks the picture and the bandwidth together: **Data saver** (720p60, 8 Mbps),
   **Balanced** (1080p60, 15 Mbps, the default) or **High quality** (1080p60, 30 Mbps). **Custom** adds the fine
   settings, Quality (resolution and frame rate) and Bitrate. The **Codec** row is always there: H.264, H.265, or
-  **HDR** on a PS5 (an HDR TV switches to HDR10; a PS4 always sends H.264 without HDR). **Smooth playback** adds a
+  **HDR** on a PS5 (an HDR TV switches to HDR10; a PS4 always sends H.264 without HDR). A webOS 4 TV has no H.265 and
+  no HDR, so there the row offers H.264 alone. **Smooth playback** adds a
   short delay that hides Wi-Fi hiccups. If the picture stutters, try a lower preset, 100 or 150 ms of Smooth
   playback, or Custom with a lower bitrate.
 - **Controller**: rumble (turning it on gives a short buzz), whether the touchpad's touches reach the console, and

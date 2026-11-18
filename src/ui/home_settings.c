@@ -131,6 +131,8 @@ static int preset_index(const stream_settings_t *s) {
 
 static bool stream_custom(const stream_settings_t *s) { return preset_index(s) == PRESET_CUSTOM; }
 
+int home_settings_codec_options(void) { return g.rows[SET_STREAM][ST_CODEC].seg.n; }
+
 /* "Custom" when the values are not a preset (a state, so the caption can say it too) */
 static const char *preset_name(const stream_settings_t *s) {
     int i = preset_index(s);
@@ -145,7 +147,7 @@ static void stream_controls_refresh(void) {
     bool custom = stream_custom(s);
     ctl_seg_select(&r[ST_PRESET].seg, preset_index(s));
     ctl_seg_select(&r[ST_QUALITY].seg, quality_index(s));
-    ctl_seg_select(&r[ST_CODEC].seg, codec_index(s));
+    ctl_seg_select(&r[ST_CODEC].seg, app_stream_h264_only() ? 0 : codec_index(s));
     ctl_meter_set(&r[ST_BITRATE].meter, s->bitrate_kbps / 1000);
     ctl_seg_select(&r[ST_SMOOTH].seg, smooth_index(s->smooth_ms));
     lv_coord_t y = 0;
@@ -243,8 +245,12 @@ static void build_stream(void) {
             160);
     row_seg(add_row(SET_STREAM, "Quality", "Resolution and frame rate together"), g_quality_opts, 4, quality_index(s),
             140);
-    row_seg(add_row(SET_STREAM, "Codec", "Decoded in hardware; HDR needs an HDR picture mode"), g_codec_opts, 3,
-            codec_index(s), 150);
+    /* a webOS 4 TV's media API has no H.265 and no HDR: one option, and the caption says why */
+    bool h264 = app_stream_h264_only();
+    row_seg(add_row(SET_STREAM, "Codec",
+                    h264 ? "H.264 only: this TV's media API has no H.265 or HDR"
+                         : "Decoded in hardware; HDR needs an HDR picture mode"),
+            g_codec_opts, h264 ? 1 : 3, h264 ? 0 : codec_index(s), 150);
     prow_t *r = add_row(SET_STREAM, "Bitrate", "Lower it if the picture stutters");
     r->kind = ROW_METER;
     ctl_meter_create(&r->meter, r->row, 300, 2, 50, s->bitrate_kbps / 1000, "%d Mbps");
@@ -389,8 +395,10 @@ static void refresh_stream(void) {
     int kbps = s->bitrate_kbps;
     stream_controls_refresh();
     lv_label_set_text_fmt(g.sum_big, "%dp%d", s->height, s->fps);
-    lv_label_set_text_fmt(g.sum_txt, "%s" BULLET "%s" BULLET "%d Mbps", s->codec == CODEC_H264 ? "H.264" : "H.265",
-                          codec_index(s) == 2 ? "HDR" : "SDR", kbps / 1000);
+    bool h264 = app_stream_h264_only();
+    lv_label_set_text_fmt(g.sum_txt, "%s" BULLET "%s" BULLET "%d Mbps",
+                          h264 || s->codec == CODEC_H264 ? "H.264" : "H.265",
+                          !h264 && codec_index(s) == 2 ? "HDR" : "SDR", kbps / 1000);
     motion_to(g.sum_fill, MO_W, 16 + (SUM_CW - 16) * kbps / 50000, 260, 0, NULL);
     lv_label_set_text(g.sum_note, app_conn_state() == CONN_IDLE
                                       ? "Video settings apply the next time you connect."
@@ -546,7 +554,8 @@ static void edit_row(int panel, int row, uint32_t key) {
     int d = key == LV_KEY_LEFT ? -1 : 1;
     switch (r->kind) {
         case ROW_SEG: {
-            int s = key == LV_KEY_ENTER ? (r->seg.sel + 1) % r->seg.n : r->seg.sel + d;
+            /* a one-choice row (the Codec row on a webOS 4 TV) has nothing to step to: Cross bumps like LEFT/RIGHT */
+            int s = key != LV_KEY_ENTER ? r->seg.sel + d : r->seg.n == 1 ? -1 : (r->seg.sel + 1) % r->seg.n;
             if (s < 0 || s >= r->seg.n) {
                 bump(r->seg.box, d);
                 return;

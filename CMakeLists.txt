@@ -47,8 +47,8 @@ endif()
 if(CMAKE_CROSSCOMPILING)
     # NDL DirectMedia: the TV's hardware video/audio pipeline. Headers + lib ship in the SDK
     # sysroot (usr/include/libndl-media, lib/libNDL_directmedia); media/ndl.c opens the lib at
-    # runtime and resolves the v2 API, so a webOS 4 TV (v1 only) gets a message, not a crash.
-    # Only the headers are needed at build time.
+    # runtime and resolves the API it has (v2, else the v1 calls), so a webOS 4 TV streams
+    # H.264 SDR through it. Only the headers are needed at build time.
     find_path(NDL_INCLUDE_DIR NAMES NDL_directmedia_v2.h PATH_SUFFIXES libndl-media)
     if(NDL_INCLUDE_DIR)
         message(STATUS "NDL DirectMedia headers: ${NDL_INCLUDE_DIR}")

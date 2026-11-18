@@ -35,8 +35,8 @@ src/
   config/           settings, consoles, PSN account, device UID; one key=value file (config.h)
   chiaki/           session.h: the libchiaki wrapper API; session_real.c the real backend
                     (HOTARU_HAVE_LIBCHIAKI), session.c the simulation (host tests, simulator)
-  media/            ndl.[ch] NDL hardware video + PCM audio; feeder.[ch] media worker threads;
-                    pacer.[ch] even playout cadence for "Smooth playback"
+  media/            ndl.[ch] NDL hardware video + PCM audio, v2 or v1 (ndl_v1.[ch] the calls a webOS 4 TV
+                    has); feeder.[ch] media worker threads; pacer.[ch] even playout cadence for "Smooth playback"
   net/              update.[ch]: is a newer release out (GitHub's latest release, once per launch)
   vendor/           qrcodegen.[ch]: Nayuki's QR encoder, unmodified
 tests/host/         macOS behaviour tests (shim/ fakes <linux/input.h>)
@@ -163,8 +163,9 @@ scripts/tv.sh install && scripts/tv.sh launch --probe && scripts/tv.sh log -f
   dialog runs its callback after it is gone, through `lv_async_call()`
 - **Errors**: `app.c` keeps the last failure as a what/why pair (`app_conn_error_what`/`_why`). Home says it in
   the one notice slot in the top bar, shared with the update check (an error wins while it is up), and a TV-wide
-  condition (`app_stream_blocked`, e.g. a webOS 4 TV with no v2 NDL) as the hero's state line, and it is said
-  again in the notice when a connect is refused. The bottom-left toast is for moments ("Wake-up sent") only
+  condition (`app_stream_blocked`, e.g. a TV whose media library has neither NDL generation) as the hero's state
+  line; it is said again in the notice when a connect is refused. The bottom-left toast is for moments ("Wake-up
+  sent") only
 - **Device art** comes from `design/menu/art/`, scaled by `scripts/make-device-art.sh` into `assets/devices/`; the
   ipk installs it next to the binary. The app icon is a checked-in PNG with the glyph only: the launcher draws the
   tile in `appinfo.json` `iconColor`

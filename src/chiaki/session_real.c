@@ -426,17 +426,21 @@ static void regist_cb(ChiakiRegistEvent *event, void *user) {
 
 bool session_available(void) { return true; }
 
-/* The TV's media library is only known at runtime (the app no longer links it): a webOS 4 set
- * answers with the v1 API, where the v2 calls this app makes do not exist. A build without NDL at
- * all (the simulator with real libchiaki, or a TV build whose headers were missing) has no answer
- * to give and streams without a picture, as it did before. */
+bool session_media_h264_only(void) { return ndl_h264_only(); }
+
+/* The TV's media library is only known at runtime (the app no longer links it): a webOS 5 set
+ * answers with the v2 API and a webOS 4 one with the v1 API, which media/ndl.c picks apart by
+ * symbol. Only a set that answers to neither is refused: the v2 calls this app makes do not exist
+ * there, and the v1 ones do not either. A build without NDL at all (the simulator with real
+ * libchiaki, or a TV build whose headers were missing) has no answer to give and streams without a
+ * picture, as it did before. */
 const char *session_media_reason(void) {
 #ifdef HOTARU_HAVE_NDL
     if (ndl_available()) return "";
     static bool logged;
     if (!logged) {
         logged = true;
-        log_msg("media: no v2 NDL (%s): webOS 4 and older have the v1 API only", ndl_unavailable_detail());
+        log_msg("media: no NDL at all (%s): neither the v2 nor the v1 API", ndl_unavailable_detail());
     }
     return SESSION_MEDIA_WHY;
 #else
@@ -456,9 +460,16 @@ static void fill_video_profile(ChiakiConnectInfo *info, const config_host_t *hos
     /* a PS4 does not stream H.265 (chiaki-ng always decodes PS4 as H.264); only a PS5 takes the setting.
      * HDR is negotiated when the HDR switch is on or the codec is H.265 HDR (both mean HDR10 on a PS5). */
     ChiakiCodec codec;
-    if (!host->is_ps5) codec = CHIAKI_CODEC_H264;
+    if (!host->is_ps5 || ndl_h264_only()) codec = CHIAKI_CODEC_H264; /* a v1 media TV has no H.265 */
     else if (stream->hdr || stream->codec == CODEC_H265_HDR) codec = CHIAKI_CODEC_H265_HDR;
     else codec = (ChiakiCodec)stream->codec;
+    if (ndl_h264_only() && (stream->hdr || stream->codec != CODEC_H264)) {
+        static bool told;
+        if (!told) {
+            told = true;
+            log_event(LOG_WARN, "NDL", "this TV's media API has no H.265 or HDR: the session uses H.264 SDR");
+        }
+    }
     info->video_profile.codec = codec;
 }
 

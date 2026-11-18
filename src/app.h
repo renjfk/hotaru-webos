@@ -92,6 +92,9 @@ unsigned app_conn_error_gen(void); /* counts failures: the UI shows each one onc
 /* A TV-wide condition that stops every stream, as the line Home shows under the console's name
  * ("" when there is none). It outlives an attempt, so it is a state, not a message. */
 const char *app_stream_blocked(void);
+
+/* true on a TV whose media API plays H.264 SDR only (webOS 4): Settings > Stream offers no other codec */
+bool app_stream_h264_only(void);
 bool app_conn_over_psn(void); /* the session (or the attempt) runs over PSN */
 bool app_conn_fallback(void); /* ... because the local network did not reach the console */
 bool app_conn_waking(void);   /* connecting: waiting for a console in rest mode to wake up */

@@ -171,11 +171,30 @@ Watch the log from launch, then start a stream. The app no longer links `libNDL_
 connect (a webOS 4 TV has only the v1 API there, and a direct call to a v2 entry point killed the app: issue #5).
 
 - **Look for** `ndl: libNDL_directmedia.so.1 has the v2 API` once per launch (a near-miss name such as
-  `libNDL_directmedia.so` would say `did not open`), then the usual `DirectMediaInit ok`. A TV without the v2 API
-  says `has no NDL_DirectMediaLoad (the v1 API: webOS 4 and older)` and refuses the session with
-  "This TV cannot play video".
+  `libNDL_directmedia.so` would say `did not open`), then the usual `DirectMediaInit ok`. A webOS 4 TV says
+  `has the v1 API only (webOS 4 and older): H.264 SDR at most` and streams through check 16; a set with neither
+  says `has no NDL_DirectMediaLoad and no v1 API` and refuses the session with "This TV cannot play video".
 - **It decides** the name in `src/media/ndl.c` (`NDL_LIBRARY`): it must be the SONAME the TV ships, not the
   unversioned dev symlink in the SDK sysroot.
+
+### 16. A webOS 4 TV streams through the v1 API
+
+On a webOS 4 set (2018-2019, e.g. an OLED C8), start a stream. Such a TV has only the v1 NDL API (issue #7), and
+the app then plays H.264 SDR only.
+
+- **Look for** `ndl: libNDL_directmedia.so.1 has the v1 API only (webOS 4 and older): H.264 SDR at most`, then
+  `DirectMediaInit ok` and `... H.264 + PCM 48000 Hz stereo (v1 API)`: those are the lines that appear on success,
+  the `DirectVideoOpen`/`DirectAudioOpen` calls are logged only when they fail. Settings > Stream > Codec offers
+  H.264 alone, and the console is asked for H.264 SDR even if the saved settings say H.265 or HDR.
+- **Note** the picture's position (the plane is placed with `NDL_DirectVideoSetArea`, letterboxed if the aspect
+  differs), the audio, and whether the first frames arrive. moonlight-tv's compatibility table marks webOS 4.3.0 as
+  broken, so the webOS version (first line of the log) matters. A set that misbehaves may need what ss4s's `webos4`
+  module does beyond these calls: its `MS_VDEC_Init` patch (`SS4S_webOS_M3_KADP_Fix`), direct audio turned off on
+  `m16p` chips (moonlight-tv#456), and `k3lp`/`k5lp` sets refused when their jail config is broken.
+- **Proven on** an OLED55C8PLA (webOS TV 4.4.3): 720p H.264 at ~30 fps and 1080p H.264 at 60 fps for about two
+  minutes each, with 0 frames lost, 0 FEC failures and 0 socket drops
+  ([webos4-v1-observed.txt](webos4-v1-observed.txt)). A webOS 4.3.0 set is still unproven (moonlight-tv marks it
+  broken), so repeat this check on each new set, and the quirks above are what a misbehaving one would need.
 
 ## Recording the results
 

@@ -1,0 +1,33 @@
+Observed the v1 NDL DirectMedia path on an LG OLED55C8PLA (webOS TV
+4.4.3, 2018), from a tester's log attached to PR #8:
+https://github.com/renjfk/hotaru-webos/pull/8#issuecomment-6946473997
+
+The TV has the v1 entry points only. The app says so once at launch,
+initialises the media library through them, and streams H.264 SDR: a
+720p run at about 30 fps, then a 1080p run at 60 fps after the settings
+changed. Both runs report 0 frames lost, 0 FEC failures and 0 socket
+drops throughout.
+
+HEAD AND THE API CHOICE
+
+  13:01:19.350 tv: OLED55C8PLA (O18_DVB), webOS TV 4.4.3
+  13:01:19.783 ndl: libNDL_directmedia.so.1 has the v1 API only (webOS 4 and older): H.264 SDR at most
+  13:01:25.642 ui: [NDL] DirectMediaInit ok (com.renjfk.hotaru)
+  13:01:25.740 ui: [NDL] 1280x720 H.264 + PCM 48000 Hz stereo (v1 API)
+
+720p RUN
+
+  13:01:26.514 chiaki: [I] Switched to profile 0, resolution: 1280x720
+  13:01:36.377 stats: 10.0 s, 29.7 fps, 0.5 Mbps, 0 frame(s) lost, 0 FEC failure(s), 0 IDR request(s), 0 recovered, socket drops 0 (total 0)
+  13:03:10.393 stats: 10.6 s, 30.0 fps, 0.4 Mbps, 0 frame(s) lost, 0 FEC failure(s), 0 IDR request(s), 0 recovered, socket drops 0 (total 0)
+  13:03:16.694 session: stopped with PS5-416
+
+1080p RUN
+
+  13:09:53.581 session: started with PS5-416 (192.168.8.135)
+  13:09:54.267 chiaki: [I] Switched to profile 0, resolution: 1920x1080
+  13:10:05.073 stats: 10.6 s, 61.5 fps, 1.0 Mbps, 0 frame(s) lost, 0 FEC failure(s), 0 IDR request(s), 0 recovered, socket drops 0 (total 0)
+  13:11:51.533 stats: 10.7 s, 60.0 fps, 0.6 Mbps, 0 frame(s) lost, 0 FEC failure(s), 0 IDR request(s), 0 recovered, socket drops 0 (total 0)
+
+webOS 4.3.0 is still untested: moonlight-tv's compatibility table marks
+it broken, so the quirks noted in TV check 16 still apply to other sets.

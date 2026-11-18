@@ -6,7 +6,8 @@
  * the session, the stream menu (see-through, adjust, restart, Share + Options, Disconnect),
  * right-stick scrolling, hotplug, every step of Add a console, simulated registrations, the
  * confirm and passcode dialogs and the empty host list. The config lives in an isolated dir
- * (HOTARU_CONFIG_DIR), wiped on every run. Run with tests/host/run.sh. */
+ * (HOTARU_CONFIG_DIR), wiped on every run. Run with tests/host/run.sh (the suite, then the short
+ * v1-settings pass that builds the Stream panel for a webOS 4 TV). */
 #include <SDL.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -28,6 +29,7 @@
 #include "platform/tv.h"
 #include "ui/dialog.h"
 #include "ui/home.h"
+#include "ui/home_internal.h"
 #include "ui/qr.h"
 #include "ui/register.h"
 #include "ui/splash.h"
@@ -249,6 +251,15 @@ static bool visible(lv_obj_t *o) {
     for (; o; o = lv_obj_get_parent(o))
         if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return false;
     return true;
+}
+/* a label with this text that is on screen now: the hidden panels hold labels of their own */
+static lv_obj_t *find_visible_text(lv_obj_t *o, const char *txt) {
+    if (lv_obj_check_type(o, &lv_label_class) && visible(o) && !strcmp(lv_label_get_text(o), txt)) return o;
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) {
+        lv_obj_t *r = find_visible_text(lv_obj_get_child(o, (int32_t)i), txt);
+        if (r) return r;
+    }
+    return NULL;
 }
 static lv_obj_t *find_type(lv_obj_t *o, const lv_obj_class_t *cls) {
     if (lv_obj_check_type(o, cls)) return o;
@@ -535,7 +546,8 @@ static void test_update_versions(void) {
            "a tag that is no version is never newer");
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    bool v1_settings = argc > 1 && !strcmp(argv[1], "v1-settings");
     log_init("/dev/stdout");
     SDL_Init(SDL_INIT_TIMER);
     lv_init();
@@ -554,34 +566,53 @@ int main(void) {
 
     if (system("rm -rf " DEV " " CONFIG_DIR) != 0) return 1; /* NOLINT(cert-env33-c): fixed paths, a fresh run */
     setenv("HOTARU_CONFIG_DIR", CONFIG_DIR, 1);              /* never the developer's own settings */
+    if (v1_settings) setenv("HOTARU_SIM_H264_ONLY", "1", 1); /* the panel is built once: this pass builds it as v1 */
     pad_plug("event9");
     fake_sysfs();
     theme_init(disp);
-    test_persistence();
-    test_tv_identity();
-    test_host_identity();
-    test_psn_account_id();
-    test_feeder();
-    test_pacer();
-    test_update_versions();
-    /* No demo consoles any more: seed three registered ones (not saved) so the Hosts list, the
-     * D-pad focus and the connect test below have something to act on. */
-    static const struct {
-        const char *name, *addr;
-        bool ps5;
-    } seed[] = {
-        { "Living-room PS5", "192.168.1.40", true },
-        { "Bedroom PS5", "192.168.1.41", true },
-        { "Study PS4 Pro", "192.168.1.52", false },
-    };
-    for (int i = 0; i < 3; i++) {
-        config_host_t h = { .is_ps5 = seed[i].ps5, .server_mac = { 0x02, 0, 0, 0, 0, (uint8_t)(i + 1) } };
-        snprintf(h.nickname, sizeof(h.nickname), "%s", seed[i].name);
-        snprintf(h.addr, sizeof(h.addr), "%s", seed[i].addr);
-        config_host_add(&h);
+    if (!v1_settings) {
+        test_persistence();
+        test_tv_identity();
+        test_host_identity();
+        test_psn_account_id();
+        test_feeder();
+        test_pacer();
+        test_update_versions();
+        /* No demo consoles any more: seed three registered ones (not saved) so the Hosts list, the
+         * D-pad focus and the connect test below have something to act on. */
+        static const struct {
+            const char *name, *addr;
+            bool ps5;
+        } seed[] = {
+            { "Living-room PS5", "192.168.1.40", true },
+            { "Bedroom PS5", "192.168.1.41", true },
+            { "Study PS4 Pro", "192.168.1.52", false },
+        };
+        for (int i = 0; i < 3; i++) {
+            config_host_t h = { .is_ps5 = seed[i].ps5, .server_mac = { 0x02, 0, 0, 0, 0, (uint8_t)(i + 1) } };
+            snprintf(h.nickname, sizeof(h.nickname), "%s", seed[i].name);
+            snprintf(h.addr, sizeof(h.addr), "%s", seed[i].addr);
+            config_host_add(&h);
+        }
     }
     app_init(ui_app_changed);
     ui_create();
+    /* a second, short pass (`tests/host/run.sh` runs it with the argument) builds the Stream panel on a v1
+     * media TV, which cannot happen in the main pass because the panel is built once and that pass is v2 */
+    if (v1_settings) {
+        expect(app_stream_h264_only() && home_settings_codec_options() == 1,
+               "a v1 media TV's Stream panel offers H.264 alone");
+        expect(find_btn(lv_scr_act(), "H.264 only: this TV's media API has no H.265 or HDR") != NULL,
+               "... and its caption says why");
+        expect(find_btn(lv_scr_act(), "H.264" BULLET "SDR" BULLET "15 Mbps") != NULL,
+               "... and the summary says H.264 SDR at the saved bitrate");
+        stream_settings_t *st = &config_get()->stream;
+        int row = 2; /* Codec */
+        expect(home_settings_key(SET_STREAM, &row, LV_KEY_ENTER) && st->codec == CODEC_H265 && !st->hdr,
+               "... and Cross on the one-choice row changes nothing, the saved H.265 stays");
+        printf("== %d failure(s)\n", g_fail);
+        return g_fail ? 1 : 0;
+    }
     const input_hooks_t hooks = { ui_tab_step, app_quit,          ui_set_pad_state, ui_scroll_fallback,
                                   ui_pad_back, ui_overlay_toggle, ui_pad_shift };
     input_init(ui_group(), &hooks);
@@ -1271,13 +1302,13 @@ int main(void) {
            "the registered console is in the saved config");
     app_reg_cancel();
 
-    /* a TV whose media library has the v1 API only (webOS 4) is refused before the network, with a
+    /* a TV whose media library has neither NDL generation is refused before the network, with a
      * what and a why; the simulation answers through HOTARU_SIM_NO_MEDIA */
     setenv("HOTARU_SIM_NO_MEDIA", "1", 1);
     app_connect();
     expect(app_conn_state() == CONN_IDLE && !strcmp(app_conn_error_what(), "This TV cannot play video") &&
                !strcmp(app_conn_error_why(), SESSION_MEDIA_WHY) && !session_active_host(),
-           "a TV without the v2 media API refuses a session before the network, with what and why");
+           "a TV with no NDL generation at all refuses a session before the network, with what and why");
     pump(600);
     expect(!strcmp(home_hero_state(), "This TV cannot play video") &&
                !strcmp(home_notice_text(), "This TV cannot play video"),
@@ -1289,6 +1320,7 @@ int main(void) {
     expect(app_conn_error_gen() == gen + 1 && !strcmp(home_notice_text(), "This TV cannot play video"),
            "... and each refusal is a new failure, even while the last one is still up");
     unsetenv("HOTARU_SIM_NO_MEDIA");
+
     app_connect(); /* the same console, with the media API there */
     pump(400);
     expect(app_conn_state() == CONN_CONNECTING && !strcmp(home_notice_text(), "") &&
@@ -1296,6 +1328,14 @@ int main(void) {
            "... and a retry that starts clears the notice and the state line");
     app_disconnect();
     pump(400);
+
+    /* a TV with only the v1 media API (webOS 4) plays H.264 SDR: the session and the settings are told so.
+     * The panel is built once at startup, on a v2 TV in this pass; the v1 panel is the v1-settings pass. */
+    setenv("HOTARU_SIM_H264_ONLY", "1", 1);
+    expect(app_stream_h264_only(), "a v1 media TV is H.264 only, as the session and the settings are told");
+    unsetenv("HOTARU_SIM_H264_ONLY");
+    expect(!app_stream_h264_only() && home_settings_codec_options() == 3,
+           "... and a v2 TV has the three codec choices the panel was built with");
 
     /* a console with one route: RIGHT from Start goes straight to its options */
     home_reset();
@@ -1438,6 +1478,22 @@ int main(void) {
     pump(3300);
     expect(restarting && reconnecting && app_conn_state() == CONN_STREAMING && !app_stream_settings_pending(),
            "closing the menu restarts the stream with the new video settings");
+    /* a v1 media TV (webOS 4) is asked for H.264 SDR whatever the saved settings say: the Stream menu's codec
+     * chip says so, and a saved H.265 + HDR is no change to restart a running stream for */
+    int codec_saved = st->codec;
+    bool hdr_saved = st->hdr;
+    setenv("HOTARU_SIM_H264_ONLY", "1", 1);
+    st->codec = CODEC_H265;
+    st->hdr = true;
+    ui_overlay_toggle();
+    pump(400);
+    expect(app_stream_h264_only() && find_visible_text(lv_scr_act(), "H.264") && !app_stream_settings_pending(),
+           "on a v1 media TV the Stream menu says H.264 and a saved H.265 + HDR waits for no restart");
+    st->codec = codec_saved; /* back before closing, so the close is not a restart for the restored values */
+    st->hdr = hdr_saved;
+    ui_overlay_toggle();
+    pump(400);
+    unsetenv("HOTARU_SIM_H264_ONLY");
     st->fps = 60;
 
     /* Disconnect: L1/R1 choose the action, Cross ends the stream at once */
