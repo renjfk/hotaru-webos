@@ -554,7 +554,8 @@ static void edit_row(int panel, int row, uint32_t key) {
     int d = key == LV_KEY_LEFT ? -1 : 1;
     switch (r->kind) {
         case ROW_SEG: {
-            int s = key == LV_KEY_ENTER ? (r->seg.sel + 1) % r->seg.n : r->seg.sel + d;
+            /* a one-choice row (the Codec row on a webOS 4 TV) has nothing to step to: Cross bumps like LEFT/RIGHT */
+            int s = key != LV_KEY_ENTER ? r->seg.sel + d : r->seg.n == 1 ? -1 : (r->seg.sel + 1) % r->seg.n;
             if (s < 0 || s >= r->seg.n) {
                 bump(r->seg.box, d);
                 return;

@@ -35,8 +35,8 @@ src/
   config/           settings, consoles, PSN account, device UID; one key=value file (config.h)
   chiaki/           session.h: the libchiaki wrapper API; session_real.c the real backend
                     (HOTARU_HAVE_LIBCHIAKI), session.c the simulation (host tests, simulator)
-  media/            ndl.[ch] NDL hardware video + PCM audio; feeder.[ch] media worker threads;
-                    pacer.[ch] even playout cadence for "Smooth playback"
+  media/            ndl.[ch] NDL hardware video + PCM audio, v2 or v1 (ndl_v1.[ch] the calls a webOS 4 TV
+                    has); feeder.[ch] media worker threads; pacer.[ch] even playout cadence for "Smooth playback"
   net/              update.[ch]: is a newer release out (GitHub's latest release, once per launch)
   vendor/           qrcodegen.[ch]: Nayuki's QR encoder, unmodified
 tests/host/         macOS behaviour tests (shim/ fakes <linux/input.h>)

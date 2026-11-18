@@ -5,11 +5,12 @@ What works, and where it was proven. The device: LG 50UP75003LF, webOS TV Lite 6
 
 Evidence comes from three places:
 
-- **TV**: the app on the device, read back from `/tmp/hotaru.log` (`scripts/tv.sh log`)
+- **TV**: the app on the device, read back from `/tmp/hotaru.log` (`scripts/tv.sh log`); the webOS 4 v1 run is in
+  [webos4-v1-observed.txt](webos4-v1-observed.txt)
 - **Probe**: a standalone probe app run on the TV before this one; its raw results are kept here:
   [ds4-map-observed.txt](ds4-map-observed.txt), [dualsense-map-observed.txt](dualsense-map-observed.txt),
   [pad-battery-observed.txt](pad-battery-observed.txt), [network-capabilities.txt](network-capabilities.txt),
-  [wifi-stalls-observed.txt](wifi-stalls-observed.txt), [webos4-v1-observed.txt](webos4-v1-observed.txt)
+  [wifi-stalls-observed.txt](wifi-stalls-observed.txt)
 - **Host**: `tests/host/run.sh` (the real modules on macOS, a fake controller, a simulated console)
 
 What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).

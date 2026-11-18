@@ -8,4 +8,7 @@ BUILD="$ROOT/out/host-tests"
 cmake -S "$ROOT/tests/host" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release -Wno-dev >/dev/null
 cmake --build "$BUILD" -j"$(sysctl -n hw.ncpu)"
 mkdir -p "$BUILD/shots"
-"$BUILD/host-tests"
+rc=0
+"$BUILD/host-tests" || rc=$((rc + $?))
+"$BUILD/host-tests" v1-settings || rc=$((rc + $?))
+exit "$rc"

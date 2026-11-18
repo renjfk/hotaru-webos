@@ -1,6 +1,6 @@
 Observed the v1 NDL DirectMedia path on an LG OLED55C8PLA (webOS TV
 4.4.3, 2018), from a tester's log attached to PR #8:
-https://github.com/renjfk/hotaru-webos/pull/8#issuecomment-6946840973
+https://github.com/renjfk/hotaru-webos/pull/8#issuecomment-6946473997
 
 The TV has the v1 entry points only. The app says so once at launch,
 initialises the media library through them, and streams H.264 SDR: a
