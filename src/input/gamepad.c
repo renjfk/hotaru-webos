@@ -73,9 +73,11 @@ static size_t g_btn_map_n = sizeof(g_ds4_buttons) / sizeof(g_ds4_buttons[0]);
 /* The tables above are LG's uhid order (webOS 6, docs/ds4-map-observed.txt). Newer TVs bind
  * the stock hid-playstation driver instead (webOS 11, docs/dualsense-map-linux-observed.txt):
  * the standard Linux layout, BTN_SOUTH = Cross from 0x130 on, the right stick on ABS_RX/RY and
- * the triggers on ABS_Z/RZ. That node is told apart at grab by BTN_THUMBR (0x13e), which the
- * uhid order never sends, and its codes are normalised to the uhid ones as they are read, so
- * the tables and everything after them stay as they are. */
+ * the triggers on ABS_Z/RZ. That node is told apart at grab by BTN_THUMBR (0x13e) without BTN_C
+ * (0x132) or BTN_Z (0x135), the rule in docs/TV-CHECKS.md: the uhid order never sends 0x13e, and a
+ * pad on the generic driver in raw HID order sends all of 0x130..0x13e (Mute on 0x13e) and stays
+ * on the tables as they are. The standard layout's codes are normalised to the uhid ones as they
+ * are read, so the tables and everything after them stay as they are. */
 static bool g_std_layout;
 
 static int std_key(int code) {
@@ -343,8 +345,9 @@ bool gamepad_try_acquire(void) {
             continue;
         }
         unsigned char keys[(KEY_CNT + 7) / 8] = { 0 };
-        g_std_layout = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) >= 0 && GETBIT(keys, BTN_THUMBR);
-        log_msg("gamepad %s: %s layout", path, g_std_layout ? "standard Linux (BTN_THUMBR)" : "LG uhid");
+        g_std_layout = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) >= 0 && GETBIT(keys, BTN_THUMBR) &&
+                       !GETBIT(keys, BTN_Z) && !GETBIT(keys, BTN_C);
+        log_msg("gamepad %s: %s layout", path, g_std_layout ? "standard Linux (BTN_THUMBR, no BTN_C/Z)" : "LG uhid");
         if (ioctl(fd, EVIOCGRAB, 1) < 0) log_msg("gamepad %s grab FAILED: %s", path, strerror(errno));
         else log_msg("gamepad %s \"%s\" grabbed", path, name);
         struct {
@@ -363,8 +366,11 @@ bool gamepad_try_acquire(void) {
         }
         g_l2.value = g_l2.min; /* a released trigger is at the axis minimum, not the middle */
         g_r2.value = g_r2.min;
-        log_msg("pad abs X %d..%d Y %d..%d Z %d..%d RZ %d..%d RX %d..%d RY %d..%d", g_lx.min, g_lx.max, g_ly.min,
-                g_ly.max, g_rx.min, g_rx.max, g_ry.min, g_ry.max, g_l2.min, g_l2.max, g_r2.min, g_r2.max);
+        /* named by the code each range came from: on the standard layout the right stick is RX/RY
+         * and the triggers Z/RZ */
+        log_msg("pad abs X %d..%d Y %d..%d %s %d..%d %s %d..%d %s %d..%d %s %d..%d", g_lx.min, g_lx.max, g_ly.min,
+                g_ly.max, g_std_layout ? "RX" : "Z", g_rx.min, g_rx.max, g_std_layout ? "RY" : "RZ", g_ry.min, g_ry.max,
+                g_std_layout ? "Z" : "RX", g_l2.min, g_l2.max, g_std_layout ? "RZ" : "RY", g_r2.min, g_r2.max);
         snprintf(g_pad_path, sizeof(g_pad_path), "%s", path);
         snprintf(g_pad_name, sizeof(g_pad_name), "%s", name);
         if (strstr(name, "DualSense")) {

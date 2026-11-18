@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/chiaki-lib-build-webos.sh - cross-compile libchiaki (chiaki-ng/lib) and its static deps for webOS
 #
-# Builds on the macOS host with the webosbrew buildroot toolchain (the one ./build.sh uses) and
+# Builds on a macOS or Linux host with the webosbrew buildroot toolchain (the one ./build.sh uses) and
 # installs a staging tree the app links against:
 #   out/chiaki-lib-staging/include   chiaki/*.h (+ the generated chiaki/config.h), curl/, openssl/, ...
 #   out/chiaki-lib-staging/lib       libchiaki.a and every static archive it needs

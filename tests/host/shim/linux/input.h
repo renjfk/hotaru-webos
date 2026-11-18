@@ -2,7 +2,8 @@
  * Declares the evdev bits input/gamepad.c uses and fakes the ioctls: FIFOs in
  * the test's INPUT_DIR answer like a DualShock 4, so the real gamepad.c code
  * (scan, grab, hotplug) runs against events the test writes into the FIFO.
- * SHIM_PAD_LAYOUT=linux makes the node report BTN_THUMBR, as hid-playstation does on webOS 11. */
+ * SHIM_PAD_LAYOUT=linux makes the node report BTN_THUMBR, as hid-playstation does on webOS 11;
+ * SHIM_PAD_LAYOUT=hid reports all of 0x130..0x13e, a pad on the generic driver in raw HID order. */
 #pragma once
 #include <stdint.h>
 #include <sys/time.h>
@@ -27,6 +28,8 @@ struct input_id { uint16_t bustype, vendor, product, version; };
 #define BTN_X              0x133
 #define BTN_GAMEPAD        0x130
 #define BTN_JOYSTICK       0x120
+#define BTN_C              0x132
+#define BTN_Z              0x135
 #define BTN_THUMBR         0x13e
 #define EVIOCGBIT(ev, len) (0x1000 + (ev))
 #define EVIOCGNAME(len)    0x2000
@@ -83,6 +86,8 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
         ((unsigned char *)arg)[0x130 / 8] |= 1 << (0x130 % 8);
         const char *layout = getenv("SHIM_PAD_LAYOUT");
         if (layout && !strcmp(layout, "linux")) ((unsigned char *)arg)[BTN_THUMBR / 8] |= 1 << (BTN_THUMBR % 8);
+        if (layout && !strcmp(layout, "hid"))
+            for (int k = 0x130; k <= BTN_THUMBR; k++) ((unsigned char *)arg)[k / 8] |= 1 << (k % 8);
         return 0;
     }
     /* SHIM_PAD_NAME picks the controller; a DualSense is as webOS shows it: no touches, no rumble */
