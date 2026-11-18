@@ -92,7 +92,7 @@ What is proven on the TV and what only in the tests is tracked in [docs/STATUS.m
 
 - An LG webOS TV in [Developer Mode](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app)
   (or rooted, with the [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel)); playing a stream
-  needs webOS 4 or newer, and a webOS 4 TV is experimental: its older media API plays H.264 SDR only
+  needs webOS 4 or newer; a webOS 4 TV plays H.264 SDR only, since its older media API has no H.265 or HDR
 - A PS5 or PS4 with Remote Play on: Settings > System > Remote Play
 - The TV on an Ethernet cable for the smoothest stream (Wi-Fi works, with Smooth playback hiding its hiccups)
 - A DualShock 4 paired with the TV (optional: the TV remote drives everything but the game)

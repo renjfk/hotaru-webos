@@ -191,8 +191,10 @@ the app then plays H.264 SDR only.
   broken, so the webOS version (first line of the log) matters. A set that misbehaves may need what ss4s's `webos4`
   module does beyond these calls: its `MS_VDEC_Init` patch (`SS4S_webOS_M3_KADP_Fix`), direct audio turned off on
   `m16p` chips (moonlight-tv#456), and `k3lp`/`k5lp` sets refused when their jail config is broken.
-- **It decides** whether the v1 path can be declared supported: no release has run it yet, and the calls follow
-  ss4s's `webos4` module rather than a proven run on this set.
+- **Proven on** an OLED55C8PLA (webOS TV 4.4.3): 720p H.264 at ~30 fps and 1080p H.264 at 60 fps for about two
+  minutes each, with 0 frames lost, 0 FEC failures and 0 socket drops
+  ([webos4-v1-observed.txt](webos4-v1-observed.txt)). A webOS 4.3.0 set is still unproven (moonlight-tv marks it
+  broken), so repeat this check on each new set, and the quirks above are what a misbehaving one would need.
 
 ## Recording the results
 

@@ -9,7 +9,7 @@ Evidence comes from three places:
 - **Probe**: a standalone probe app run on the TV before this one; its raw results are kept here:
   [ds4-map-observed.txt](ds4-map-observed.txt), [dualsense-map-observed.txt](dualsense-map-observed.txt),
   [pad-battery-observed.txt](pad-battery-observed.txt), [network-capabilities.txt](network-capabilities.txt),
-  [wifi-stalls-observed.txt](wifi-stalls-observed.txt)
+  [wifi-stalls-observed.txt](wifi-stalls-observed.txt), [webos4-v1-observed.txt](webos4-v1-observed.txt)
 - **Host**: `tests/host/run.sh` (the real modules on macOS, a fake controller, a simulated console)
 
 What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
@@ -21,7 +21,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | Native app, packaging, sideload, the display (LVGL into an SDL texture, 1080p) | TV |
 | Remote Play with a PS5 on the local network and over PSN (holepunch) | TV |
 | Hardware video (H.264, H.265) and 48 kHz audio through NDL DirectMedia | TV |
-| The media library opened at runtime (`libNDL_directmedia.so.1`, the v2 entry points resolved by name) | TV (webOS 6.5; a v1-only TV: [TV-CHECKS](TV-CHECKS.md) 16) |
+| The media library opened at runtime (`libNDL_directmedia.so.1`, the v2 entry points resolved by name) | TV (webOS 6.5; a v1-only 4.4 TV: [TV-CHECKS](TV-CHECKS.md) 16) |
 | 60 fps with no socket drops or FEC failures; Smooth playback hides the Wi-Fi stalls | TV |
 | PSN sign-in (OAuth code from the phone), the account's console list, token refresh | TV + host |
 | Settings, consoles and the PSN account kept in `conf/hotaru.conf` | TV + host |
@@ -65,7 +65,9 @@ drops, 0 FEC failures, the main thread at ~1% of a core. A `stats:` line every 1
 queue depths.
 
 **NDL.** `libNDL_directmedia.so.1` is opened at launch and the v2 entry points resolved by name (a webOS 4 TV only
-has the v1 API, and a direct call to `NDL_DirectMediaLoad()` there killed the process: issue #5).
+has the v1 API, and a direct call to `NDL_DirectMediaLoad()` there killed the process: issue #5). A webOS 4 TV uses
+the v1 calls instead: an OLED C8 on 4.4.3 streamed 1080p60 H.264 through them without a lost frame or socket drop
+([webos4-v1-observed.txt](webos4-v1-observed.txt)).
 `NDL_DirectAudioPlay` blocks once ~80 ms of PCM is queued (which paces the audio feeder);
 `NDL_DirectVideoPlay` returns in 2 ms or less in steady state (up to 80 ms right after load); the render queue holds
 5 frames at most. NDL draws on a plane below the app surface, so while streaming the surface is cleared
@@ -104,9 +106,9 @@ directory is not writable the app falls back to `/tmp/hotaru`, which a reboot cl
   `libNDL_directmedia` is opened at runtime and its entry points resolved by name: the v2 API is what ss4s
   (moonlight-tv's media layer) uses from webOS 5 on, a webOS 4 TV has the v1 API only, and a directly linked
   `NDL_DirectMediaLoad()` call there kills the process on the missing symbol (issue #5). Both generations are
-  used: a webOS 4 TV streams H.264 SDR through the v1 calls, which have never run on such a set (issue #7, TV
-  check 16), and only a TV that answers to neither gets "This TV cannot play video" as the hero's state line and
-  a notice, with no session started
+  used: a webOS 4 TV streams H.264 SDR through the v1 calls, proven on a 4.4.3 OLED C8 (issue #7, TV check 16),
+  and only a TV that answers to neither gets "This TV cannot play video" as the hero's state line and a notice,
+  with no session started
 - OpenSSL must be linked statically: a dynamic `libssl.so.1.1` fails to load and the app is relaunched in a loop
 - ~340 MB of free RAM; the two LVGL draw buffers take ~16 MB
 - Wi-Fi: the bitrate must suit the link, and the stalls above need Smooth playback; on Ethernet they are gone
