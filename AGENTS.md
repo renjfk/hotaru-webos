@@ -133,10 +133,12 @@ scripts/tv.sh install && scripts/tv.sh launch --probe && scripts/tv.sh log -f
 - **The controller map is webOS's, not hid-sony's**: buttons in HID order from 0x130 (Cross 0x131, L1 0x134, R1
   0x135, Options 0x139), right stick `ABS_Z`/`ABS_RZ`, triggers `ABS_RX`/`ABS_RY`
   ([docs/ds4-map-observed.txt](docs/ds4-map-observed.txt)). Tables are per device name; the DualSense uses the same
-  order but has no rumble and no touchpad touches on webOS
-  ([docs/dualsense-map-observed.txt](docs/dualsense-map-observed.txt)). The TV's own nodes are skipped by name
-  (`LGE ...`, `LG ...`, and the virtual `Smart Remote RCU Input`, whose keys 0x100..0x153 and `ABS_X`/`ABS_Y` do
-  pass the bitmap check), so the scan never grabs the remote
+  order but on webOS 6 has no rumble and no touchpad touches
+  ([docs/dualsense-map-observed.txt](docs/dualsense-map-observed.txt)). A webOS 11 TV binds hid-playstation
+  instead: the standard Linux order, normalised to this map as events are read, with rumble through `FF_RUMBLE`
+  ([docs/dualsense-map-linux-observed.txt](docs/dualsense-map-linux-observed.txt)). The TV's own nodes are skipped
+  by name (`LGE ...`, `LG ...`, and the virtual `Smart Remote RCU Input`, whose keys 0x100..0x153 and `ABS_X`/`ABS_Y`
+  do pass the bitmap check), so the scan never grabs the remote
 - **Text entry**: numbers are digit boxes and a number pad, free text a field and our own keyboard; a USB keyboard
   (`SDL_TEXTINPUT` -> `keypad_push_text`) and the remote's digit keys type straight in, as code points through the
   key sink. Digit key events type at once and their text echo is dropped (`input_remote_key()`)

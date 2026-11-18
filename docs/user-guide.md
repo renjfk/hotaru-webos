@@ -110,8 +110,10 @@ Settings. The TV remote's arrows, OK and Back do the same.
   short delay that hides Wi-Fi hiccups. If the picture stutters, try a lower preset, 100 or 150 ms of Smooth
   playback, or Custom with a lower bitrate.
 - **Controller**: rumble (turning it on gives a short buzz), whether the touchpad's touches reach the console, and
-  the controller in use. On LG TVs a DualSense works for every button, stick and trigger, but webOS passes no
-  rumble, adaptive trigger effects or touchpad touches through; a DualShock 4 rumbles and its touchpad works.
+  the controller in use. A DualSense works for every button, stick and trigger. On webOS 6 it cannot rumble and
+  only its touchpad click reaches the console; webOS 11 passes rumble through and keeps the touchpad on its own
+  node, which the app does not read. Adaptive trigger effects need raw HID output and never reach either. A
+  DualShock 4 rumbles and its touchpad works.
 - **PSN account**: add a console, find the consoles on your account again, sign out.
 - **Log**: what just happened (the right stick scrolls it).
 - **About**: the version, the network, and **Diagnostics**, which logs details for a bug report.

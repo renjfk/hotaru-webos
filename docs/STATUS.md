@@ -1,7 +1,8 @@
 # Status
 
 What works, and where it was proven. The device: LG 50UP75003LF, webOS TV Lite 6.5.3, kernel 4.4.84 armv7l,
-4 cores, 1.3 GB RAM (~340 MB free while the app runs), on 5 GHz Wi-Fi.
+4 cores, 1.3 GB RAM (~340 MB free while the app runs), on 5 GHz Wi-Fi. A second TV, the OLED48C55LA on webOS
+11.2.0, appears only where its result differs.
 
 Evidence comes from three places:
 
@@ -9,6 +10,7 @@ Evidence comes from three places:
   [webos4-v1-observed.txt](webos4-v1-observed.txt)
 - **Probe**: a standalone probe app run on the TV before this one; its raw results are kept here:
   [ds4-map-observed.txt](ds4-map-observed.txt), [dualsense-map-observed.txt](dualsense-map-observed.txt),
+  [dualsense-map-linux-observed.txt](dualsense-map-linux-observed.txt),
   [pad-battery-observed.txt](pad-battery-observed.txt), [network-capabilities.txt](network-capabilities.txt),
   [wifi-stalls-observed.txt](wifi-stalls-observed.txt)
 - **Host**: `tests/host/run.sh` (the real modules on macOS, a fake controller, a simulated console)
@@ -33,7 +35,8 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | One console with two routes, PSN fallback, the saved route choice | host |
 | PIN pairing | host: the libchiaki path is real but not yet run against a console |
 | HDR10 (`NDL_DirectVideoSetHDRInfo` with the VUI codes) | TV: a 1080p H.265 HDR stream plays and the call succeeds with the HDR10 defaults (no SEI in the first 120 frames); reading the SEI values is not yet seen on the TV, and the picture is not graded |
-| DualSense: the button map (the DualShock 4's); no rumble or touches reach the app | TV (probe) + host |
+| DualSense on webOS 6: the button map (the DualShock 4's); no rumble or touches reach the app | TV (probe) + host |
+| DualSense on webOS 11: the standard Linux layout, rumble through `FF_RUMBLE`, touchpad on its own unread node | TV (probe, OLED48C55LA) + host |
 | Remote number keys, Magic Remote, launch parameters | wired for both possibilities; the probe decides |
 | Rest mode on disconnect (the Disconnect card's End and sleep) | TV: the console is in rest mode 6 s after the request; host |
 
@@ -52,7 +55,10 @@ is not hid-sony's (buttons in HID order from 0x130, the right stick on `ABS_Z`/`
 `ABS_RX`/`ABS_RY`): [ds4-map-observed.txt](ds4-map-observed.txt). The touchpad is `ABS_MT_*` on the same node.
 `FF_RUMBLE` works with the node opened read-write. hid-sony also publishes its battery on the uhid node
 (`power_supply/.../capacity`, 60% while discharging), which Home and the Controller panel show; a DualSense has no
-such node (hid-generic): [pad-battery-observed.txt](pad-battery-observed.txt).
+such node (hid-generic): [pad-battery-observed.txt](pad-battery-observed.txt). A webOS 11 TV binds the stock
+hid-playstation driver instead: the node reports the standard Linux layout (BTN_THUMBR without BTN_Z / BTN_C,
+triggers on `ABS_Z`/`ABS_RZ`, right stick on `ABS_RX`/`ABS_RY`) and rumbles through `FF_RUMBLE`; its touchpad click
+is on a separate node the app does not read: [dualsense-map-linux-observed.txt](dualsense-map-linux-observed.txt).
 
 **Network.** UDP unicast and broadcast, DNS, TCP, TLS 1.3 (OpenSSL linked statically) and listening sockets all work
 for a native app: [network-capabilities.txt](network-capabilities.txt). PSN's TLS needed the CA bundle path set for

@@ -1,8 +1,9 @@
-/* input/gamepad.c - DualShock 4 via evdev.
+/* input/gamepad.c - DualShock 4 and DualSense via evdev.
  *
- * The pad is a webOS uhid device with a NON-standard map (HID button order
- * shifted onto 0x130+, right stick on ABS_Z/ABS_RZ, triggers on ABS_RX/RY):
- * see docs/ds4-map-observed.txt before touching any code below.
+ * Two layouts feed one set of tables. On webOS 6 the pad is a uhid device with a NON-standard map
+ * (HID button order shifted onto 0x130+, right stick on ABS_Z/ABS_RZ, triggers on ABS_RX/RY):
+ * see docs/ds4-map-observed.txt. On webOS 11 hid-playstation reports the standard Linux order,
+ * normalised to that map as events are read: docs/dualsense-map-linux-observed.txt.
  *
  * Hotplug: while offline, INPUT_DIR is rescanned every PAD_RESCAN_MS (the
  * node number changes across reconnects). While attached, a read error or EOF
@@ -149,7 +150,7 @@ static lv_key_t g_dpad_key;
 static Uint32 g_dpad_next, g_last_tick;
 static char g_pad_path[300], g_pad_name[160];
 static bool g_pad_seen; /* attached at least once: offline vs never found */
-/* what the node offers: a DualSense on webOS has neither (no EV_FF, no ABS_MT_*), a DualShock 4 both */
+/* what the node offers: a DualSense on webOS 6 has neither (no EV_FF, no ABS_MT_*), a DualShock 4 both */
 static bool g_can_rumble, g_can_touch;
 /* probe mode: the travel of each axis, read at grab, so a stick at full range logs a few lines and not hundreds */
 static int g_abs_span[ABS_CNT];
@@ -291,8 +292,8 @@ static void probe_event(int type, int code, int mapped, int value) {
  * <hid device>/power_supply/<name>/capacity. There is no /sys/class/power_supply here to
  * enumerate from, but the pad's own input node leads there: /sys/class/input/eventN/device
  * resolves to inputN, which sits in the HID device's input/ directory, so the HID device that
- * owns the power_supply is two levels up. A DualSense is only hid-generic, which registers no
- * battery: no node, no reading. See docs/pad-battery-observed.txt. */
+ * owns the power_supply is two levels up. A DualSense on webOS 6 is only hid-generic, which registers
+ * no battery: no node, no reading. See docs/pad-battery-observed.txt. */
 bool gamepad_battery(int *pct) {
     if (g_pad_fd < 0 || !pct) return false;
     const char *node = strrchr(g_pad_path, '/');
@@ -395,7 +396,9 @@ bool gamepad_try_acquire(void) {
                 g_abs_span[c] = ai.maximum - ai.minimum;
         }
         log_msg("gamepad: rumble %s, touchpad %s", g_can_rumble ? "yes" : "no",
-                g_can_touch ? "touches and click" : "click only");
+                g_can_touch    ? "touches and click"
+                : g_std_layout ? "its own node, not read"
+                               : "click only");
         probe_device(fd);
         memset(&g_pad, 0, sizeof(g_pad));
         g_ff_id = -1;

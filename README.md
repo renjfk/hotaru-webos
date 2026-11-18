@@ -78,11 +78,11 @@ The name is Japanese: hotaru (蛍) is a firefly, a small light glowing in anothe
 |                                  | Status                                                               |
 |----------------------------------|----------------------------------------------------------------------|
 | LG 50UP75003LF, webOS TV 6.5.3   | Developed and tested on                                              |
-| Other LG webOS TVs               | Untested: it builds for webOS's ARM toolchain, but needs trying      |
+| Other LG webOS TVs               | webOS 11 (OLED48C55LA) tested; other models still need trying         |
 | PS5                              | Streams on the local network and over PSN                            |
 | PS4 / PS4 Pro                    | Untested; firmware 7.0 or later needs your PSN account ID to pair    |
 | DualShock 4 (Bluetooth)          | Tested, with rumble                                                  |
-| DualSense (Bluetooth)            | Tested; webOS passes no rumble, touches or adaptive triggers through |
+| DualSense (Bluetooth)            | Tested; webOS 6 gives no rumble or touches, webOS 11 rumbles only    |
 
 What is proven on the TV and what only in the tests is tracked in [docs/STATUS.md](docs/STATUS.md).
 

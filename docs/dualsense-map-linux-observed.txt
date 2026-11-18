@@ -73,7 +73,9 @@ Options, PS, L3, R3, then left stick up, right stick up, L2 and R2 all the way:
   pad: abs 0x05 = 63 .. 255, then 214 .. 0          <- R2 all the way, released
 
 CONCLUSIONS
-- BTN_THUMBR (0x13e) tells the layouts apart at grab: LG's uhid order never sends it.
-  gamepad.c normalises this layout's codes to LG's as they are read; the tables stay.
+- BTN_THUMBR (0x13e) with neither BTN_Z (0x135) nor BTN_C (0x132) tells the layouts apart at
+  grab: LG's uhid order always sends those two, and a generic-driver pad in raw HID order can send
+  15 buttons and so 0x13e too. gamepad.c normalises this layout's codes to LG's as they are read;
+  the tables stay.
 - Rumble works through the node's FF_RUMBLE.
 - Touchpad touches and the click are on their own node, which the app does not read.

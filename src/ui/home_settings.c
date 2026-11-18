@@ -419,7 +419,7 @@ static void refresh_pad(void) {
                                    : st == PAD_OFFLINE ? "Offline: turn it on again"
                                                        : "Not found: pair it with the TV");
     lv_obj_set_style_text_color(g.pad_state, C(st == PAD_ONLINE ? COL_OK : st == PAD_OFFLINE ? COL_ERR : COL_MUTED), 0);
-    /* its battery, when the pad reports one (a DualShock 4 does, a DualSense on this TV does not) */
+    /* its battery, when the pad reports one (a DualShock 4 does, a DualSense on webOS 6 does not) */
     int pct = 0;
     if (st == PAD_ONLINE && input_pad_battery(&pct)) {
         uint32_t col = pct <= BATT_CRIT ? COL_ERR : pct <= BATT_LOW ? COL_WARN : COL_OK;
@@ -430,13 +430,13 @@ static void refresh_pad(void) {
     } else {
         lv_obj_add_flag(g.pad_batt, LV_OBJ_FLAG_HIDDEN);
     }
-    /* what this pad can do on this TV (a DualSense: neither rumble nor touches reach the app) */
+    /* what this pad can do on this TV (a DualSense on webOS 6: neither rumble nor touches reach the app) */
     bool on = st == PAD_ONLINE;
     lv_label_set_text(g.rows[SET_PAD][0].caption, on && !input_pad_rumbles()
                                                       ? "This controller cannot rumble on this TV"
                                                       : "Vibrate with in-game feedback");
     lv_label_set_text(g.rows[SET_PAD][1].caption, on && !input_pad_touches()
-                                                      ? "Only its click reaches the console on this TV"
+                                                      ? "Its touchpad does not reach the console on this TV"
                                                       : "Send touches to the console");
 }
 

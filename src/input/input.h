@@ -86,11 +86,11 @@ void input_remote_key(SDL_Keycode key, Uint16 mod);
 void input_remote_text(const char *utf8); /* SDL_TEXTINPUT: USB/desktop keyboard typing */
 pad_state_t input_pad_state(void);
 const char *input_pad_name(void); /* the attached controller's name, "" if none */
-/* its battery, 0..100; false when the controller reports none. On this TV only the DualShock 4
- * does (hid-sony publishes it in sysfs); a DualSense is hid-generic and has no battery node. */
+/* its battery, 0..100; false when the controller reports none. On webOS 6 only the DualShock 4
+ * does (hid-sony publishes it in sysfs); a DualSense there is hid-generic and has no battery node. */
 bool input_pad_battery(int *pct);
-bool input_pad_rumbles(void); /* the attached controller can rumble on this TV (a DualSense cannot) */
-bool input_pad_touches(void); /* its touchpad reports touches, not only the click (a DualSense: the click) */
+bool input_pad_rumbles(void); /* the attached controller can rumble on this TV (on webOS 6 a DualSense cannot) */
+bool input_pad_touches(void); /* its touchpad reports touches, not only the click (on webOS 6 a DualSense: the click) */
 
 /* While a session streams the pad drives the console, not the UI: its keys and scrolling
  * stop and the raw state is read with input_pad_get(). Set by ui.c on a

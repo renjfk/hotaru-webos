@@ -98,8 +98,9 @@ Turn the controller off and on again while the app runs; press every button once
 
 ### 8. DualSense
 
-Done on the 50UP75003LF: [dualsense-map-observed.txt](dualsense-map-observed.txt). Repeat on another TV or webOS
-version: pair a DualSense with the TV and launch with probe mode.
+Done on the 50UP75003LF: [dualsense-map-observed.txt](dualsense-map-observed.txt), and on the OLED48C55LA (webOS
+11.2.0, hid-playstation): [dualsense-map-linux-observed.txt](dualsense-map-linux-observed.txt). Repeat on another TV
+or webOS version: pair a DualSense with the TV and launch with probe mode.
 
 - **Look for** `pad: ... "DualSense Wireless Controller": a gamepad`, the `pad: keys` list and the `pad: abs` ranges,
   then press every control in the order the [user guide](user-guide.md#troubleshooting) gives. The `pad: key` lines
