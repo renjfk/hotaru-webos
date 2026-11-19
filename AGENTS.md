@@ -140,8 +140,10 @@ scripts/tv.sh install && scripts/tv.sh launch --probe && scripts/tv.sh log -f
   hid-sony driver's Sixaxis node instead: keys 0x120..0x12f and 0x2c0..0x2c2, no hat (its D-pad is four buttons,
   turned into hat events), its triggers are pressures on `ABS 0x30`/`0x31`, no `FF_RUMBLE`, and `ABS_MT_*` names on
   its pressure axes (so touches are off by kind, not by bitmap)
-  ([docs/ds3-map-observed.txt](docs/ds3-map-observed.txt)). A layout is told apart at grab (BTN_THUMBR, else the
-  name) and normalised to the uhid order as events are read. The TV's own nodes are skipped
+  ([docs/ds3-map-observed.txt](docs/ds3-map-observed.txt)). A newer kernel's hid-sony maps the DS3 to the standard
+  codes instead, with the D-pad on `BTN_DPAD_*` (0x220..0x223): that node is taken for the standard layout and its
+  D-pad is not read yet. A layout is told apart at grab (BTN_THUMBR, else the name) and normalised to the uhid order
+  as events are read. The TV's own nodes are skipped
   by name (`LGE ...`, `LG ...`, and the virtual `Smart Remote RCU Input`, whose keys 0x100..0x153 and `ABS_X`/`ABS_Y`
   do pass the bitmap check), so the scan never grabs the remote
 - **Text entry**: numbers are digit boxes and a number pad, free text a field and our own keyboard; a USB keyboard

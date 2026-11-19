@@ -997,8 +997,9 @@ int main(int argc, char **argv) {
     setenv("SHIM_PAD_LAYOUT", "ds3", 1);
     pad_plug("event13");
     pump(1800);
-    bool ds3 = input_pad_state() == PAD_ONLINE && !input_pad_touches();
-    expect(ds3, "a DualShock 3 is grabbed, and its pressure bytes are not taken for a touchpad");
+    bool ds3 = input_pad_state() == PAD_ONLINE && strcmp(input_pad_title(), "DualShock 3") == 0 &&
+               !input_pad_rumbles() && !input_pad_touches();
+    expect(ds3, "a DualShock 3 is named, grabbed, cannot rumble and its pressures are not a touchpad");
     input_set_streaming(true); /* the presses below stay out of Home */
     static const struct {
         int code;
@@ -1042,11 +1043,12 @@ int main(int argc, char **argv) {
     pad_ev(EV_KEY, 0x125, 0);
     pump(60);
     expect(dpad, "a DualShock 3's D-pad buttons become the hat switch's bits");
-    /* the triggers: travel on 0x30 / 0x31, not ABS_RX / ABS_RY */
-    pad_ev(EV_ABS, 0x30, 255);
-    pad_ev(EV_ABS, 0x31, 128);
+    /* the triggers: travel on 0x30 / 0x31, whose 0..100 range in the shim is what says the grab read
+     * them there and not on the node's absent ABS_RX / ABS_RY (50 of 100 -> 127 of 255) */
+    pad_ev(EV_ABS, 0x30, 50);
+    pad_ev(EV_ABS, 0x31, 25);
     pump(60);
-    bool trig = input_pad_get(&p) && p.l2 == 255 && p.r2 > 120 && p.r2 < 136;
+    bool trig = input_pad_get(&p) && p.l2 > 125 && p.l2 < 130 && p.r2 > 61 && p.r2 < 66;
     pad_ev(EV_ABS, 0x30, 0);
     pad_ev(EV_ABS, 0x31, 0);
     /* and the right stick on ABS_Z / ABS_RZ, as on LG's order */
@@ -1056,6 +1058,16 @@ int main(int argc, char **argv) {
     pad_ev(EV_ABS, ABS_Z, 128);
     pump(60);
     expect(trig, "a DualShock 3's triggers are pressures on 0x30 / 0x31, its right stick on Z / RZ");
+    /* the same axes carry ABS_MT_* names (0x35 is Circle's pressure): they are not touches */
+    pad_ev(EV_ABS, 0x35, 200);
+    pad_ev(EV_ABS, 0x39, 3);
+    pump(60);
+    bool no_touch = input_pad_get(&p) && !p.touch_down && p.touch_x == 0;
+    pad_ev(EV_ABS, 0x35, 0);
+    pad_ev(EV_ABS, 0x39, -1);
+    pump(60);
+    expect(no_touch && input_pad_get(&p) && !p.touch_down,
+           "a DualShock 3's ABS_MT_* pressure bytes never read as touches");
     input_set_streaming(false);
     while (home_index() > 0) key(SDLK_LEFT);
     pump(200);

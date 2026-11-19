@@ -31,10 +31,10 @@ bits:
   L3                0x121        L3
   R3                0x122        R3
   Start             0x123        Options
-  D-pad up          0x124        (a button, turned into ABS_HAT0Y -1)
-  D-pad right       0x125        (the hat switch of the other layouts is four buttons here)
-  D-pad down        0x126        (ABS_HAT0Y +1)
-  D-pad left        0x127        (ABS_HAT0X -1 / +1)
+  D-pad up          0x124        a button, turned into ABS_HAT0Y -1
+  D-pad right       0x125        (the hat switch of the other layouts is four buttons here:
+  D-pad down        0x126         ABS_HAT0X +1, ABS_HAT0Y +1)
+  D-pad left        0x127        ABS_HAT0X -1
   L2 (click)        0x128        L2, with its travel on ABS 0x30
   R2 (click)        0x129        R2, with its travel on ABS 0x31
   L1                0x12a        L1
@@ -48,10 +48,12 @@ bits:
 
 The order is confirmed by the pressures. Every analog button reports beside its own pressure
 axis, and in the log the offset between a button and its axis is the same for all of them:
-0x124 -> 0x2c, 0x125 -> 0x2d, 0x126 -> 0x2e, 0x127 -> 0x2f, 0x128 -> 0x30, 0x12c -> 0x34.
-The DS3's pressures run up, right, down, left, L2, R2, L1, R1, triangle, circle, cross, square
-from ABS 0x2c (the four axes before it, 0x28..0x2b, never moved), which is what makes the
-D-pad the first four buttons and the face buttons the last four.
+0x124 -> 0x2c, 0x125 -> 0x2d, 0x126 -> 0x2e, 0x128 -> 0x30, 0x12c -> 0x34. D-pad left is the one
+whose pressure (0x2f, ABS_MT_SLOT) the kernel's input core swallows, so its press logged no axis;
+the offset is the same one as its neighbour's. The DS3's pressures run up, right, down, left, L2,
+R2, L1, R1, triangle, circle, cross, square from ABS 0x2c (the four axes before it, 0x28..0x2b,
+never moved), which is what makes the D-pad the first four buttons and the face buttons the last
+four.
 
 AXES IN HOTARU'S TERMS
   left stick X/Y    ABS_X / ABS_Y       0..255, centre 128
@@ -59,7 +61,7 @@ AXES IN HOTARU'S TERMS
   L2 travel         ABS 0x30            0..255, released = 0
   R2 travel         ABS 0x31            0..255, released = 0
   D-pad             no ABS_HAT0X/Y: the four buttons above
-  button pressures  ABS 0x2c..0x37      not read (the console takes buttons, not pressures)
+  button pressures  ABS 0x2c..0x2f, 0x32..0x37   not read (the console takes buttons, not pressures)
   motion            ABS 0x3b..0x3e      not read (no motion forwarding)
 
 NO RUMBLE
@@ -76,11 +78,18 @@ by the bitmap.
 
 WHAT IS STILL TO CONFIRM ON A TV
 The tester pressed PS, Triangle, L2, the four D-pad buttons and both sticks; Cross, Circle,
-Square, L1, R1, L3, R3, Select and Start never appear in that log, so their names rest on the
-descriptor order above. One probe pass in the order the user guide gives (Cross, Circle, Square,
+Square, L1, R1, R2, L3, R3, Select and Start never appear in that log, so their names rest on
+the descriptor order above. One probe pass in the order the user guide gives (Cross, Circle, Square,
 Triangle, L1, R1, L2 and R2 fully down, L3, R3, Select, Start, PS, the D-pad, both sticks up)
 settles it: each press should read itself, L2 and R2 should move ABS 0x30 / 0x31, and the pad
 should say `hid-sony Sixaxis (DualShock 3) layout`.
 
 A DS3 paired over Bluetooth should be the same node: hid-sony decodes both transports into that
 one descriptor. Not observed yet.
+
+A NEWER KERNEL
+Kernels from about 4.12 map the DS3 to the standard gamepad codes instead (the DualShock 4's
+layout, with the D-pad on BTN_DPAD_UP..RIGHT, 0x220..0x223). Such a node is taken for the
+standard Linux layout, which normalises the sticks, the triggers and the face buttons, but the
+four BTN_DPAD_* buttons read nothing: the D-pad would be dead there and its art and name would
+still say DualShock 3. Not seen on any TV yet; TV check 17 asks for it.

@@ -700,10 +700,16 @@ static void build_connecting(void) {
 static void connecting_hints(void) {
     lv_obj_clean(g.conn_hints);
     ctl_hint(g.conn_hints, PS_CIRCLE, "Cancel");
-    if (input_pad_state() == PAD_ONLINE)
-        ctl_hint_keys(g.conn_hints, art_pad(input_pad_name()) == ART_DUALSENSE ? "Create" : "Share", "Options",
-                      "The menu during the game");
-    else ctl_hint_key(g.conn_hints, "Back", "The menu during the game");
+    if (input_pad_state() == PAD_ONLINE) {
+        pad_kind_t kind = input_pad_kind();
+        ctl_hint_keys(g.conn_hints,
+                      kind == PAD_KIND_DS3         ? "Select"
+                      : kind == PAD_KIND_DUALSENSE ? "Create"
+                                                   : "Share",
+                      kind == PAD_KIND_DS3 ? "Start" : "Options", "The menu during the game");
+    } else {
+        ctl_hint_key(g.conn_hints, "Back", "The menu during the game");
+    }
 }
 
 static void breathe_cb(void *img, int32_t v) { lv_img_set_zoom(img, (uint16_t)v); }

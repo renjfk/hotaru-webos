@@ -1,6 +1,6 @@
 /* input/gamepad.c - DualShock 4, DualSense and DualShock 3 via evdev.
  *
- * Two layouts feed one set of tables. On webOS 6 the pad is a uhid device with a NON-standard map
+ * Three layouts feed one set of tables. On webOS 6 the pad is a uhid device with a NON-standard map
  * (HID button order shifted onto 0x130+, right stick on ABS_Z/ABS_RZ, triggers on ABS_RX/RY):
  * see docs/ds4-map-observed.txt. On webOS 11 hid-playstation reports the standard Linux order,
  * normalised to that map as events are read: docs/dualsense-map-linux-observed.txt. A DualShock 3
@@ -183,6 +183,16 @@ static int layout_abs(int code) {
     return code;
 }
 
+/* the raw code behind a uhid one, for the ranges read at grab: layout_abs() is not its own inverse
+ * for the DS3, whose triggers travel on axes of their own */
+static int layout_raw_abs(int code) {
+    if (g_layout == LAYOUT_DS3) {
+        if (code == ABS_RX) return DS3_L2_AXIS;
+        if (code == ABS_RY) return DS3_R2_AXIS;
+    }
+    return layout_abs(code);
+}
+
 static const char *btn_name(uint32_t b) {
     static const char *const n[] = { "Cross", "Circle", "Square", "Triangle", "Left",    "Right", "Up",       "Down",
                                      "L1",    "R1",     "L3",     "R3",       "Options", "Share", "Touchpad", "PS" };
@@ -284,7 +294,7 @@ static const char *axis_role(int code) {
         case ABS_HAT0Y: return "D-pad Y";
         case ABS_MT_TRACKING_ID:
         case ABS_MT_POSITION_X:
-        case ABS_MT_POSITION_Y: return "touchpad";
+        case ABS_MT_POSITION_Y: return g_can_touch ? "touchpad" : NULL; /* a DS3's pressures */
         default: return NULL;
     }
 }
@@ -457,7 +467,7 @@ bool gamepad_try_acquire(void) {
                      { DS4_RSTICK_Y, &g_ry }, { ABS_RX, &g_l2 }, { ABS_RY, &g_r2 } };
         for (size_t i = 0; i < sizeof(axes) / sizeof(axes[0]); i++) {
             struct input_absinfo ai;
-            int code = layout_abs(axes[i].code);
+            int code = layout_raw_abs(axes[i].code);
             if (ioctl(fd, EVIOCGABS(code), &ai) == 0 && ai.maximum > ai.minimum) {
                 axes[i].axis->min = ai.minimum;
                 axes[i].axis->max = ai.maximum;

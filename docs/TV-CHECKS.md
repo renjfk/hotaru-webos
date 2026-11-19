@@ -215,7 +215,11 @@ this pass is what confirms it on a TV.
 - **It decides** whether the Sixaxis bit order in `ds3_key()` is right: a button that lands wrong is a fix there,
   saved next to [ds3-map-observed.txt](ds3-map-observed.txt). It also settles whether hid-sony decodes a Bluetooth
   DS3 into the same node, and which pressure axis the triggers use on another TV or kernel.
-- **Note** there is no rumble on such a TV (hid-sony without `CONFIG_SONY_FF`), and no touchpad to read.
+- **Note** there is no rumble on such a TV (hid-sony without `CONFIG_SONY_FF`), and no touchpad to read. A newer
+  kernel (from about 4.12) maps the DS3 to the standard gamepad codes with the D-pad on `BTN_DPAD_*`
+  (0x220..0x223), which Hotaru does not read yet: such a node would log `standard Linux ... layout` for a DS3, every
+  button but the D-pad would read itself and the D-pad would read nothing. Note the kernel version and whether the
+  D-pad logs at all.
 
 ## Recording the results
 

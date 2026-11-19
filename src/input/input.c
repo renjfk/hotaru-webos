@@ -55,11 +55,18 @@ void input_remote_text(const char *utf8) {
 
 pad_state_t input_pad_state(void) { return gamepad_state(); }
 const char *input_pad_name(void) { return gamepad_name(); }
-const char *input_pad_title(void) {
+pad_kind_t input_pad_kind(void) {
     const char *name = gamepad_name();
-    if (strstr(name, "DualSense")) return "DualSense";
-    if (strstr(name, "PLAYSTATION(R)3")) return "DualShock 3";
-    return "DualShock 4";
+    if (strstr(name, "DualSense")) return PAD_KIND_DUALSENSE;
+    if (strstr(name, "PLAYSTATION(R)3")) return PAD_KIND_DS3;
+    return PAD_KIND_DS4;
+}
+const char *input_pad_title(void) {
+    switch (input_pad_kind()) {
+        case PAD_KIND_DUALSENSE: return "DualSense";
+        case PAD_KIND_DS3: return "DualShock 3";
+        default: return "DualShock 4";
+    }
 }
 bool input_pad_battery(int *pct) { return gamepad_battery(pct); }
 

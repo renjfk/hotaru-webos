@@ -132,6 +132,12 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
         memset(ai, 0, sizeof(*ai));
         ai->maximum = 255;
         ai->value = 128;
+        /* the DS3's triggers travel on axes of their own: a range unlike the others tells a grab
+         * that reads the right ones from one that asks for ABS_RX / ABS_RY */
+        if (ds3 && (req == 0x4000 + 0x30 || req == 0x4000 + 0x31)) {
+            ai->maximum = 100;
+            ai->value = 0;
+        }
         return 0;
     }
     if (req == EVIOCGVERSION) {

@@ -86,7 +86,8 @@ wakes it first), or **not on this network** (it then plays over PSN if it has th
 Play**.
 
 While playing, the controller drives the console. The TV remote's **Back**, or **Share + Options** together on the
-controller (**Create + Options** on a DualSense; the Connecting screen reminds you), opens the menu over the game:
+controller (**Create + Options** on a DualSense, **Select + Start** on a DualShock 3; the Connecting screen reminds
+you), opens the menu over the game:
 stream quality, smooth playback, the controller, and **Disconnect**. Back or Circle closes it. Changing the video
 settings there restarts the stream when the menu closes. Under the console's name the menu shows the session clock
 and what the stream is actually doing right now (the video rate and the frame rate the console is sending), so you
