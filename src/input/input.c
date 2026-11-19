@@ -11,8 +11,7 @@ void input_init(lv_group_t *group, const input_hooks_t *hooks) {
     if (hooks) g_in.hooks = *hooks;
     keypad_init(group);
     if (gamepad_try_acquire()) {
-        log_event(LOG_OK, "INPUT", "%s ready: D-pad or left stick to move, Cross to select",
-                  strstr(gamepad_name(), "DualSense") ? "DualSense" : "DualShock 4");
+        log_event(LOG_OK, "INPUT", "%s ready: D-pad or left stick to move, Cross to select", input_pad_title());
     } else {
         log_msg("no gamepad found");
         log_event(LOG_WARN, "INPUT", "no gamepad found, use the TV remote (still looking)");
@@ -56,6 +55,12 @@ void input_remote_text(const char *utf8) {
 
 pad_state_t input_pad_state(void) { return gamepad_state(); }
 const char *input_pad_name(void) { return gamepad_name(); }
+const char *input_pad_title(void) {
+    const char *name = gamepad_name();
+    if (strstr(name, "DualSense")) return "DualSense";
+    if (strstr(name, "PLAYSTATION(R)3")) return "DualShock 3";
+    return "DualShock 4";
+}
 bool input_pad_battery(int *pct) { return gamepad_battery(pct); }
 
 void input_set_streaming(bool on) {

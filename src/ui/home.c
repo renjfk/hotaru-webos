@@ -533,9 +533,7 @@ static void cards_refresh(void) {
     if (s->smooth_ms) lv_label_set_text_fmt(g.card_val[CARD_SMOOTH], "%d ms", s->smooth_ms);
     else lv_label_set_text(g.card_val[CARD_SMOOTH], "Off");
     pad_state_t st = input_pad_state();
-    art_id_t id = art_pad(input_pad_name());
-    lv_label_set_text(g.card_val[CARD_PAD],
-                      st == PAD_ONLINE ? (id == ART_DUALSENSE ? "DualSense" : "DualShock 4") : "No controller");
+    lv_label_set_text(g.card_val[CARD_PAD], st == PAD_ONLINE ? input_pad_title() : "No controller");
     int pct = 0;
     if (st == PAD_ONLINE && input_pad_battery(&pct)) {
         lv_label_set_text_fmt(g.card_pad_batt, "Battery %d%%", pct);
@@ -1125,7 +1123,7 @@ void home_set_pad(pad_state_t state) {
     lv_obj_set_style_bg_color(g.pad_dot, C(col[state]), 0);
     lv_obj_set_style_shadow_color(g.pad_dot, C(col[state]), 0);
     art_id_t id = art_pad(input_pad_name());
-    if (id != g.pad_art) { /* a DualSense or a DualShock 4: the drawings follow */
+    if (id != g.pad_art) { /* a DualSense, DualShock 3 or DualShock 4: the drawings follow */
         g.pad_art = id;
         if (g.pad_img) lv_obj_del(g.pad_img);
         g.pad_img = art_create(g.pad_box, id, 44);

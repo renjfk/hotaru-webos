@@ -158,7 +158,7 @@ static void tick_cb(lv_timer_t *t) {
                           (unsigned)(s % 60), rate);
 }
 
-/* the Controller card shows the pad in use (a DualSense or a DualShock 4) */
+/* the Controller card shows the pad in use (a DualSense, DualShock 3 or DualShock 4) */
 static void pad_art_set(art_id_t id) {
     if (g.pad_art && id == g.pad_id) return;
     if (g.pad_art) lv_obj_del(g.pad_art);

@@ -113,7 +113,8 @@ Settings. The TV remote's arrows, OK and Back do the same.
   the controller in use. A DualSense works for every stick and trigger and every button but Mute. On webOS 6 it
   cannot rumble and only its touchpad click reaches the console; on webOS 11 it rumbles, but neither its touches
   nor its click reach the console. Adaptive trigger effects never reach the console on either version. A
-  DualShock 4 rumbles and its touchpad works.
+  DualShock 4 rumbles and its touchpad works. A DualShock 3 plays with every button, both sticks, its D-pad and its
+  analog L2/R2, but it has no touchpad and no rumble, and Select + Start opens the menu over the game.
 - **PSN account**: add a console, find the consoles on your account again, sign out.
 - **Log**: what just happened (the right stick scrolls it).
 - **About**: the version, the network, and **Diagnostics**, which logs details for a bug report.

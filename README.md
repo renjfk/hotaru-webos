@@ -69,7 +69,8 @@ The name is Japanese: hotaru (蛍) is a firefly, a small light glowing in anothe
 - **Adding a console** - a full-screen setup: the PIN on a big number pad (or the remote's number keys), the
   address filled in when the console is found on the network, PSN sign-in with a QR code for your phone
 - **The DualShock 4 is forwarded** - buttons, sticks, triggers, touchpad and rumble; Share + Options opens the
-  menu over the game (stream quality, smoothing, controller, disconnect)
+  menu over the game (stream quality, smoothing, controller, disconnect). A DualShock 3 forwards the same way
+  (Select + Start for the menu), and a DualSense forwards its buttons and triggers
 - **Diagnostics** - a switch in Settings logs raw input, discovery answers and frame timing, for checking a new
   TV or controller
 
@@ -82,6 +83,7 @@ The name is Japanese: hotaru (蛍) is a firefly, a small light glowing in anothe
 | PS5                              | Streams on the local network and over PSN                            |
 | PS4 / PS4 Pro                    | Untested; firmware 7.0 or later needs your PSN account ID to pair    |
 | DualShock 4 (Bluetooth)          | Tested, with rumble                                                  |
+| DualShock 3 (USB or Bluetooth)   | The map is written from one probe log; the confirming TV pass is pending |
 | DualSense (Bluetooth)            | Tested; rumble on webOS 11 only; no touches or adaptive triggers     |
 
 What is proven on the TV and what only in the tests is tracked in [docs/STATUS.md](docs/STATUS.md).

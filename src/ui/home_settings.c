@@ -288,7 +288,7 @@ static void build_pad(void) {
     lv_obj_set_pos(g.pad_name, 0, 250);
     g.pad_state = ctl_label(c, FONT_CAPTION, COL_MUTED, "");
     lv_obj_set_pos(g.pad_state, 0, 296);
-    /* the level hid-sony publishes for a DualShock 4; hidden for a pad that reports none */
+    /* the level hid-sony publishes for a DualShock 4 or 3; hidden for a pad that reports none */
     g.pad_batt = ctl_obj(c);
     lv_obj_set_size(g.pad_batt, SUM_CW, SP_XL);
     lv_obj_set_pos(g.pad_batt, 0, PAD_BATT_Y);
@@ -414,12 +414,12 @@ static void refresh_pad(void) {
         lv_obj_clean(g.pad_art_box);
         lv_obj_align(art_create(g.pad_art_box, id, 190), LV_ALIGN_LEFT_MID, -6, 0);
     }
-    lv_label_set_text(g.pad_name, id == ART_DUALSENSE ? "DualSense" : "DualShock 4");
+    lv_label_set_text(g.pad_name, input_pad_title());
     lv_label_set_text(g.pad_state, st == PAD_ONLINE    ? "Connected"
                                    : st == PAD_OFFLINE ? "Offline: turn it on again"
                                                        : "Not found: pair it with the TV");
     lv_obj_set_style_text_color(g.pad_state, C(st == PAD_ONLINE ? COL_OK : st == PAD_OFFLINE ? COL_ERR : COL_MUTED), 0);
-    /* its battery, when the pad reports one (a DualShock 4 does, a DualSense on webOS 6 does not) */
+    /* its battery, when the pad reports one (a DualShock 4 or 3 does, a DualSense on webOS 6 does not) */
     int pct = 0;
     if (st == PAD_ONLINE && input_pad_battery(&pct)) {
         uint32_t col = pct <= BATT_CRIT ? COL_ERR : pct <= BATT_LOW ? COL_WARN : COL_OK;

@@ -22,7 +22,7 @@ lv_key_t keypad_from_sdl(SDL_Keycode key);
 void scroll_tick(float sx, float sy, float dt); /* normalised -1..1; 0, 0 stops */
 void scroll_reset(void);                        /* pad lost, streaming: drop what is left over */
 
-/* gamepad.c: evdev DualShock 4 */
+/* gamepad.c: evdev DualShock 4, DualSense and DualShock 3 */
 bool gamepad_try_acquire(void);
 void gamepad_tick(void);
 pad_state_t gamepad_state(void);
