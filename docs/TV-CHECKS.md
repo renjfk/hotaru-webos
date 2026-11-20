@@ -202,9 +202,10 @@ the app then plays H.264 SDR only.
 
 ### 17. DualShock 3
 
-Done once from a probe log on an OLED55C8PLA (webOS TV 4.4.3), where a DS3 over USB is the kernel's hid-sony node
-in its Sixaxis layout ([ds3-map-observed.txt](ds3-map-observed.txt)). The map has run in the host tests only, so
-this pass is what confirms it on a TV.
+Done on an OLED55C8PLA (webOS TV 4.4.3), where a DS3 over USB is the kernel's hid-sony node in its Sixaxis
+layout ([ds3-map-observed.txt](ds3-map-observed.txt)): the map was written from one probe log, and the tester's pass
+with the PR #14 build pressed every control and each read itself. Repeat it on another TV, webOS version or kernel, and
+for a DS3 over Bluetooth, which has not been seen yet.
 
 - **Look for** `gamepad ...: hid-sony Sixaxis (DualShock 3) layout` and `grabbed`, then the `pad: keys` list
   (0x120..0x12f and 0x2c0..0x2c2) and the trigger ranges (L2 and R2 on `ABS 0x30`/`0x31`). Press every control in the
@@ -215,6 +216,8 @@ this pass is what confirms it on a TV.
 - **It decides** whether the Sixaxis bit order in `ds3_key()` is right: a button that lands wrong is a fix there,
   saved next to [ds3-map-observed.txt](ds3-map-observed.txt). It also settles whether hid-sony decodes a Bluetooth
   DS3 into the same node, and which pressure axis the triggers use on another TV or kernel.
+- **Proven on** the OLED55C8PLA above: every control read itself with the PR #14 build. No log of that pass is kept
+  next to [ds3-map-observed.txt](ds3-map-observed.txt).
 - **Note** there is no rumble on such a TV (hid-sony without `CONFIG_SONY_FF`), and no touchpad to read. A newer
   kernel (from about 4.12) maps the DS3 to the standard gamepad codes with the D-pad on `BTN_DPAD_*`
   (0x220..0x223), which Hotaru does not read yet: such a node would log `standard Linux ... layout` for a DS3, every

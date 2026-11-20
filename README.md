@@ -84,7 +84,7 @@ The name is Japanese: hotaru (蛍) is a firefly, a small light glowing in anothe
 | PS5                              | Streams on the local network and over PSN                            |
 | PS4 / PS4 Pro                    | Untested; firmware 7.0 or later needs your PSN account ID to pair    |
 | DualShock 4 (Bluetooth)          | Tested, with rumble                                                  |
-| DualShock 3 (USB)               | The map is written from one probe log; the confirming TV pass is pending |
+| DualShock 3 (USB)               | Tested; no rumble and no touchpad                                     |
 | DualSense (Bluetooth)            | Tested; rumble on webOS 11 only; no touches or adaptive triggers     |
 
 What is proven on the TV and what only in the tests is tracked in [docs/STATUS.md](docs/STATUS.md).

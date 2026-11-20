@@ -30,7 +30,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | Settings, consoles and the PSN account kept in `conf/hotaru.conf` | TV + host |
 | DualShock 4: grab, the button map, forwarding to the console, rumble | TV (probe + earlier builds) + host |
 | DualShock 4 battery on Home, the Controller panel and the stream menu (sysfs `power_supply`) | TV (probe) + host |
-| DualShock 3 on hid-sony: the Sixaxis layout normalised, the D-pad as buttons, the triggers as pressures, no rumble | host (from a webOS 4 probe log: [TV-CHECKS](TV-CHECKS.md) 17) |
+| DualShock 3 on hid-sony: the Sixaxis layout normalised, the D-pad as buttons, the triggers as pressures, no rumble | TV (a tester's pass on an OLED C8: [TV-CHECKS](TV-CHECKS.md) 17) + host |
 | Home, Add a console, the dialogs, the menu over the game (this UI) | host + simulator: the earlier tabbed UI ran on the TV |
 | Console discovery: state, firmware, waking before connecting, following an address | host (simulated console) |
 | One console with two routes, PSN fallback, the saved route choice | host |
@@ -64,7 +64,8 @@ node the app does not read: [dualsense-map-linux-observed.txt](dualsense-map-lin
 the kernel hid-sony driver with its Sixaxis descriptor, a third layout: its own button order from 0x120, the D-pad as
 four buttons (no hat), the triggers as pressures on `ABS 0x30`/`0x31`, no force feedback (LG builds hid-sony without
 `CONFIG_SONY_FF`) and no touchpad, though its pressure axes carry `ABS_MT_*` names:
-[ds3-map-observed.txt](ds3-map-observed.txt).
+[ds3-map-observed.txt](ds3-map-observed.txt). It is mapped from one probe log and a tester's pass with the PR #14
+build on an OLED55C8PLA (webOS 4.4.3) pressed every control, which read itself.
 
 **Network.** UDP unicast and broadcast, DNS, TCP, TLS 1.3 (OpenSSL linked statically) and listening sockets all work
 for a native app: [network-capabilities.txt](network-capabilities.txt). PSN's TLS needed the CA bundle path set for

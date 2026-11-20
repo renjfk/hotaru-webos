@@ -76,14 +76,14 @@ ABS_MT_POSITION_X), so a node that simply looks for that bit would call it a tou
 pressures to the console as touches. gamepad.c turns touches off for the DS3 by its layout, not
 by the bitmap.
 
-WHAT IS STILL TO CONFIRM ON A TV
-The tester pressed PS, Triangle, L2, the four D-pad buttons and both sticks; Cross, Circle,
-Square, L1, R1, R2, L3, R3, Select and Start never appear in that log, so their names rest on
-the descriptor order above. One probe pass in the order the user guide gives (Cross, Circle, Square,
-Triangle, L1, R1, L2 and R2 fully down, L3, R3, Select, Start, PS, the D-pad, both sticks up)
-settles it: each press should read itself, L2 and R2 should move ABS 0x30 / 0x31, and the pad
-should say `hid-sony Sixaxis (DualShock 3) layout`.
+CONFIRMED ON A TV
+The first log showed PS, Triangle, L2, the four D-pad buttons and both sticks; Cross, Circle,
+Square, L1, R1, R2, L3, R3, Select and Start never appeared in it, so their names rested on the
+descriptor order above. The tester's pass with the PR #14 build on the same OLED55C8PLA pressed
+every control and all of them read themselves, so the table is right. That pass was not captured
+as a log, which is why this file keeps the derivation above.
 
+WHAT IS STILL UNPROVEN
 A DS3 paired over Bluetooth should be the same node: hid-sony decodes both transports into that
 one descriptor. Not observed yet.
 
