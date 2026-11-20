@@ -164,10 +164,10 @@ When creating issues, please follow these naming conventions:
 
 ## Development
 
-- **Simulator** - `sim/run.sh` builds the whole app for macOS and runs it in a window: the keyboard is the TV
+- **Simulator** - `sim/run.sh` builds the whole app for macOS or Linux and runs it in a window: the keyboard is the TV
   remote, the mouse wheel the right stick. With a native libchiaki (`scripts/chiaki-lib-build-macos.sh`) it talks to
   real consoles and PSN; without, sessions and pairing are simulated.
-- **Tests** - `tests/host/run.sh` (macOS, `brew install sdl2`) drives the real modules offscreen with a fake
+- **Tests** - `tests/host/run.sh` (macOS or Linux, with SDL2) drives the real modules offscreen with a fake
   controller and writes a screenshot of every screen to `out/host-tests/shots/`.
 - **Screenshots** - the README's images are those renders (`mise run screenshots` remakes them);
   `mise run screenshots:check` reports the ones that no longer match the app, which a release requires.

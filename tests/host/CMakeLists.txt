@@ -1,4 +1,4 @@
-# Host (macOS) behaviour tests: every src/ module except main.c and the SDL
+# Host (macOS or Linux) behaviour tests: every src/ module except main.c and the SDL
 # display, rendered offscreen with a fake evdev pad. Run via tests/host/run.sh.
 cmake_minimum_required(VERSION 3.16)
 project(hotaru-host-tests C)
@@ -25,3 +25,8 @@ target_compile_definitions(host-tests PRIVATE INPUT_DIR="${CMAKE_BINARY_DIR}/dev
 target_include_directories(host-tests PRIVATE ${CMAKE_SOURCE_DIR}/shim ${APP}/src ${SDL2_INCLUDE_DIRS})
 target_compile_options(host-tests PRIVATE -Wall -Wextra -Wno-unused-function)
 target_link_libraries(host-tests PRIVATE lvgl ${SDL2_LINK_LIBRARIES})
+# libm is part of libSystem on macOS; glibc keeps it apart
+find_library(MATH_LIB m)
+if(MATH_LIB)
+    target_link_libraries(host-tests PRIVATE ${MATH_LIB})
+endif()

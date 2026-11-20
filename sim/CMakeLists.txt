@@ -1,7 +1,8 @@
-# LG webOS TV simulator (macOS): builds the real app (main.c + display.c
+# LG webOS TV simulator (macOS or Linux): builds the real app (main.c + display.c
 # included) against SDL2 + LVGL and runs it in a window. See sim/run.sh.
 #
-# Needs `brew install sdl2` and LVGL in third_party/ (./build.sh fetches it).
+# Needs SDL2 (`brew install sdl2`, or `dnf install SDL2-devel`) and LVGL in third_party/
+# (./build.sh fetches it).
 # gamepad.c is compiled against tests/host/shim so no /dev/input is required;
 # INPUT_DIR points at a nonexistent dir, so the app runs on the keyboard (the TV remote) alone.
 cmake_minimum_required(VERSION 3.16)
@@ -26,6 +27,11 @@ target_compile_definitions(hotaru-sim PRIVATE HOTARU_SIM INPUT_DIR="${CMAKE_BINA
 target_include_directories(hotaru-sim PRIVATE ${APP}/tests/host/shim ${SDL2_INCLUDE_DIRS})
 target_compile_options(hotaru-sim PRIVATE -Wall -Wextra)
 target_link_libraries(hotaru-sim PRIVATE lvgl ${SDL2_LINK_LIBRARIES})
+# libm is part of libSystem on macOS; glibc keeps it apart
+find_library(MATH_LIB m)
+if(MATH_LIB)
+    target_link_libraries(hotaru-sim PRIVATE ${MATH_LIB})
+endif()
 
 # Native libchiaki (optional): when scripts/chiaki-lib-build-macos.sh has staged
 # it, build the REAL session backend (chiaki/session_real.c) so the simulator
