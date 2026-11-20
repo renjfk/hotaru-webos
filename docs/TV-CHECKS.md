@@ -200,6 +200,30 @@ the app then plays H.264 SDR only.
   ([webos4-v1-observed.txt](webos4-v1-observed.txt)). A webOS 4.3.0 set is still unproven (moonlight-tv marks it
   broken), so repeat this check on each new set, and the quirks above are what a misbehaving one would need.
 
+### 17. DualShock 3
+
+Done on an OLED55C8PLA (webOS TV 4.4.3), where a DS3 over USB is the kernel's hid-sony node in its Sixaxis
+layout ([ds3-map-observed.txt](ds3-map-observed.txt)): the map was written from one probe log, and the tester's pass
+with the PR #14 build pressed every control and each read itself. Repeat it on another TV, webOS version or kernel, and
+for a DS3 over Bluetooth, which has not been seen yet.
+
+- **Look for** `gamepad ...: hid-sony Sixaxis (DualShock 3) layout` and `grabbed`, then the `pad: keys` list
+  (0x120..0x12f and 0x2c0..0x2c2) and the trigger ranges (L2 and R2 on `ABS 0x30`/`0x31`). Press every control in the
+  order the [user guide](user-guide.md#troubleshooting) gives: each `pad: key` line should name what Hotaru read
+  (Cross at 0x12e, Circle at 0x12d, Square at 0x12f, Triangle at 0x12c, L1/R1 at 0x12a/0x12b, Select/Start at
+  0x120/0x123, PS at 0x2c0), a D-pad press should say `Hotaru reads D-pad up` and its three siblings, and L2/R2
+  should move `0x30`/`0x31`. `gamepad: rumble no, touchpad none` is what this TV gives.
+- **It decides** whether the Sixaxis bit order in `ds3_key()` is right: a button that lands wrong is a fix there,
+  saved next to [ds3-map-observed.txt](ds3-map-observed.txt). It also settles whether hid-sony decodes a Bluetooth
+  DS3 into the same node, and which pressure axis the triggers use on another TV or kernel.
+- **Proven on** the OLED55C8PLA above: every control read itself with the PR #14 build. No log of that pass is kept
+  next to [ds3-map-observed.txt](ds3-map-observed.txt).
+- **Note** there is no rumble on such a TV (hid-sony without `CONFIG_SONY_FF`), and no touchpad to read. A newer
+  kernel (from about 4.12) maps the DS3 to the standard gamepad codes with the D-pad on `BTN_DPAD_*`
+  (0x220..0x223), which Hotaru does not read yet: such a node would log `standard Linux ... layout` for a DS3, every
+  button but the D-pad would read itself and the D-pad would read nothing. Note the kernel version and whether the
+  D-pad logs at all.
+
 ## Recording the results
 
 Update the table in [STATUS.md](STATUS.md), keep raw evidence next to it (like

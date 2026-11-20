@@ -1,9 +1,11 @@
-/* input/gamepad.c - DualShock 4 and DualSense via evdev.
+/* input/gamepad.c - DualShock 4, DualSense and DualShock 3 via evdev.
  *
- * Two layouts feed one set of tables. On webOS 6 the pad is a uhid device with a NON-standard map
+ * Three layouts feed one set of tables. On webOS 6 the pad is a uhid device with a NON-standard map
  * (HID button order shifted onto 0x130+, right stick on ABS_Z/ABS_RZ, triggers on ABS_RX/RY):
  * see docs/ds4-map-observed.txt. On webOS 11 hid-playstation reports the standard Linux order,
- * normalised to that map as events are read: docs/dualsense-map-linux-observed.txt.
+ * normalised to that map as events are read: docs/dualsense-map-linux-observed.txt. A DualShock 3
+ * on the kernel's hid-sony driver is the Sixaxis layout, normalised the same way: its own button
+ * order from 0x120, no hat switch and its triggers as pressures: docs/ds3-map-observed.txt.
  *
  * Hotplug: while offline, INPUT_DIR is rescanned every PAD_RESCAN_MS (the
  * node number changes across reconnects). While attached, a read error or EOF
@@ -33,6 +35,32 @@
 #define DS4_OPTIONS  0x139
 #define DS4_RSTICK_X ABS_Z /* not ABS_RX: that is the L2 trigger here */
 #define DS4_RSTICK_Y ABS_RZ
+
+/* A DualShock 3 on the kernel's hid-sony driver reports the Sixaxis layout instead
+ * (docs/ds3-map-observed.txt): 19 buttons from 0x120 in the pad's own bit order, no hat switch (the
+ * D-pad is four of those buttons), the triggers' travel as 0..255 pressures on ABS 0x30/0x31, and on
+ * LG's kernel no force feedback (hid-sony without CONFIG_SONY_FF). Its codes are normalised to LG's
+ * uhid order as they are read, like the standard layout's, and the D-pad's buttons become hat
+ * events, so the tables and everything after them stay as they are. */
+#define DS3_SELECT   0x120 /* Select: Share on a DualShock 4 */
+#define DS3_L3       0x121
+#define DS3_R3       0x122
+#define DS3_START    0x123 /* Start: Options */
+#define DS3_UP       0x124
+#define DS3_RIGHT    0x125
+#define DS3_DOWN     0x126
+#define DS3_LEFT     0x127
+#define DS3_L2       0x128 /* the click; its travel is ABS 0x30 */
+#define DS3_R2       0x129 /* ... and ABS 0x31 */
+#define DS3_L1       0x12a
+#define DS3_R1       0x12b
+#define DS3_TRIANGLE 0x12c
+#define DS3_CIRCLE   0x12d
+#define DS3_CROSS    0x12e
+#define DS3_SQUARE   0x12f
+#define DS3_PS       0x2c0
+#define DS3_L2_AXIS  0x30
+#define DS3_R2_AXIS  0x31
 
 #define STICK_DEADZONE    0.15f
 #define DPAD_REPEAT_DELAY 350 /* ms before a held D-pad starts repeating */
@@ -78,8 +106,10 @@ static size_t g_btn_map_n = sizeof(g_ds4_buttons) / sizeof(g_ds4_buttons[0]);
  * (0x132) or BTN_Z (0x135), the rule in docs/TV-CHECKS.md: the uhid order never sends 0x13e, and a
  * pad on the generic driver in raw HID order sends all of 0x130..0x13e (Mute on 0x13e) and stays
  * on the tables as they are. The standard layout's codes are normalised to the uhid ones as they
- * are read, so the tables and everything after them stay as they are. */
-static bool g_std_layout;
+ * are read, so the tables and everything after them stay as they are. A DualShock 3 is the third
+ * layout, told apart by name and normalised the same way (ds3_key(), ds3_abs()). */
+typedef enum { LAYOUT_UHID, LAYOUT_STD, LAYOUT_DS3 } layout_t;
+static layout_t g_layout = LAYOUT_UHID;
 
 static int std_key(int code) {
     switch (code) {
@@ -109,6 +139,58 @@ static int std_abs(int code) {
         case ABS_RY: return ABS_RZ;
         default: return code;
     }
+}
+
+/* the Sixaxis layout's own bit order, as LG's uhid order (docs/ds3-map-observed.txt) */
+static int ds3_key(int code) {
+    switch (code) {
+        case DS3_SQUARE: return 0x130;
+        case DS3_CROSS: return 0x131;
+        case DS3_CIRCLE: return 0x132;
+        case DS3_TRIANGLE: return 0x133;
+        case DS3_L1: return 0x134;
+        case DS3_R1: return 0x135;
+        case DS3_L2: return 0x136;
+        case DS3_R2: return 0x137;
+        case DS3_SELECT: return 0x138;
+        case DS3_START: return 0x139;
+        case DS3_L3: return 0x13a;
+        case DS3_R3: return 0x13b;
+        case DS3_PS: return 0x13c;
+        default: return -1;
+    }
+}
+
+/* the DS3's trigger travel is a pressure on its own axis, where the uhid map has ABS_RX / ABS_RY */
+static int ds3_abs(int code) {
+    switch (code) {
+        case DS3_L2_AXIS: return ABS_RX;
+        case DS3_R2_AXIS: return ABS_RY;
+        default: return code;
+    }
+}
+
+/* the layout's own codes, normalised to the uhid ones as they are read; -1: no table knows it */
+static int layout_key(int code) {
+    if (g_layout == LAYOUT_STD) return std_key(code);
+    if (g_layout == LAYOUT_DS3) return ds3_key(code);
+    return code;
+}
+
+static int layout_abs(int code) {
+    if (g_layout == LAYOUT_STD) return std_abs(code);
+    if (g_layout == LAYOUT_DS3) return ds3_abs(code);
+    return code;
+}
+
+/* the raw code behind a uhid one, for the ranges read at grab: layout_abs() is not its own inverse
+ * for the DS3, whose triggers travel on axes of their own */
+static int layout_raw_abs(int code) {
+    if (g_layout == LAYOUT_DS3) {
+        if (code == ABS_RX) return DS3_L2_AXIS;
+        if (code == ABS_RY) return DS3_R2_AXIS;
+    }
+    return layout_abs(code);
 }
 
 static const char *btn_name(uint32_t b) {
@@ -146,6 +228,7 @@ static int g_ff_id = -1;         /* uploaded FF_RUMBLE effect id, -1 when unavai
 static uint8_t g_rum_l, g_rum_r; /* the magnitudes last applied */
 static bool g_ff_warned;         /* log a failed rumble upload once */
 static int g_hatx, g_haty;
+static uint8_t g_ds3_dpad; /* the DS3's D-pad buttons held (no hat switch: they become hat events) */
 static lv_key_t g_dpad_key;
 static Uint32 g_dpad_next, g_last_tick;
 static char g_pad_path[300], g_pad_name[160];
@@ -211,7 +294,7 @@ static const char *axis_role(int code) {
         case ABS_HAT0Y: return "D-pad Y";
         case ABS_MT_TRACKING_ID:
         case ABS_MT_POSITION_X:
-        case ABS_MT_POSITION_Y: return "touchpad";
+        case ABS_MT_POSITION_Y: return g_can_touch ? "touchpad" : NULL; /* a DS3's pressures */
         default: return NULL;
     }
 }
@@ -231,6 +314,19 @@ static const char *linux_abs_name(int code) {
         case 0x36: return "ABS_MT_POSITION_Y";
         case 0x39: return "ABS_MT_TRACKING_ID";
         case 0x3a: return "ABS_MT_PRESSURE";
+        default: return NULL;
+    }
+}
+
+/* the DS3's D-pad is four buttons where the other layouts have a hat switch: no table knows them,
+ * and they become hat events (see ds3_dpad_event) */
+static bool ds3_dpad_button(int code) { return code >= DS3_UP && code <= DS3_LEFT; }
+static const char *ds3_dpad_name(int code) {
+    switch (code) {
+        case DS3_UP: return "D-pad up";
+        case DS3_RIGHT: return "D-pad right";
+        case DS3_DOWN: return "D-pad down";
+        case DS3_LEFT: return "D-pad left";
         default: return NULL;
     }
 }
@@ -271,6 +367,7 @@ static void probe_event(int type, int code, int mapped, int value) {
         const char *verb = value == 1 ? "down" : value == 0 ? "up" : "repeat";
         for (size_t i = 0; i < g_btn_map_n; i++)
             if (g_btn_map[i].code == mapped) read = btn_name(g_btn_map[i].btn);
+        if (g_layout == LAYOUT_DS3 && ds3_dpad_name(code)) read = ds3_dpad_name(code);
         log_probe("pad: key 0x%x %s %s, Hotaru reads %s", code, verb, std ? std : "unlisted", read);
     } else if (type == EV_ABS && code >= 0 && code < 64) {
         static int last[64];
@@ -352,9 +449,15 @@ bool gamepad_try_acquire(void) {
             continue;
         }
         unsigned char keys[(KEY_CNT + 7) / 8] = { 0 };
-        g_std_layout = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) >= 0 && GETBIT(keys, BTN_THUMBR) &&
-                       !GETBIT(keys, BTN_Z) && !GETBIT(keys, BTN_C);
-        log_msg("gamepad %s: %s layout", path, g_std_layout ? "standard Linux (BTN_THUMBR, no BTN_C/Z)" : "LG uhid");
+        bool std = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) >= 0 && GETBIT(keys, BTN_THUMBR) &&
+                   !GETBIT(keys, BTN_Z) && !GETBIT(keys, BTN_C);
+        g_layout = LAYOUT_UHID;
+        if (std) g_layout = LAYOUT_STD;
+        else if (strstr(name, "PLAYSTATION(R)3")) g_layout = LAYOUT_DS3;
+        log_msg("gamepad %s: %s layout", path,
+                g_layout == LAYOUT_STD   ? "standard Linux (BTN_THUMBR, no BTN_C/Z)"
+                : g_layout == LAYOUT_DS3 ? "hid-sony Sixaxis (DualShock 3)"
+                                         : "LG uhid");
         if (ioctl(fd, EVIOCGRAB, 1) < 0) log_msg("gamepad %s grab FAILED: %s", path, strerror(errno));
         else log_msg("gamepad %s \"%s\" grabbed", path, name);
         struct {
@@ -364,7 +467,7 @@ bool gamepad_try_acquire(void) {
                      { DS4_RSTICK_Y, &g_ry }, { ABS_RX, &g_l2 }, { ABS_RY, &g_r2 } };
         for (size_t i = 0; i < sizeof(axes) / sizeof(axes[0]); i++) {
             struct input_absinfo ai;
-            int code = g_std_layout ? std_abs(axes[i].code) : axes[i].code;
+            int code = layout_raw_abs(axes[i].code);
             if (ioctl(fd, EVIOCGABS(code), &ai) == 0 && ai.maximum > ai.minimum) {
                 axes[i].axis->min = ai.minimum;
                 axes[i].axis->max = ai.maximum;
@@ -374,10 +477,13 @@ bool gamepad_try_acquire(void) {
         g_l2.value = g_l2.min; /* a released trigger is at the axis minimum, not the middle */
         g_r2.value = g_r2.min;
         /* named by the code each range came from: on the standard layout the right stick is RX/RY
-         * and the triggers Z/RZ */
+         * and the triggers Z/RZ; a DualShock 3's triggers are pressures on 0x30/0x31 */
+        const char *rsx = g_layout == LAYOUT_STD ? "RX" : "Z", *rsy = g_layout == LAYOUT_STD ? "RY" : "RZ";
+        const char *l2 = g_layout == LAYOUT_STD ? "Z" : g_layout == LAYOUT_DS3 ? "0x30" : "RX";
+        const char *r2 = g_layout == LAYOUT_STD ? "RZ" : g_layout == LAYOUT_DS3 ? "0x31" : "RY";
         log_msg("pad abs X %d..%d Y %d..%d %s %d..%d %s %d..%d %s %d..%d %s %d..%d", g_lx.min, g_lx.max, g_ly.min,
-                g_ly.max, g_std_layout ? "RX" : "Z", g_rx.min, g_rx.max, g_std_layout ? "RY" : "RZ", g_ry.min, g_ry.max,
-                g_std_layout ? "Z" : "RX", g_l2.min, g_l2.max, g_std_layout ? "RZ" : "RY", g_r2.min, g_r2.max);
+                g_ly.max, rsx, g_rx.min, g_rx.max, rsy, g_ry.min, g_ry.max, l2, g_l2.min, g_l2.max, r2, g_r2.min,
+                g_r2.max);
         snprintf(g_pad_path, sizeof(g_pad_path), "%s", path);
         snprintf(g_pad_name, sizeof(g_pad_name), "%s", name);
         if (strstr(name, "DualSense")) {
@@ -389,8 +495,11 @@ bool gamepad_try_acquire(void) {
         }
         unsigned char ff[(FF_CNT + 7) / 8] = { 0 }, abs_bits[(ABS_CNT + 7) / 8] = { 0 };
         g_can_rumble = ioctl(fd, EVIOCGBIT(EV_FF, sizeof(ff)), ff) >= 0 && GETBIT(ff, FF_RUMBLE);
-        g_can_touch =
+        /* A DualShock 3 has no touchpad, but it sends its button pressures on axes named ABS_MT_*
+         * too (0x35 among them), so its kind decides, not the bitmap (docs/ds3-map-observed.txt) */
+        bool has_mt =
             ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs_bits)), abs_bits) >= 0 && GETBIT(abs_bits, ABS_MT_POSITION_X);
+        g_can_touch = has_mt && g_layout != LAYOUT_DS3;
         memset(g_abs_span, 0, sizeof(g_abs_span));
         for (int c = 0; c < ABS_CNT; c++) {
             struct input_absinfo ai;
@@ -398,11 +507,13 @@ bool gamepad_try_acquire(void) {
                 g_abs_span[c] = ai.maximum - ai.minimum;
         }
         log_msg("gamepad: rumble %s, touchpad %s", g_can_rumble ? "yes" : "no",
-                g_can_touch    ? "touches and click"
-                : g_std_layout ? "on its own node (not read)"
-                               : "click only");
+                g_can_touch              ? "touches and click"
+                : g_layout == LAYOUT_STD ? "on its own node (not read)"
+                : g_layout == LAYOUT_DS3 ? "none"
+                                         : "click only");
         probe_device(fd);
         memset(&g_pad, 0, sizeof(g_pad));
+        g_ds3_dpad = 0;
         g_ff_id = -1;
         g_rum_l = g_rum_r = 0;
         g_pad_fd = fd;
@@ -425,6 +536,7 @@ static void gamepad_lost(const char *why) {
     g_pad_fd = -1;
     scroll_reset();
     g_hatx = g_haty = 0;
+    g_ds3_dpad = 0;
     g_dpad_key = 0;
     memset(&g_pad, 0, sizeof(g_pad)); /* nothing stays held on the console side either */
     memset(&g_chord, 0, sizeof(g_chord));
@@ -475,6 +587,30 @@ static void dpad_event(int code, int value) {
     if (value) keypad_push(k);
     g_dpad_key = k;
     g_dpad_next = SDL_GetTicks() + DPAD_REPEAT_DELAY;
+}
+
+/* The DS3's D-pad: four buttons where the other layouts have a hat switch. They are turned into
+ * hat events, so the bits, the UI keys and their repeat stay in one place (dpad_event()). */
+#define DS3_DPAD_UP    1
+#define DS3_DPAD_RIGHT 2
+#define DS3_DPAD_DOWN  4
+#define DS3_DPAD_LEFT  8
+
+static void ds3_dpad_event(int code, int value) {
+    static const struct {
+        int code;
+        uint8_t bit;
+    } pad[] = {
+        { DS3_UP, DS3_DPAD_UP }, { DS3_RIGHT, DS3_DPAD_RIGHT }, { DS3_DOWN, DS3_DPAD_DOWN }, { DS3_LEFT, DS3_DPAD_LEFT }
+    };
+    for (size_t i = 0; i < sizeof(pad) / sizeof(pad[0]); i++) {
+        if (pad[i].code != code) continue;
+        if (value) g_ds3_dpad |= pad[i].bit;
+        else g_ds3_dpad = (uint8_t)(g_ds3_dpad & ~pad[i].bit);
+        break;
+    }
+    dpad_event(ABS_HAT0X, (g_ds3_dpad & DS3_DPAD_RIGHT ? 1 : 0) - (g_ds3_dpad & DS3_DPAD_LEFT ? 1 : 0));
+    dpad_event(ABS_HAT0Y, (g_ds3_dpad & DS3_DPAD_DOWN ? 1 : 0) - (g_ds3_dpad & DS3_DPAD_UP ? 1 : 0));
 }
 
 /* normalised stick axis in -1..1 with deadzone and a soft response curve */
@@ -592,13 +728,19 @@ void gamepad_tick(void) {
     ssize_t n;
     while ((n = read(g_pad_fd, &ev, sizeof(ev))) == (ssize_t)sizeof(ev)) {
         int raw = ev.code;
-        if (g_std_layout && ev.type == EV_KEY) {
-            int code = std_key(ev.code);
+        /* the DS3's D-pad: four buttons where a hat switch would be (no table knows them) */
+        if (ev.type == EV_KEY && g_layout == LAYOUT_DS3 && ds3_dpad_button(raw)) {
+            probe_event(ev.type, raw, -1, ev.value);
+            ds3_dpad_event(raw, ev.value);
+            continue;
+        }
+        if (ev.type == EV_KEY && g_layout != LAYOUT_UHID) {
+            int code = layout_key(ev.code);
             probe_event(ev.type, raw, code, ev.value);
             if (code < 0) continue; /* no button the tables know */
             ev.code = (uint16_t)code;
         } else {
-            if (g_std_layout && ev.type == EV_ABS) ev.code = (uint16_t)std_abs(ev.code);
+            if (ev.type == EV_ABS) ev.code = (uint16_t)layout_abs(ev.code);
             probe_event(ev.type, raw, ev.code, ev.value);
         }
         if (ev.type == EV_KEY) gamepad_button(ev.code, ev.value);
@@ -610,9 +752,10 @@ void gamepad_tick(void) {
             else if (ev.code == ABS_RX) g_l2.value = ev.value; /* L2 analog is ABS_RX here */
             else if (ev.code == ABS_RY) g_r2.value = ev.value; /* R2 analog is ABS_RY here */
             else if (ev.code == ABS_HAT0X || ev.code == ABS_HAT0Y) dpad_event(ev.code, ev.value);
-            else if (ev.code == ABS_MT_TRACKING_ID) g_pad.touch_down = ev.value >= 0; /* the console's only */
-            else if (ev.code == ABS_MT_POSITION_X) g_pad.touch_x = (uint16_t)ev.value;
-            else if (ev.code == ABS_MT_POSITION_Y) g_pad.touch_y = (uint16_t)ev.value;
+            /* a DS3 sends button pressures on axes named like these: g_can_touch is off for it */
+            else if (g_can_touch && ev.code == ABS_MT_TRACKING_ID) g_pad.touch_down = ev.value >= 0;
+            else if (g_can_touch && ev.code == ABS_MT_POSITION_X) g_pad.touch_x = (uint16_t)ev.value;
+            else if (g_can_touch && ev.code == ABS_MT_POSITION_Y) g_pad.touch_y = (uint16_t)ev.value;
         }
     }
     if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {

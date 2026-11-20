@@ -3,7 +3,9 @@
  * the test's INPUT_DIR answer like a DualShock 4, so the real gamepad.c code
  * (scan, grab, hotplug) runs against events the test writes into the FIFO.
  * SHIM_PAD_LAYOUT=linux makes the node report BTN_THUMBR, as hid-playstation does on webOS 11;
- * SHIM_PAD_LAYOUT=hid reports all of 0x130..0x13e, a pad on the generic driver in raw HID order. */
+ * SHIM_PAD_LAYOUT=hid reports all of 0x130..0x13e, a pad on the generic driver in raw HID order;
+ * SHIM_PAD_LAYOUT=ds3 reports a DualShock 3 on hid-sony: the Sixaxis keys from 0x120, no hat,
+ * the trigger pressures on 0x30/0x31 and no force feedback. */
 #pragma once
 #include <stdint.h>
 #include <sys/time.h>
@@ -84,6 +86,11 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
     const char *layout = getenv("SHIM_PAD_LAYOUT");
     if (req == 0x1000 + EV_KEY) {
         memset(arg, 0, (KEY_CNT + 7) / 8);
+        if (layout && !strcmp(layout, "ds3")) {
+            for (int k = 0x120; k <= 0x12f; k++) ((unsigned char *)arg)[k / 8] |= 1 << (k % 8);
+            for (int k = 0x2c0; k <= 0x2c2; k++) ((unsigned char *)arg)[k / 8] |= 1 << (k % 8);
+            return 0;
+        }
         ((unsigned char *)arg)[0x130 / 8] |= 1 << (0x130 % 8);
         if (layout && !strcmp(layout, "linux")) ((unsigned char *)arg)[BTN_THUMBR / 8] |= 1 << (BTN_THUMBR % 8);
         if (layout && !strcmp(layout, "hid"))
@@ -93,14 +100,20 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
     /* SHIM_PAD_NAME picks the controller; a DualSense on webOS 6 has no touches and no rumble, while
      * SHIM_PAD_LAYOUT=linux gives it webOS 11's hid-playstation rumble */
     const char *name = getenv("SHIM_PAD_NAME") ? getenv("SHIM_PAD_NAME") : "Wireless Controller";
-    bool dualsense = strstr(name, "DualSense") != NULL;
+    bool dualsense = strstr(name, "DualSense") != NULL, ds3 = layout && !strcmp(layout, "ds3");
     if (req == 0x1000 + EV_ABS) {
         memset(arg, 0, (ABS_CNT + 7) / 8);
         ((unsigned char *)arg)[0] |= 3;
-        if (!dualsense) ((unsigned char *)arg)[ABS_MT_POSITION_X / 8] |= 1 << (ABS_MT_POSITION_X % 8);
+        if (ds3) /* the sticks, then 19 button pressures from 0x28 and the motion axes from 0x3b */
+            for (int k = 0x28; k <= 0x3e; k++) ((unsigned char *)arg)[k / 8] |= 1 << (k % 8);
+        else if (!dualsense) ((unsigned char *)arg)[ABS_MT_POSITION_X / 8] |= 1 << (ABS_MT_POSITION_X % 8);
         return 0;
     }
     if (req == 0x1000 + EV_FF) {
+        if (ds3) { /* LG's kernel builds hid-sony without CONFIG_SONY_FF: an empty bitmap */
+            memset(arg, 0, (FF_CNT + 7) / 8);
+            return 0;
+        }
         if (dualsense && !(layout && !strcmp(layout, "linux"))) {
             errno = EINVAL;
             return -1;
@@ -119,6 +132,12 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
         memset(ai, 0, sizeof(*ai));
         ai->maximum = 255;
         ai->value = 128;
+        /* the DS3's triggers travel on axes of their own: a range unlike the others tells a grab
+         * that reads the right ones from one that asks for ABS_RX / ABS_RY */
+        if (ds3 && (req == 0x4000 + 0x30 || req == 0x4000 + 0x31)) {
+            ai->maximum = 100;
+            ai->value = 0;
+        }
         return 0;
     }
     if (req == EVIOCGVERSION) {

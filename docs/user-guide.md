@@ -86,7 +86,8 @@ wakes it first), or **not on this network** (it then plays over PSN if it has th
 Play**.
 
 While playing, the controller drives the console. The TV remote's **Back**, or **Share + Options** together on the
-controller (**Create + Options** on a DualSense; the Connecting screen reminds you), opens the menu over the game:
+controller (**Create + Options** on a DualSense, **Select + Start** on a DualShock 3; the Connecting screen reminds
+you), opens the menu over the game:
 stream quality, smooth playback, the controller, and **Disconnect**. Back or Circle closes it. Changing the video
 settings there restarts the stream when the menu closes. Under the console's name the menu shows the session clock
 and what the stream is actually doing right now (the video rate and the frame rate the console is sending), so you
@@ -113,7 +114,8 @@ Settings. The TV remote's arrows, OK and Back do the same.
   the controller in use. A DualSense works for every stick and trigger and every button but Mute. On webOS 6 it
   cannot rumble and only its touchpad click reaches the console; on webOS 11 it rumbles, but neither its touches
   nor its click reach the console. Adaptive trigger effects never reach the console on either version. A
-  DualShock 4 rumbles and its touchpad works.
+  DualShock 4 rumbles and its touchpad works. A DualShock 3 plays with every button, both sticks, its D-pad and its
+  analog L2/R2, but it has no touchpad and no rumble, and Select + Start opens the menu over the game.
 - **PSN account**: add a console, find the consoles on your account again, sign out.
 - **Log**: what just happened (the right stick scrolls it).
 - **About**: the version, the network, and **Diagnostics**, which logs details for a bug report.

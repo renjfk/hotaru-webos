@@ -1,7 +1,7 @@
 /* input/input.h - all user input, fed into LVGL.
  *
  * Sources: the TV remote (SDL key events -> LVGL keypad indev) and a
- * DualShock 4 read straight from evdev (EVIOCGRAB, hotplug-aware). The pad:
+ * DualShock 4, DualShock 3 or DualSense read straight from evdev (EVIOCGRAB, hotplug-aware). The pad:
  *   D-pad       -> keypad keys, same queue as the remote, auto-repeat
  *   left stick  -> the same keys as the D-pad (a second D-pad, with repeat)
  *   Cross       -> ENTER
@@ -27,6 +27,9 @@
 #include <lvgl.h>
 
 typedef enum { PAD_NONE, PAD_ONLINE, PAD_OFFLINE } pad_state_t;
+
+/* the controllers the map knows; the UI names the pad and its menu chord from it */
+typedef enum { PAD_KIND_DS4, PAD_KIND_DS3, PAD_KIND_DUALSENSE } pad_kind_t;
 
 /* Canonical pad button bits (a DualShock 4 today). The session layer maps these to the
  * console protocol (chiaki/session.h SESSION_PAD_BTN_*), so input never depends on chiaki.
@@ -85,7 +88,9 @@ void input_tick(void); /* every main-loop iteration: pad, hotplug, repeat, scrol
 void input_remote_key(SDL_Keycode key, Uint16 mod);
 void input_remote_text(const char *utf8); /* SDL_TEXTINPUT: USB/desktop keyboard typing */
 pad_state_t input_pad_state(void);
-const char *input_pad_name(void); /* the attached controller's name, "" if none */
+const char *input_pad_name(void);  /* the attached controller's name, "" if none */
+pad_kind_t input_pad_kind(void);   /* which controller it is; a DualShock 4 when none is attached */
+const char *input_pad_title(void); /* "DualShock 4", "DualShock 3" or "DualSense", for the UI and the log */
 /* its battery, 0..100; false when the controller reports none. On webOS 6 only the DualShock 4
  * does (hid-sony publishes it in sysfs); a DualSense there is hid-generic and has no battery node.
  * webOS 11's hid-playstation publishes the DualSense's too. */

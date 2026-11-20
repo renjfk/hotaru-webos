@@ -1,0 +1,95 @@
+Observed DualShock 3 (Sony PLAYSTATION(R)3 Controller, USB id 054c:0268, bus USB) on an
+OLED55C8PLA (webOS TV 4.4.3), captured in the probe log the tester attached to PR #8
+(20261119-151154.log). The node is the kernel's hid-sony driver with its Sixaxis descriptor,
+not webOS's uhid stack: /dev/input/event6, bus 0x0003 vendor 0x054c product 0x0268.
+
+WHAT THE LOG SHOWS (condensed: the probe prints one line per axis)
+  pad: /dev/input/event6 "Sony PLAYSTATION(R)3 Controller": a gamepad
+  pad: keys 0x120 0x121 0x122 0x123 0x124 0x125 0x126 0x127 0x128 0x129 0x12a 0x12b 0x12c
+            0x12d 0x12e 0x12f 0x2c0 0x2c1 0x2c2
+  pad: abs 0x00 0..255   0x01 0..255   0x02 0..255   0x05 0..255     (X, Y, Z, RZ)
+  pad: abs 0x28..0x3a 0..255 (flat 15)     (19 axes: the button pressures)
+  pad: abs 0x3b..0x3e 0..1023 (flat 63, fuzz 3)   (the motion block)
+  pad: force feedback                     (an EV_FF bitmap with no effect in it)
+  gamepad: rumble no, touchpad touches and click   (the touchpad reading is wrong: see below)
+  gamepad: battery 100%                   (hid-sony's power_supply; charging over USB)
+
+The sticks are the only controls that read before the map: the probe logged
+"pad: abs 0x00 ABS_X = ..., Hotaru reads left stick X" and the same for Y, Z and RZ, so the
+left stick and the right stick were already right (right stick on ABS_Z/ABS_RZ, as on LG's
+uhid order). Every button read nothing.
+
+WHERE THE BUTTON CODES COME FROM
+The keys are hid-sony's synthetic Sixaxis descriptor (drivers/hid/hid-sony.c, sixaxis_rdesc):
+a Generic Desktop / Joystick collection whose 19 button usages land on BTN_JOYSTICK and up
+(usage 1..16 -> 0x120..0x12f) and BTN_TRIGGER_HAPPY (usage 17..19 -> 0x2c0..0x2c2). Linux's
+hid-input assigns those codes in descriptor order, which is the order of the DS3's own button
+bits:
+
+  Physical          Linux code   Hotaru's name
+  Select            0x120        Share
+  L3                0x121        L3
+  R3                0x122        R3
+  Start             0x123        Options
+  D-pad up          0x124        a button, turned into ABS_HAT0Y -1
+  D-pad right       0x125        (the hat switch of the other layouts is four buttons here:
+  D-pad down        0x126         ABS_HAT0X +1, ABS_HAT0Y +1)
+  D-pad left        0x127        ABS_HAT0X -1
+  L2 (click)        0x128        L2, with its travel on ABS 0x30
+  R2 (click)        0x129        R2, with its travel on ABS 0x31
+  L1                0x12a        L1
+  R1                0x12b        R1
+  Triangle          0x12c        Triangle
+  Circle            0x12d        Circle
+  Cross             0x12e        Cross
+  Square            0x12f        Square
+  PS                0x2c0        PS
+  (bits 18, 19)     0x2c1, 0x2c2  unused
+
+The order is confirmed by the pressures. Every analog button reports beside its own pressure
+axis, and in the log the offset between a button and its axis is the same for all of them:
+0x124 -> 0x2c, 0x125 -> 0x2d, 0x126 -> 0x2e, 0x128 -> 0x30, 0x12c -> 0x34. D-pad left is the one
+whose pressure (0x2f, ABS_MT_SLOT) the kernel's input core swallows, so its press logged no axis;
+the offset is the same one as its neighbour's. The DS3's pressures run up, right, down, left, L2,
+R2, L1, R1, triangle, circle, cross, square from ABS 0x2c (the four axes before it, 0x28..0x2b,
+never moved), which is what makes the D-pad the first four buttons and the face buttons the last
+four.
+
+AXES IN HOTARU'S TERMS
+  left stick X/Y    ABS_X / ABS_Y       0..255, centre 128
+  right stick X/Y   ABS_Z / ABS_RZ      0..255, centre 128   (as on LG's uhid order)
+  L2 travel         ABS 0x30            0..255, released = 0
+  R2 travel         ABS 0x31            0..255, released = 0
+  D-pad             no ABS_HAT0X/Y: the four buttons above
+  button pressures  ABS 0x2c..0x2f, 0x32..0x37   not read (the console takes buttons, not pressures)
+  motion            ABS 0x3b..0x3e      not read (no motion forwarding)
+
+NO RUMBLE
+The node's EV_FF bitmap is empty and hid-sony's sixaxis rumble lives in the driver's output
+report (CONFIG_SONY_FF), so there is none to reach from evdev; the pad cannot rumble on this
+TV. The battery is still published: hid-sony's power_supply hangs on the HID device two levels
+above the node, which is where gamepad_battery() looks.
+
+NO TOUCHPAD
+The DS3 has none, but its pressure axes are named ABS_MT_* by Linux (0x35 is
+ABS_MT_POSITION_X), so a node that simply looks for that bit would call it a touchpad and feed
+pressures to the console as touches. gamepad.c turns touches off for the DS3 by its layout, not
+by the bitmap.
+
+CONFIRMED ON A TV
+The first log showed PS, Triangle, L2, the four D-pad buttons and both sticks; Cross, Circle,
+Square, L1, R1, R2, L3, R3, Select and Start never appeared in it, so their names rested on the
+descriptor order above. The tester's pass with the PR #14 build on the same OLED55C8PLA pressed
+every control and all of them read themselves, so the table is right. That pass was not captured
+as a log, which is why this file keeps the derivation above.
+
+WHAT IS STILL UNPROVEN
+A DS3 paired over Bluetooth should be the same node: hid-sony decodes both transports into that
+one descriptor. Not observed yet.
+
+A NEWER KERNEL
+Kernels from about 4.12 map the DS3 to the standard gamepad codes instead (the DualShock 4's
+layout, with the D-pad on BTN_DPAD_UP..RIGHT, 0x220..0x223). Such a node is taken for the
+standard Linux layout, which normalises the sticks, the triggers and the face buttons, but the
+four BTN_DPAD_* buttons read nothing: the D-pad would be dead there and its art and name would
+still say DualShock 3. Not seen on any TV yet; TV check 17 asks for it.

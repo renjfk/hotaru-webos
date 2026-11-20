@@ -83,7 +83,7 @@ static struct {
     prow_t rows[SET__N][MAX_ROWS];
     int nrows[SET__N];
     lv_obj_t *sum_big, *sum_txt, *sum_fill, *sum_note;                       /* Stream */
-    lv_obj_t *pad_art_box, *pad_art, *pad_name, *pad_state;                  /* Controller */
+    lv_obj_t *pad_art_box, *pad_art, *pad_name, *pad_state, *pad_note;       /* Controller */
     lv_obj_t *pad_batt, *pad_batt_fill, *pad_batt_pct;                       /* Controller: the battery gauge */
     lv_obj_t *acc_avatar, *acc_initials, *acc_name, *acc_state, *acc_status; /* PSN account */
     lv_obj_t *log_card, *log;                                                /* Log */
@@ -288,7 +288,7 @@ static void build_pad(void) {
     lv_obj_set_pos(g.pad_name, 0, 250);
     g.pad_state = ctl_label(c, FONT_CAPTION, COL_MUTED, "");
     lv_obj_set_pos(g.pad_state, 0, 296);
-    /* the level hid-sony publishes for a DualShock 4; hidden for a pad that reports none */
+    /* the level hid-sony publishes for a DualShock 4 or 3; hidden for a pad that reports none */
     g.pad_batt = ctl_obj(c);
     lv_obj_set_size(g.pad_batt, SUM_CW, SP_XL);
     lv_obj_set_pos(g.pad_batt, 0, PAD_BATT_Y);
@@ -298,10 +298,10 @@ static void build_pad(void) {
     g.pad_batt_pct = ctl_label(g.pad_batt, FONT_CAPTION, COL_SUBTLE, "");
     lv_obj_set_pos(g.pad_batt_pct, PAD_BATT_W + SP_S, 0);
     lv_obj_add_flag(g.pad_batt, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_t *n = ctl_label(c, FONT_CAPTION, COL_MUTED, "Share + Options opens the menu while you play");
-    lv_obj_set_width(n, SUM_CW);
-    lv_label_set_long_mode(n, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(n, 0, 358);
+    g.pad_note = ctl_label(c, FONT_CAPTION, COL_MUTED, "");
+    lv_obj_set_width(g.pad_note, SUM_CW);
+    lv_label_set_long_mode(g.pad_note, LV_LABEL_LONG_WRAP);
+    lv_obj_set_pos(g.pad_note, 0, 358);
     g.pad_art_id = ART__N;
 }
 
@@ -414,12 +414,16 @@ static void refresh_pad(void) {
         lv_obj_clean(g.pad_art_box);
         lv_obj_align(art_create(g.pad_art_box, id, 190), LV_ALIGN_LEFT_MID, -6, 0);
     }
-    lv_label_set_text(g.pad_name, id == ART_DUALSENSE ? "DualSense" : "DualShock 4");
+    pad_kind_t kind = input_pad_kind();
+    lv_label_set_text(g.pad_name, input_pad_title());
+    lv_label_set_text(g.pad_note, kind == PAD_KIND_DS3         ? "Select + Start opens the menu while you play"
+                                  : kind == PAD_KIND_DUALSENSE ? "Create + Options opens the menu while you play"
+                                                               : "Share + Options opens the menu while you play");
     lv_label_set_text(g.pad_state, st == PAD_ONLINE    ? "Connected"
                                    : st == PAD_OFFLINE ? "Offline: turn it on again"
                                                        : "Not found: pair it with the TV");
     lv_obj_set_style_text_color(g.pad_state, C(st == PAD_ONLINE ? COL_OK : st == PAD_OFFLINE ? COL_ERR : COL_MUTED), 0);
-    /* its battery, when the pad reports one (a DualShock 4 does, a DualSense on webOS 6 does not) */
+    /* its battery, when the pad reports one (a DualShock 4 or 3 does, a DualSense on webOS 6 does not) */
     int pct = 0;
     if (st == PAD_ONLINE && input_pad_battery(&pct)) {
         uint32_t col = pct <= BATT_CRIT ? COL_ERR : pct <= BATT_LOW ? COL_WARN : COL_OK;

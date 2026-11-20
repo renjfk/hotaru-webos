@@ -10,7 +10,7 @@ SRC=design/menu/art
 OUT=assets/devices
 mkdir -p "$OUT"
 # name  geometry: PS5 key art 470 px tall, PS4 and the unknown console 580 px wide, pads up to 200 px tall
-for spec in "ps5 x470" "ps4 580x" "unknown 580x" "ds4 x200" "dualsense x200"; do
+for spec in "ps5 x470" "ps4 580x" "unknown 580x" "ds4 x200" "ds3 x200" "dualsense x200"; do
     name=${spec% *}; geo=${spec#* }
     magick "$SRC/$name.png" -filter Lanczos -resize "$geo" -strip -define png:compression-level=9 "PNG32:$OUT/$name.png"
     echo "$OUT/$name.png $(magick identify -format '%wx%h' "$OUT/$name.png")"

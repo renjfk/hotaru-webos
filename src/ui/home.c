@@ -533,9 +533,7 @@ static void cards_refresh(void) {
     if (s->smooth_ms) lv_label_set_text_fmt(g.card_val[CARD_SMOOTH], "%d ms", s->smooth_ms);
     else lv_label_set_text(g.card_val[CARD_SMOOTH], "Off");
     pad_state_t st = input_pad_state();
-    art_id_t id = art_pad(input_pad_name());
-    lv_label_set_text(g.card_val[CARD_PAD],
-                      st == PAD_ONLINE ? (id == ART_DUALSENSE ? "DualSense" : "DualShock 4") : "No controller");
+    lv_label_set_text(g.card_val[CARD_PAD], st == PAD_ONLINE ? input_pad_title() : "No controller");
     int pct = 0;
     if (st == PAD_ONLINE && input_pad_battery(&pct)) {
         lv_label_set_text_fmt(g.card_pad_batt, "Battery %d%%", pct);
@@ -702,10 +700,16 @@ static void build_connecting(void) {
 static void connecting_hints(void) {
     lv_obj_clean(g.conn_hints);
     ctl_hint(g.conn_hints, PS_CIRCLE, "Cancel");
-    if (input_pad_state() == PAD_ONLINE)
-        ctl_hint_keys(g.conn_hints, art_pad(input_pad_name()) == ART_DUALSENSE ? "Create" : "Share", "Options",
-                      "The menu during the game");
-    else ctl_hint_key(g.conn_hints, "Back", "The menu during the game");
+    if (input_pad_state() == PAD_ONLINE) {
+        pad_kind_t kind = input_pad_kind();
+        ctl_hint_keys(g.conn_hints,
+                      kind == PAD_KIND_DS3         ? "Select"
+                      : kind == PAD_KIND_DUALSENSE ? "Create"
+                                                   : "Share",
+                      kind == PAD_KIND_DS3 ? "Start" : "Options", "The menu during the game");
+    } else {
+        ctl_hint_key(g.conn_hints, "Back", "The menu during the game");
+    }
 }
 
 static void breathe_cb(void *img, int32_t v) { lv_img_set_zoom(img, (uint16_t)v); }
@@ -1125,7 +1129,7 @@ void home_set_pad(pad_state_t state) {
     lv_obj_set_style_bg_color(g.pad_dot, C(col[state]), 0);
     lv_obj_set_style_shadow_color(g.pad_dot, C(col[state]), 0);
     art_id_t id = art_pad(input_pad_name());
-    if (id != g.pad_art) { /* a DualSense or a DualShock 4: the drawings follow */
+    if (id != g.pad_art) { /* a DualSense, DualShock 3 or DualShock 4: the drawings follow */
         g.pad_art = id;
         if (g.pad_img) lv_obj_del(g.pad_img);
         g.pad_img = art_create(g.pad_box, id, 44);

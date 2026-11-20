@@ -988,6 +988,100 @@ int main(int argc, char **argv) {
     pad_plug("event12");
     pump(1800);
 
+    /* A DualShock 3 on hid-sony: the Sixaxis layout at 0x120 (its own bit order), the D-pad as four
+     * buttons with no hat, the triggers as pressures on 0x30/0x31, no force feedback, and no
+     * touchpad even though axes at 0x35.. are named ABS_MT_* (docs/ds3-map-observed.txt) */
+    pad_unplug();
+    pump(100);
+    setenv("SHIM_PAD_NAME", "Sony PLAYSTATION(R)3 Controller", 1);
+    setenv("SHIM_PAD_LAYOUT", "ds3", 1);
+    pad_plug("event13");
+    pump(1800);
+    bool ds3 = input_pad_state() == PAD_ONLINE && strcmp(input_pad_title(), "DualShock 3") == 0 &&
+               !input_pad_rumbles() && !input_pad_touches();
+    expect(ds3, "a DualShock 3 is named, grabbed, cannot rumble and its pressures are not a touchpad");
+    input_set_streaming(true); /* the presses below stay out of Home */
+    static const struct {
+        int code;
+        uint32_t btn;
+    } ds3_btns[] = { { 0x12e, PAD_BTN_CROSS },    { 0x12d, PAD_BTN_CIRCLE }, { 0x12f, PAD_BTN_SQUARE },
+                     { 0x12c, PAD_BTN_TRIANGLE }, { 0x12a, PAD_BTN_L1 },     { 0x12b, PAD_BTN_R1 },
+                     { 0x121, PAD_BTN_L3 },       { 0x122, PAD_BTN_R3 },     { 0x2c0, PAD_BTN_PS } };
+    bool ds3_ok = true;
+    for (size_t i = 0; i < sizeof(ds3_btns) / sizeof(ds3_btns[0]); i++) {
+        pad_ev(EV_KEY, ds3_btns[i].code, 1);
+        pump(60);
+        bool got = input_pad_get(&p) && p.buttons == ds3_btns[i].btn;
+        if (!got) printf("  0x%x -> 0x%x, want 0x%x\n", ds3_btns[i].code, p.buttons, ds3_btns[i].btn);
+        ds3_ok = ds3_ok && got;
+        pad_ev(EV_KEY, ds3_btns[i].code, 0);
+        pump(60);
+    }
+    expect(ds3_ok, "a DualShock 3's Cross, Circle, Square, Triangle, L1, R1, L3, R3 and PS read as themselves");
+    /* Select and Start are the stream-menu chord, held past PAD_CHORD_MS like Share and Options */
+    static const struct {
+        int code;
+        uint32_t btn;
+    } ds3_menu[] = { { 0x120, PAD_BTN_SHARE }, { 0x123, PAD_BTN_OPTIONS } };
+    bool ds3_chord = true;
+    for (size_t i = 0; i < sizeof(ds3_menu) / sizeof(ds3_menu[0]); i++) {
+        pad_ev(EV_KEY, ds3_menu[i].code, 1);
+        pump(200);
+        ds3_chord = ds3_chord && input_pad_get(&p) && p.buttons == ds3_menu[i].btn;
+        pad_ev(EV_KEY, ds3_menu[i].code, 0);
+        pump(60);
+    }
+    expect(ds3_chord, "a DualShock 3's Select and Start read as Share and Options");
+    /* its D-pad buttons: the bits now, and the UI key when streaming stops */
+    pad_ev(EV_KEY, 0x124, 1);
+    pump(60);
+    bool dpad = input_pad_get(&p) && p.buttons == PAD_BTN_DPAD_UP;
+    pad_ev(EV_KEY, 0x124, 0);
+    pad_ev(EV_KEY, 0x125, 1);
+    pump(60);
+    dpad = dpad && input_pad_get(&p) && p.buttons == PAD_BTN_DPAD_RIGHT;
+    pad_ev(EV_KEY, 0x125, 0);
+    pump(60);
+    expect(dpad, "a DualShock 3's D-pad buttons become the hat switch's bits");
+    /* the triggers: travel on 0x30 / 0x31, whose 0..100 range in the shim is what says the grab read
+     * them there and not on the node's absent ABS_RX / ABS_RY (50 of 100 -> 127 of 255) */
+    pad_ev(EV_ABS, 0x30, 50);
+    pad_ev(EV_ABS, 0x31, 25);
+    pump(60);
+    bool trig = input_pad_get(&p) && p.l2 > 125 && p.l2 < 130 && p.r2 > 61 && p.r2 < 66;
+    pad_ev(EV_ABS, 0x30, 0);
+    pad_ev(EV_ABS, 0x31, 0);
+    /* and the right stick on ABS_Z / ABS_RZ, as on LG's order */
+    pad_ev(EV_ABS, ABS_Z, 255);
+    pump(60);
+    trig = trig && input_pad_get(&p) && p.l2 == 0 && p.r2 == 0 && p.right_x > 30000;
+    pad_ev(EV_ABS, ABS_Z, 128);
+    pump(60);
+    expect(trig, "a DualShock 3's triggers are pressures on 0x30 / 0x31, its right stick on Z / RZ");
+    /* the same axes carry ABS_MT_* names (0x35 is Circle's pressure): they are not touches */
+    pad_ev(EV_ABS, 0x35, 200);
+    pad_ev(EV_ABS, 0x39, 3);
+    pump(60);
+    bool no_touch = input_pad_get(&p) && !p.touch_down && p.touch_x == 0;
+    pad_ev(EV_ABS, 0x35, 0);
+    pad_ev(EV_ABS, 0x39, -1);
+    pump(60);
+    expect(no_touch && input_pad_get(&p) && !p.touch_down,
+           "a DualShock 3's ABS_MT_* pressure bytes never read as touches");
+    input_set_streaming(false);
+    while (home_index() > 0) key(SDLK_LEFT);
+    pump(200);
+    int ds3_i0 = home_index();
+    pad_btn(0x125); /* D-pad right: the same key path as a hat switch */
+    pump(300);
+    expect(home_index() == ds3_i0 + 1, "a DualShock 3's D-pad steps Home like the hat switch");
+    pad_unplug();
+    pump(100);
+    unsetenv("SHIM_PAD_LAYOUT");
+    unsetenv("SHIM_PAD_NAME");
+    pad_plug("event12");
+    pump(1800);
+
     /* Add a console: Cross on the Add tile opens the full-screen flow over Home. It is focus
      * driven (every key comes from the sink, no LVGL group of its own), Home stops drawing under
      * it, and every step fits 1080p with its focus rings unclipped */
