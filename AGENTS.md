@@ -32,7 +32,7 @@ src/
                     dialog.[ch] confirm card and passcode sheet; controls.[ch] focus-driven controls;
                     motion.[ch] tweens; art.[ch] device illustrations; theme.[ch] tokens and styles;
                     widgets.[ch], logo.[ch], log_view.[ch], splash.[ch], qr.[ch]
-  config/           settings, consoles, PSN account, device UID; one key=value file (config.h)
+  config/           settings, consoles, PSN accounts, device UID; one key=value file (config.h)
   chiaki/           session.h: the libchiaki wrapper API; session_real.c the real backend
                     (HOTARU_HAVE_LIBCHIAKI), session.c the simulation (host tests, simulator)
   media/            ndl.[ch] NDL hardware video + PCM audio, v2 or v1 (ndl_v1.[ch] the calls a webOS 4 TV
@@ -70,10 +70,11 @@ assets/             app icons; devices/ the console and pad art the app loads at
 - New module: `src/<dir>/<name>.[ch]` (CMake globs `src/**/*.c`), init/tick it from `main.c`. Every screen is built
   from `ui/controls.h`, animated with `ui/motion.h` and takes its keys from `ui.c`'s sink: no LVGL group of its own,
   nothing clickable. A new settings panel: a `SET_*` entry in `ui/home_internal.h`, built in `home_settings.c`
-- One console, one host: config keeps a PIN pairing and the PSN account's device as separate entries; `app.c`
-  (`hosts_sync()`) shows them as one `app_host_t` with `lan`/`psn` routes when the PSN entry has the LAN entry's
-  nickname and kind (what chiaki-ng matches on). Host indexes are app indexes, not config indexes: never
-  `config_host(app_selected())`
+- One console per PSN account: config keeps a PIN pairing and the PSN account's device as separate entries, each
+  stamped with the account it belongs to; `app.c` (`hosts_sync()`) shows them as one `app_host_t` with `lan`/`psn`
+  routes when the PSN entry has the LAN entry's nickname, kind and account (what chiaki-ng matches on). The same
+  console under two accounts is two hosts and two tiles: config's duplicate check includes the account. Host
+  indexes are app indexes, not config indexes: never `config_host(app_selected())`
 - Discovery belongs to config entries (`g_entry[]` in `app.c`), matched by MAC, else by address; a console missing
   for `DISC_MISSING_MS` is offline. It drives connecting: rest mode is woken first, offline with a PSN route (when
   discovery hears other consoles) goes over PSN at once, a MAC at a new address updates the entry. It is paused

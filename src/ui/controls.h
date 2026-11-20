@@ -87,6 +87,7 @@ void ctl_menu_open(ctl_menu_t *m, lv_obj_t *parent, const lv_area_t *anchor, boo
 void ctl_menu_close(ctl_menu_t *m); /* fades out and deletes itself */
 void ctl_menu_move(ctl_menu_t *m, int dir);
 bool ctl_menu_is_open(const ctl_menu_t *m);
+lv_coord_t ctl_menu_height(int items); /* how tall a menu with that many rows comes out */
 
 /* a frosted pill: white with dark text when focused (ctl_button_focus), red for a destructive one */
 lv_obj_t *ctl_pill(lv_obj_t *parent, lv_coord_t w, lv_coord_t h);

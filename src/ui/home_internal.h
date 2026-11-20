@@ -27,8 +27,11 @@ int home_settings_first_row(int panel);        /* the row the focus enters on, -
 void home_settings_focus(int panel, int row);  /* row -1 = no row focused */
 /* a key while a row of `panel` has the focus; *row moves. false = the focus leaves the panel (up) */
 bool home_settings_key(int panel, int *row, uint32_t key);
-void home_settings_refresh(void);  /* config, PSN account, pad or connection changed */
-lv_obj_t *home_settings_log(void); /* the log console (right stick scrolls it) */
+void home_settings_refresh(void);   /* config, PSN account, pad or connection changed */
+bool home_settings_menu_open(void); /* a settings pop-up (the PSN account menu) has the keys */
+void home_settings_menu_close(void);
+void home_settings_panel_rebuilt(int panel); /* rows changed under the focus: Home re-aims it */
+lv_obj_t *home_settings_log(void);           /* the log console (right stick scrolls it) */
 const char *home_settings_name(int panel);
 const char *home_settings_caption(int panel);
 uint32_t home_settings_tint(int panel);

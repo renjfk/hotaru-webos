@@ -45,16 +45,20 @@ enum { BY_PIN, BY_PSN };
 enum { ICON_LAN, ICON_PSN, ICON_TYPE };
 
 static struct {
-    lv_obj_t *root, *bg, *glow, *head, *fill, *step_lbl, *hints, *flow, *main[REG__N], *aside[REG__N];
+    lv_obj_t *root, *bg, *glow, *head, *over, *fill, *step_lbl, *hints, *flow, *main[REG__N], *aside[REG__N];
     reg_step_t step;
     int method, focus;
-    bool ps5, need_account, account_then_pin, typing_id, started;
+    bool ps5, account_step, account_then_pin, typing_id, started, direct_psn;
+    int account;  /* the linked account the pairing uses */
+    int acc_base; /* focus index of the first option: 1 while the account segment is shown */
+    bool seg_shown;
     /* how */
     lv_obj_t *opt[2], *illus[2];
     /* which console */
     lv_obj_t *kind_tile[2], *kind_art[2];
     /* your PSN account */
-    lv_obj_t *acc_opt[2], *acc_row, *acc_ta, *acc_next, *acc_msg;
+    lv_obj_t *acc_opt[2], *acc_row, *acc_ta, *acc_next, *acc_msg, *acc_seg_row;
+    ctl_seg_t acc_seg;
     /* address */
     lv_obj_t *oct_cell[4], *oct_lbl[4], *addr_next, *addr_text;
     char addr_hint[200]; /* the address step's text when nothing was found */
@@ -98,6 +102,13 @@ static uint32_t tint(void) {
 /* the step number in its path, the path's length, and the step's name */
 static int progress(int *count, const char **name) {
     bool psn = R.step == REG_METHOD ? R.focus == BY_PSN : R.method == BY_PSN;
+    if (R.direct_psn) { /* Settings > Add a PSN account: no "how" step */
+        static const char *const n[] = { "Sign in", "Consoles" };
+        int i = R.step == REG_PSN || R.step == REG_LINKING ? 0 : 1;
+        *count = 2;
+        *name = n[i];
+        return i + 1;
+    }
     if (psn) {
         static const char *const n[] = { "How", "Sign in", "Consoles" };
         int i = R.step == REG_METHOD ? 0 : R.step == REG_PSN ? 1 : 2;
@@ -115,7 +126,7 @@ static int progress(int *count, const char **name) {
     reg_step_t s = R.step == REG_PSN || R.step == REG_LINKING ? REG_ACCOUNT : R.step; /* signing in for the ID */
     int len = 0, at = -1;
     for (size_t i = 0; i < sizeof(path) / sizeof(path[0]); i++) {
-        if (path[i].s == REG_ACCOUNT && !R.need_account) continue;
+        if (path[i].s == REG_ACCOUNT && !R.account_step) continue;
         if (path[i].s == s) {
             at = len;
             *name = path[i].n;
@@ -316,16 +327,50 @@ static void build_kind(void) {
     }
 }
 
+/* the linked accounts as one segment: LEFT/RIGHT picks the account the pair is made for */
+static void acc_seg_refresh(void) {
+    if (R.acc_seg.box) lv_obj_del(R.acc_seg.box);
+    memset(&R.acc_seg, 0, sizeof(R.acc_seg));
+    int n = app_psn_account_count();
+    R.seg_shown = n > 0;
+    R.acc_base = R.seg_shown ? 1 : 0;
+    if (!R.seg_shown) {
+        lv_obj_add_flag(R.acc_seg_row, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    if (R.account < 0 || R.account >= n) R.account = 0;
+    lv_coord_t w = (MAIN_W - 220) / n;
+    if (w > 300) w = 300;
+    static char opts[CONFIG_MAX_ACCOUNTS][24]; /* the segment copies the text; short names fit 4 of them */
+    const char *text[CONFIG_MAX_ACCOUNTS];
+    int fit = (int)(w - 18) / 13;
+    if (fit < 4) fit = 4;
+    for (int i = 0; i < n; i++) {
+        snprintf(opts[i], sizeof(opts[i]), "%s", app_psn_account_name(i));
+        if ((int)strlen(opts[i]) > fit) snprintf(opts[i] + fit, sizeof(opts[i]) - (size_t)fit, "...");
+        text[i] = opts[i];
+    }
+    ctl_seg_create(&R.acc_seg, R.acc_seg_row, text, n, R.account, w);
+    lv_obj_align(R.acc_seg.box, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_clear_flag(R.acc_seg_row, LV_OBJ_FLAG_HIDDEN);
+}
+
 static void build_account(void) {
     lv_obj_t *m = col(REG_ACCOUNT);
     title(m, "Your PSN account");
-    text(m, "Pairing with a PIN uses your PSN account ID. Sign in once with your phone and this TV keeps it, or "
-            "type the ID if you have it.");
+    text(m, "A console is paired for one PSN account, and this TV keeps them side by side. Choose the one to pair "
+            "with, or add another.");
     space(m, 6);
-    R.acc_opt[0] = option(m, ICON_PSN, NULL, "Sign in with your phone",
-                          "Scan a code and sign in; the console's PIN comes right after.");
+    R.acc_seg_row = ctl_obj(m);
+    lv_obj_set_size(R.acc_seg_row, MAIN_W, BTN_H);
+    lv_obj_t *lbl = ctl_label(R.acc_seg_row, FONT_SMALL, COL_MUTED, "PAIR AS");
+    lv_obj_set_style_text_letter_space(lbl, 3, 0);
+    lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_add_flag(R.acc_seg_row, LV_OBJ_FLAG_HIDDEN);
+    R.acc_opt[0] = option(m, ICON_PSN, "SIGN IN", "Add a PSN account",
+                          "Scan a code and sign in on your phone; the console's PIN comes right after.");
     R.acc_opt[1] =
-        option(m, ICON_TYPE, NULL, "Type the account ID", "12 characters of base64, from another Remote Play app.");
+        option(m, ICON_TYPE, "TYPE", "Type the account ID", "12 characters of base64, from another Remote Play app.");
     R.acc_row = field_row(m, "Account ID", 24, &R.acc_ta, &R.acc_next, "Next");
     lv_obj_add_flag(R.acc_row, LV_OBJ_FLAG_HIDDEN);
     R.acc_msg = wrap(m, FONT_BODY, COL_DANGER_TEXT, "", MAIN_W);
@@ -663,9 +708,10 @@ static void build_found(void) {
 static void found_show(void) {
     lv_obj_clean(R.found_list);
     int n = 0;
+    int account = app_psn_linked_account();
     for (int i = 0; i < app_host_count() && n < FOUND_MAX; i++) {
         const app_host_t *h = app_host(i);
-        if (!h->psn) continue;
+        if (!h->psn || h->account != account) continue; /* only the account that was just linked */
         n++;
         lv_obj_t *r = ctl_rect(R.found_list, MAIN_W, 116, 28, COL_FROST, 18);
         frost(r, LV_OPA_10);
@@ -722,7 +768,7 @@ static void kb_close(int focus) {
     motion_to(R.flow, MO_TY, 0, 300, 0, NULL);
     motion_to(R.hints, MO_OPA, LV_OPA_COVER, 220, 0, NULL);
     motion_to(R.head, MO_OPA, LV_OPA_COVER, 220, 0, NULL);
-    R.focus = focus >= 0 ? focus : R.step == REG_ACCOUNT ? 3 : 1;
+    R.focus = focus >= 0 ? focus : R.step == REG_ACCOUNT ? R.acc_base + 3 : 1;
     R.kb_ta = NULL;
     paint();
 }
@@ -730,7 +776,7 @@ static void kb_close(int focus) {
 static bool printable(uint32_t k) { return k >= ' ' && k != LV_KEY_DEL && k < 0x110000; }
 
 static void kb_key(uint32_t k) {
-    if (k == LV_KEY_ESC) kb_close(R.step == REG_ACCOUNT ? 2 : 0);
+    if (k == LV_KEY_ESC) kb_close(R.step == REG_ACCOUNT ? R.acc_base + 2 : 0);
     else if (k == LV_KEY_BACKSPACE) lv_textarea_del_char(R.kb_ta);
     else if (printable(k)) lv_textarea_add_char(R.kb_ta, k); /* typed on the remote or a USB keyboard */
     else if (k == LV_KEY_UP || k == LV_KEY_DOWN || k == LV_KEY_LEFT || k == LV_KEY_RIGHT || k == LV_KEY_ENTER)
@@ -770,7 +816,7 @@ static void start_async(void *unused) {
     if (R.step == REG_PAIRING) {
         char addr[24];
         addr_text(addr, sizeof(addr));
-        app_reg_submit_pin(addr, R.pin_txt, R.ps5, NULL);
+        app_reg_submit_pin(addr, R.pin_txt, R.ps5, R.account);
     } else if (R.step == REG_LINKING) {
         app_reg_submit_psn_code(lv_textarea_get_text(R.code_ta), true);
     }
@@ -783,12 +829,13 @@ static void enter(reg_step_t s) {
         case REG_METHOD: R.focus = R.method; break;
         case REG_KIND: R.focus = R.ps5 ? 0 : 1; break;
         case REG_ACCOUNT:
-            R.focus = 0;
             R.typing_id = false;
             R.account_then_pin = false;
             lv_obj_add_flag(R.acc_row, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(R.acc_opt[1], LV_OBJ_FLAG_HIDDEN);
             lv_label_set_text(R.acc_msg, "");
+            acc_seg_refresh();
+            R.focus = 0;
             break;
         case REG_ADDR:
             R.focus = 0;
@@ -866,9 +913,10 @@ static void paint(void) {
             }
             break;
         case REG_ACCOUNT:
-            for (int i = 0; i < 2; i++) option_focus(R.acc_opt[i], i == R.focus);
-            ctl_field_focus(R.acc_ta, R.focus == 2, R.kb_open);
-            ctl_button_focus(R.acc_next, R.focus == 3);
+            for (int i = 0; i < 2; i++) option_focus(R.acc_opt[i], i + R.acc_base == R.focus);
+            if (R.seg_shown) ctl_seg_focus(&R.acc_seg, R.focus == 0);
+            ctl_field_focus(R.acc_ta, R.focus == R.acc_base + 2, R.kb_open);
+            ctl_button_focus(R.acc_next, R.focus == R.acc_base + 3);
             lv_obj_set_style_opa(R.acc_next, lv_textarea_get_text(R.acc_ta)[0] ? LV_OPA_COVER : LV_OPA_50, 0);
             break;
         case REG_ADDR:
@@ -954,42 +1002,80 @@ void ui_register_key(uint32_t k) {
             if (k == LV_KEY_LEFT || k == LV_KEY_RIGHT) R.focus = k == LV_KEY_RIGHT;
             else if (k == LV_KEY_ENTER) {
                 R.ps5 = R.focus == 0;
-                go(R.need_account ? REG_ACCOUNT : REG_ADDR, 1);
+                go(R.account_step ? REG_ACCOUNT : REG_ADDR, 1);
                 return;
             }
             break;
-        case REG_ACCOUNT:
-            if (R.focus >= 2) {
-                if (R.focus == 2 && k != LV_KEY_UP) {
-                    field_key(k, R.acc_ta, 2);
+        case REG_ACCOUNT: {
+            int base = R.acc_base;
+            if (R.focus == 0 && R.seg_shown) { /* the segment: the account the pairing is made for */
+                int n = app_psn_account_count();
+                if (k == LV_KEY_LEFT || k == LV_KEY_RIGHT) {
+                    int sel = R.account + (k == LV_KEY_RIGHT ? 1 : -1);
+                    if (sel >= 0 && sel < n) {
+                        R.account = sel;
+                        ctl_seg_select(&R.acc_seg, sel);
+                    }
+                } else if (k == LV_KEY_DOWN) {
+                    R.focus = base;
+                } else if (k == LV_KEY_ENTER) {
+                    go(REG_ADDR, 1);
                     return;
                 }
-                if (k == LV_KEY_UP) R.focus = 0;
-                else if (k == LV_KEY_LEFT) R.focus = 2;
+            } else if (R.focus >= base + 2) { /* the typed id, and its button */
+                if (R.focus == base + 2 && k != LV_KEY_UP) {
+                    field_key(k, R.acc_ta, base + 2);
+                    return;
+                }
+                if (k == LV_KEY_UP) R.focus = R.seg_shown ? 0 : base;
+                else if (k == LV_KEY_LEFT) R.focus = base + 2;
                 else if (k == LV_KEY_ENTER) {
-                    if (app_psn_set_account_id(lv_textarea_get_text(R.acc_ta))) {
+                    const char *txt = lv_textarea_get_text(R.acc_ta);
+                    int idx = app_psn_set_account_id(txt);
+                    if (idx >= 0) {
+                        R.account = idx;
                         go(REG_ADDR, 1);
                         return;
                     }
-                    lv_label_set_text(R.acc_msg, "That is not an account ID: it is 12 characters of base64, like "
-                                                 "AbCdEfGhIjk=");
+                    bool shaped = strlen(txt) >= 11; /* 12 base64 characters: then a full list is the reason */
+                    for (const char *p = txt; *p; p++)
+                        if (!((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') || (*p >= '0' && *p <= '9') ||
+                              *p == '+' || *p == '/' || *p == '='))
+                            shaped = false;
+                    lv_label_set_text(R.acc_msg, shaped && app_psn_account_count() >= CONFIG_MAX_ACCOUNTS
+                                                     ? "The account list is full: sign one out in Settings first"
+                                                     : "That is not an account ID: it is 12 characters of base64, like "
+                                                       "AbCdEfGhIjk=");
                     ctl_shake(R.acc_row);
                 }
-            } else if (k == LV_KEY_UP || k == LV_KEY_DOWN) {
-                R.focus = k == LV_KEY_UP ? 0 : R.typing_id ? 2 : 1;
-            } else if (k == LV_KEY_ENTER && R.focus == 0) {
-                R.account_then_pin = true; /* signed in, the flow goes on to the address */
-                R.err[0] = 0;
-                go(REG_PSN, 1);
-                return;
-            } else if (k == LV_KEY_ENTER) {
-                R.typing_id = true; /* the field takes the option's place */
-                lv_obj_add_flag(R.acc_opt[1], LV_OBJ_FLAG_HIDDEN);
-                lv_obj_clear_flag(R.acc_row, LV_OBJ_FLAG_HIDDEN);
-                motion_from(R.acc_row, MO_OPA, 0, 255, 260, 0, NULL);
-                R.focus = 2;
+            } else if (R.focus == base) { /* add an account */
+                if (k == LV_KEY_UP) {
+                    if (R.seg_shown) R.focus = 0;
+                } else if (k == LV_KEY_DOWN) {
+                    R.focus = R.typing_id ? base + 2 : base + 1;
+                } else if (k == LV_KEY_ENTER) {
+                    if (app_psn_account_count() >= CONFIG_MAX_ACCOUNTS) { /* the most the TV stores */
+                        ctl_shake(R.acc_opt[0]);
+                        break;
+                    }
+                    R.account_then_pin = true; /* signed in, the flow goes on to the address */
+                    R.err[0] = 0;
+                    go(REG_PSN, 1);
+                    return;
+                }
+            } else { /* type an id */
+                if (k == LV_KEY_UP) R.focus = base;
+                else if (k == LV_KEY_DOWN) R.focus = R.typing_id ? base + 2 : base;
+                else if (k == LV_KEY_ENTER) {
+                    R.typing_id = true; /* the field takes the option's place */
+                    lv_obj_add_flag(R.acc_opt[1], LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_clear_flag(R.acc_row, LV_OBJ_FLAG_HIDDEN);
+                    motion_from(R.acc_row, MO_OPA, 0, 255, 260, 0, NULL);
+                    R.focus = base + 2;
+                }
             }
             break;
+        }
         case REG_ADDR: pad_key(k, &R.np_addr, R.addr_next, addr_valid(), addr_type, REG_PIN, true); return;
         case REG_PIN:
             pad_key(k, &R.np_pin, R.pin_pair, strlen(R.pin_txt) == PIN_LEN, pin_type, REG_PAIRING, false);
@@ -1032,7 +1118,7 @@ void ui_register_key(uint32_t k) {
 void ui_register_back(void) {
     if (!R.root) return;
     if (R.kb_open) {
-        kb_close(R.step == REG_ACCOUNT ? 2 : 0);
+        kb_close(R.step == REG_ACCOUNT ? R.acc_base + 2 : 0);
         return;
     }
     switch (R.step) {
@@ -1045,13 +1131,13 @@ void ui_register_back(void) {
                 R.typing_id = false;
                 lv_obj_add_flag(R.acc_row, LV_OBJ_FLAG_HIDDEN);
                 lv_obj_clear_flag(R.acc_opt[1], LV_OBJ_FLAG_HIDDEN);
-                R.focus = 1;
+                R.focus = R.acc_base + 1;
                 paint();
             } else {
                 go(REG_KIND, -1);
             }
             break;
-        case REG_ADDR: go(R.need_account ? REG_ACCOUNT : REG_KIND, -1); break;
+        case REG_ADDR: go(R.account_step ? REG_ACCOUNT : REG_KIND, -1); break;
         case REG_PIN:
             R.pin_err = false;
             go(REG_ADDR, -1);
@@ -1060,7 +1146,10 @@ void ui_register_back(void) {
             app_reg_cancel();
             go(REG_PIN, -1);
             break;
-        case REG_PSN: go(R.account_then_pin ? REG_ACCOUNT : REG_METHOD, -1); break;
+        case REG_PSN:
+            if (R.direct_psn) ui_register_close();
+            else go(R.account_then_pin ? REG_ACCOUNT : REG_METHOD, -1);
+            break;
         case REG_LINKING:
             app_reg_cancel();
             go(REG_PSN, -1);
@@ -1095,7 +1184,8 @@ void ui_register_refresh(void) {
             if (app_reg_status()[0]) lv_label_set_text(R.link_status, app_reg_status());
         } else if (s == APP_REG_SUCCESS) {
             R.started = false;
-            if (R.account_then_pin && config_psn_has_account_id()) go(REG_ADDR, 1);
+            if (app_psn_linked_account() >= 0) R.account = app_psn_linked_account();
+            if (R.account_then_pin && R.account >= 0) go(REG_ADDR, 1);
             else go(REG_FOUND, 1);
         } else if (s == APP_REG_FAILED) {
             R.started = false;
@@ -1116,12 +1206,18 @@ static void opened_cb(lv_obj_t *root) {
 
 static void closed_cb(lv_obj_t *root) { lv_obj_del_async(root); }
 
-void ui_register_open(void) {
+static void register_open_at(reg_step_t at) {
     if (R.root) return;
     memset(&R, 0, sizeof(R));
-    app_reg_cancel();                                     /* start clean: no result left from last time */
+    app_reg_cancel(); /* start clean: no result left from last time */
+    R.account = -1;
     R.ps5 = app_found_count() ? app_found(0)->ps5 : true; /* the kind of a console found on the network */
-    R.need_account = !config_psn_has_account_id();        /* PIN pairing asks for it: one more step */
+    R.account_step = app_psn_account_count() != 1;        /* choose, or add, unless there is exactly one */
+    if (app_psn_account_count()) R.account = 0;
+    if (at == REG_PSN) {
+        R.method = BY_PSN;
+        R.direct_psn = true;
+    }
     addr_prefill();
     R.root = ctl_obj(lv_layer_top());
     lv_obj_set_size(R.root, LV_PCT(100), LV_PCT(100));
@@ -1134,9 +1230,9 @@ void ui_register_open(void) {
 
     R.head = ctl_obj(R.root);
     lv_obj_set_size(R.head, LV_PCT(100), TRACK_Y + 6);
-    lv_obj_t *over = ctl_label(R.head, FONT_SMALL, COL_ACCENT_HI, "ADD A CONSOLE");
-    lv_obj_set_style_text_letter_space(over, 3, 0);
-    lv_obj_set_pos(over, SAFE_X, 66);
+    R.over = ctl_label(R.head, FONT_SMALL, COL_ACCENT_HI, "ADD A CONSOLE");
+    lv_obj_set_style_text_letter_space(R.over, 3, 0);
+    lv_obj_set_pos(R.over, SAFE_X, 66);
     R.step_lbl = ctl_label(R.head, FONT_CAPTION, COL_SUBTLE, "");
     lv_obj_set_width(R.step_lbl, 600);
     lv_obj_set_style_text_align(R.step_lbl, LV_TEXT_ALIGN_RIGHT, 0);
@@ -1167,17 +1263,22 @@ void ui_register_open(void) {
     lv_obj_align(R.kb, LV_ALIGN_BOTTOM_MID, 0, 40);
     lv_obj_add_event_cb(R.kb, kb_ready_cb, LV_EVENT_READY, NULL);
 
-    R.step = REG_METHOD;
-    enter(REG_METHOD);
-    lv_obj_clear_flag(R.main[REG_METHOD], LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(R.aside[REG_METHOD], LV_OBJ_FLAG_HIDDEN);
+    if (R.direct_psn) lv_label_set_text(R.over, "ADD A PSN ACCOUNT");
+    R.step = at;
+    enter(at);
+    lv_obj_clear_flag(R.main[at], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(R.aside[at], LV_OBJ_FLAG_HIDDEN);
     paint();
     follow();
     lv_obj_set_style_opa(R.root, LV_OPA_TRANSP, 0);
     motion_then(R.root, MO_OPA, LV_OPA_COVER, FADE_MS, NULL, opened_cb);
     motion_from(R.flow, MO_TY, 30, 0, 420, 0, NULL);
-    log_event(LOG_INFO, "REG", "Add a console: PIN or PSN account");
+    log_event(LOG_INFO, "REG", "%s", at == REG_PSN ? "Add a PSN account" : "Add a console: PIN or PSN account");
 }
+
+void ui_register_open(void) { register_open_at(REG_METHOD); }
+
+void ui_register_open_psn_add(void) { register_open_at(REG_PSN); }
 
 void ui_register_close(void) {
     if (!R.root) return;

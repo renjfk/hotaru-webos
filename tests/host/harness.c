@@ -352,7 +352,7 @@ static int check_clipping(lv_obj_t *o) {
 
 /* settings, consoles, the PSN account and the device UID survive config_save() + config_load() */
 static void test_persistence(void) {
-    expect(!config_load() && config_host_count() == 0 && !config_psn()->linked,
+    expect(!config_load() && config_host_count() == 0 && config_psn_count() == 0,
            "no config file: defaults, no consoles, no PSN account");
     expect(strncmp(config_path(), CONFIG_DIR "/", strlen(CONFIG_DIR) + 1) == 0,
            "the config file is in HOTARU_CONFIG_DIR");
@@ -377,15 +377,19 @@ static void test_persistence(void) {
     for (int i = 0; i < 32; i++) h.psn_uid[i] = (uint8_t)(0x20 + i);
     expect(config_host_add(&h) && !config_host_add(&h), "a console is added once, its duplicate is refused");
     const uint8_t acc[8] = { 1, 2, 3, 4, 5, 6, 7, 0xff };
-    config_psn_set(acc, "tester", "access=token", "refresh-token");
+    config_psn_t acc_cfg = { .linked = true };
+    memcpy(acc_cfg.account_id, acc, 8);
+    snprintf(acc_cfg.online_id, sizeof(acc_cfg.online_id), "tester");
+    snprintf(acc_cfg.access_token, sizeof(acc_cfg.access_token), "access=token");
+    snprintf(acc_cfg.refresh_token, sizeof(acc_cfg.refresh_token), "refresh-token");
+    config_psn_add(&acc_cfg);
     expect(config_save(), "config_save() writes the file");
 
     c->stream.bitrate_kbps = 5000; /* change memory: what comes back must be the file */
     config_host_remove(0);
-    config_psn_clear();
     bool loaded = config_load();
     const config_host_t *r = config_host(0);
-    const config_psn_t *p = config_psn();
+    const config_psn_t *p = config_psn_at(0);
     expect(loaded && c->stream.codec == CODEC_H264 && c->stream.height == 720 && c->stream.bitrate_kbps == 23000 &&
                c->stream.custom && !c->input.rumble && !c->input.touchpad && c->session.sleep_on_disconnect &&
                config_host_count() == 1 && r && !strcmp(r->nickname, h.nickname) && !strcmp(r->addr, h.addr) &&
@@ -408,6 +412,26 @@ static void test_persistence(void) {
     expect(config_load() && c->stream.bitrate_kbps == 15000 && c->stream.fps == 60 && config_host_count() == 0 &&
                !c->input.touchpad && !c->session.sleep_on_disconnect,
            "a corrupt file: bad lines and unknown keys are skipped, good ones kept, the rest defaults");
+    unlink(config_path());
+    config_load();
+
+    /* a file from before accounts were a list: its one psn.* block becomes account 0, and its pairings
+     * are stamped with it, so they keep working */
+    static const char legacy[] = "version=1\npsn.linked=1\npsn.account_id=3132333435363738\n"
+                                 "psn.online_id=older\npsn.access_token=old-access\npsn.refresh_token=old-refresh\n"
+                                 "host.0.nickname=Old PS5\nhost.0.addr=10.0.0.30\nhost.0.is_ps5=1\n"
+                                 "host.0.server_mac=020000000031\n"
+                                 "host.1.nickname=Old PSN PS5\nhost.1.is_ps5=1\nhost.1.via_psn=1\n"
+                                 "host.1.psn_uid=0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20\n";
+    f = fopen(config_path(), "w");
+    fputs(legacy, f);
+    fclose(f);
+    const uint8_t old_id[8] = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38 };
+    expect(config_load() && config_psn_count() == 1 && !memcmp(config_psn_at(0)->account_id, old_id, 8) &&
+               !strcmp(config_psn_at(0)->online_id, "older") && config_host_count() == 2 &&
+               !memcmp(config_host(0)->psn_account_id, old_id, 8) &&
+               !memcmp(config_host(1)->psn_account_id, old_id, 8) && config_host(1)->via_psn,
+           "a single-account file migrates: its account is stored, and its PIN and PSN pairings belong to it");
     unlink(config_path());
     config_load();
 }
@@ -454,19 +478,89 @@ static void test_host_identity(void) {
            "a known MAC updates the console in place when its address changes");
     config_host_remove(1);
     config_host_remove(0);
+
+    /* a console is paired per PSN account: the same console at one address under two accounts is
+     * two entries, and the same account and MAC is still the same entry */
+    const uint8_t acc_a[8] = { 1, 1, 1, 1, 1, 1, 1, 1 }, acc_b[8] = { 2, 2, 2, 2, 2, 2, 2, 2 };
+    config_host_t pa = { .addr = "10.0.0.21" }, pb = pa, pa2 = pa;
+    memcpy(pa.psn_account_id, acc_a, 8);
+    memcpy(pb.psn_account_id, acc_b, 8);
+    memcpy(pa2.psn_account_id, acc_a, 8);
+    expect(config_host_add(&pa) && config_host_add(&pb) && config_host_count() == 2 && config_host_find(&pa2) == 0,
+           "the same console under two PSN accounts is two pairings");
+    while (config_host_count()) config_host_remove(0);
 }
 
 /* a manually entered account id persists without marking the PSN account linked */
 static void test_psn_account_id(void) {
     const uint8_t id[8] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 };
-    config_psn_set_account_id(id);
-    expect(config_psn_has_account_id() && !config_psn()->linked, "a manual account ID is not a PSN link");
+    config_psn_add_id(id);
+    expect(config_psn_count() > 0 && !config_psn_at(0)->linked && !strcmp(config_psn_at(0)->online_id, "PSN 1122"),
+           "a manual account ID is not a PSN link, and gets a label of its own");
     expect(config_save(), "saving a manual account ID writes the file");
-    config_psn_clear();
-    expect(config_load() && config_psn_has_account_id() && !config_psn()->linked &&
-               !memcmp(config_psn()->account_id, id, 8),
+    config_psn_remove(0);
+    expect(config_load() && config_psn_count() > 0 && !config_psn_at(0)->linked &&
+               !memcmp(config_psn_at(0)->account_id, id, 8),
            "a manual account ID survives save + load");
-    config_psn_clear();
+    /* signing out keeps a PIN pairing's account stamp: signing in again rejoins it, and re-pairing
+     * updates that entry instead of adding another */
+    const uint8_t kept[8] = { 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48 };
+    int k = config_psn_add_id(kept);
+    config_host_t ph = { .addr = "10.0.0.40", .server_mac = { 0x02, 0, 0, 0, 0, 0x40 } };
+    memcpy(ph.psn_account_id, kept, 8);
+    expect(k >= 0 && config_host_add(&ph), "a PIN pairing is stored with its account");
+    config_psn_remove(k);
+    expect(config_host_count() == 1 && !memcmp(config_host(0)->psn_account_id, kept, 8),
+           "signing out keeps the pairing and its account stamp");
+    expect(config_psn_add_id(kept) >= 0, "signing in again stores that account next to the others");
+    config_host_t again = ph;
+    expect(config_host_find(&again) == 0, "re-pairing the console updates the same entry, not a second one");
+    config_host_remove(0);
+    while (config_psn_count()) config_psn_remove(0);
+    config_save();
+
+    /* several accounts keep their place and their ids */
+    const uint8_t id2[8] = { 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28 };
+    config_psn_add_id(id); /* the account the block above cleared */
+    config_psn_add_id(id2);
+    expect(config_psn_count() == 2 && config_save(), "a second account is stored next to the first");
+    config_psn_remove(0);
+    expect(config_load() && config_psn_count() == 2 && !memcmp(config_psn_at(0)->account_id, id, 8) &&
+               !memcmp(config_psn_at(1)->account_id, id2, 8),
+           "linked accounts keep their order and ids across save + load");
+    while (config_psn_count()) config_psn_remove(0);
+    /* two pairings of one console under two accounts, both signed out: the stamps keep them apart */
+    uint8_t two_a[8] = { 0x71, 0, 0, 0, 0, 0, 0, 1 }, two_b[8] = { 0x72, 0, 0, 0, 0, 0, 0, 2 };
+    int ia = config_psn_add_id(two_a), ib = config_psn_add_id(two_b);
+    config_host_t ha = { .addr = "10.0.0.50", .server_mac = { 0x02, 0, 0, 0, 0, 0x50 } }, hb = ha;
+    memcpy(ha.psn_account_id, two_a, 8);
+    memcpy(hb.psn_account_id, two_b, 8);
+    expect(ia >= 0 && ib >= 0 && config_host_add(&ha) && config_host_add(&hb),
+           "one console is paired for two accounts");
+    config_psn_remove(ib);
+    config_psn_remove(ia);
+    expect(config_host_count() == 2 && config_save(), "signing both out keeps both pairings");
+    config_psn_remove(0); /* whatever is left */
+    while (config_host_count()) config_host_remove(0);
+    expect(config_load() && config_host_count() == 2 && !memcmp(config_host(0)->psn_account_id, two_a, 8) &&
+               !memcmp(config_host(1)->psn_account_id, two_b, 8),
+           "their different stamps keep them apart across a reload");
+    while (config_host_count()) config_host_remove(0);
+    while (config_psn_count()) config_psn_remove(0);
+    config_save();
+
+    /* four linked accounts are the most the panel holds */
+    uint8_t cap[4][8];
+    int made = 0;
+    for (int i = 0; i < 4; i++) {
+        cap[i][0] = 0x50;
+        cap[i][7] = (uint8_t)(i + 1);
+        if (config_psn_add_id(cap[i]) >= 0) made++;
+    }
+    uint8_t fifth[8] = { 0x60, 1, 2, 3, 4, 5, 6, 7 };
+    expect(made == 4 && config_psn_add_id(fifth) < 0 && config_psn_count() == 4,
+           "four PSN accounts are the most: a fifth is refused");
+    while (config_psn_count()) config_psn_remove(0);
     config_save();
     unlink(config_path());
     config_load();
@@ -1113,7 +1207,7 @@ int main(int argc, char **argv) {
     expect(ui_register_step() == REG_KIND, "Cross on the PIN way in: which console");
     reg_check("add-kind");
     key(SDLK_RETURN);
-    expect(ui_register_step() == REG_ACCOUNT && !config_psn_has_account_id(),
+    expect(ui_register_step() == REG_ACCOUNT && config_psn_count() == 0,
            "with no PSN account ID stored, PIN pairing asks for it first");
     reg_check("add-account");
     key(SDLK_DOWN);
@@ -1154,15 +1248,15 @@ int main(int argc, char **argv) {
            "Circle puts the keyboard away and types nothing");
     key(SDLK_RIGHT);
     key(SDLK_RETURN);
-    expect(ui_register_step() == REG_ACCOUNT && !config_psn_has_account_id(), "an invalid account ID is refused");
+    expect(ui_register_step() == REG_ACCOUNT && config_psn_count() == 0, "an invalid account ID is refused");
     key(SDLK_LEFT);
     for (int i = 0; i < 4; i++) key(SDLK_BACKSPACE);
     input_remote_text("AQIDBAUGBwg=");
     bool id_typed = wait_text("AQIDBAUGBwg=");
     key(SDLK_RIGHT);
     key(SDLK_RETURN);
-    expect(id_typed && ui_register_step() == REG_ADDR && config_psn_has_account_id() &&
-               config_psn()->account_id[0] == 1 && !config_psn()->linked,
+    expect(id_typed && ui_register_step() == REG_ADDR && config_psn_count() > 0 &&
+               config_psn_at(0)->account_id[0] == 1 && !config_psn_at(0)->linked,
            "a valid account ID is stored, and the flow goes on to the address");
     expect(!strcmp(ui_register_text(), "192.168.1.240") && ui_register_focus() == 1,
            "the PS5 discovery found unpaired has its address filled in, Next focused");
@@ -1238,27 +1332,27 @@ int main(int argc, char **argv) {
     expect(!ui_register_active() && !lv_obj_has_flag(home_root(), LV_OBJ_FLAG_HIDDEN), "... and closes from there");
 
     /* the manual PSN account id: bad base64 is rejected, a valid one is stored and used */
-    config_psn_clear();
-    app_reg_submit_pin("192.168.1.79", "12345678", true, "not base64!");
-    expect(app_reg_state() == APP_REG_FAILED && strstr(app_reg_error(), "base64"), "a bad PSN account ID is rejected");
+    while (config_psn_count()) config_psn_remove(0);
+    app_reg_submit_pin("192.168.1.79", "12345678", true, -1);
+    expect(app_reg_state() == APP_REG_FAILED && strstr(app_reg_error(), "PSN account"),
+           "PIN pairing without a PSN account is refused");
     app_reg_cancel();
-    app_reg_submit_pin("192.168.1.79", "12345678", true, "AAAAAAAAAAA=");
-    expect(app_reg_state() == APP_REG_FAILED && strstr(app_reg_error(), "base64"),
-           "an all-zero PSN account ID is rejected");
-    app_reg_cancel();
-    app_reg_submit_pin("192.168.1.79", "12345678", true, "AQIDBAUGBwg=");
-    expect(app_reg_state() == APP_REG_RUNNING && config_psn_has_account_id() && !config_psn()->linked &&
-               config_psn()->account_id[0] == 1 && config_psn()->account_id[7] == 8,
-           "a valid base64 PSN account ID is stored (not a PSN link) and used");
+    const uint8_t manual[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    int manual_i = config_psn_add_id(manual);
+    config_save();
+    app_reg_submit_pin("192.168.1.79", "12345678", true, manual_i);
+    expect(app_reg_state() == APP_REG_RUNNING && config_psn_count() == 1 && !config_psn_at(0)->linked &&
+               config_psn_at(0)->account_id[0] == 1 && config_psn_at(0)->account_id[7] == 8,
+           "a manual account ID pairs the console for that account");
     pump(2600);
     expect(app_reg_state() == APP_REG_SUCCESS, "registration with a manual account ID succeeds");
     app_reg_cancel();
-    config_psn_clear();
-    config_save();
 
     /* signing in for the account ID: the PSN sign-in, then straight on to the address. Signing in
      * brings the account's consoles too: its PS5 has the name of the PS5 paired above, so the two
      * are one console with two routes */
+    while (config_psn_count()) config_psn_remove(0); /* start from none: the account step asks for one */
+    config_save();
     ui_register_open();
     pump(400);
     key(SDLK_RETURN);
@@ -1275,15 +1369,22 @@ int main(int argc, char **argv) {
     pump(400);
     expect(code && ui_register_step() == REG_LINKING, "Link signs in");
     pump(3600);
-    expect(ui_register_step() == REG_ADDR && config_psn()->linked && config_host_count() == entries1 + 2 &&
-               app_host_count() == hosts1 + 1,
-           "signed in, the flow goes on to the address; the PS5 joins the PIN-paired one, the PS4 is new");
+    expect(ui_register_step() == REG_ADDR && app_psn_account_linked(0) && config_host_count() == entries1 + 2 &&
+               app_host_count() == hosts1 + 2,
+           "signed in, the flow goes on to the address; another account's consoles are new tiles");
     int via = 0;
     for (int i = 0; i < config_host_count(); i++)
         if (config_host(i)->via_psn) via++;
     expect(via == 2, "the PSN consoles are stored as via PSN");
     ui_register_close();
     pump(300);
+
+    /* pairing a console for the account that was just linked: it joins that account's PSN console of
+     * the same name, so the console has both routes (the PIN pairing is preferred) */
+    int acc_b = app_psn_linked_account();
+    app_reg_submit_pin("192.168.1.77", "12345678", true, acc_b);
+    pump(2600);
+    app_reg_cancel();
 
     /* the PSN way in: the code (a USB keyboard and the on-screen one), signing in, the consoles found */
     ui_register_open();
@@ -1307,7 +1408,8 @@ int main(int argc, char **argv) {
     key(SDLK_RIGHT);
     key(SDLK_RETURN);
     pump(3600);
-    expect(ui_register_step() == REG_FOUND && config_psn()->linked, "signed in, the flow lists the consoles found");
+    expect(ui_register_step() == REG_FOUND && config_psn_count() >= 2 && app_psn_account_linked(1),
+           "signed in, the flow lists the consoles found");
     shot("add-found");
     key(SDLK_RETURN);
     pump(300);
@@ -1351,9 +1453,14 @@ int main(int argc, char **argv) {
     pump(300);
     expect(!home_menu_open() && app_host(both)->route == ROUTE_PSN, "the route menu switches the console to PSN");
     shot("home-route-psn");
-    int psn_entry = -1;
+    int psn_entry = -1, psn_acc = -1;
+    for (int i = 0; i < config_psn_count(); i++)
+        if (i == app_host(both)->account) psn_acc = i;
     for (int i = 0; i < config_host_count(); i++)
-        if (config_host(i)->via_psn && config_host(i)->is_ps5) psn_entry = i;
+        if (config_host(i)->via_psn && config_host(i)->is_ps5 && psn_acc >= 0 &&
+            !memcmp(config_host(i)->psn_account_id, config_psn_at(psn_acc)->account_id, 8) &&
+            !strcmp(config_host(i)->nickname, app_host(both)->name))
+            psn_entry = i;
     config_load();
     app_init(ui_app_changed); /* as after a restart */
     expect(psn_entry >= 0 && config_host(psn_entry)->prefer_psn && app_host(both)->route == ROUTE_PSN,
@@ -1365,6 +1472,7 @@ int main(int argc, char **argv) {
     expect(kept && app_host_count() == shown, "an entry with neither an address nor a PSN route is not shown");
     if (kept) config_host_remove(config_host_find(&routeless));
     app_init(ui_app_changed);
+
     key(SDLK_LEFT);
     key(SDLK_RETURN);
     pump(400);
@@ -1384,9 +1492,184 @@ int main(int argc, char **argv) {
     expect(app_host(both)->route == ROUTE_LAN && !config_host(psn_entry)->prefer_psn,
            "the route switches back to the local network, saved");
 
+    /* Settings > PSN account: one row per account, Cross opens its menu, Refresh syncs it */
+    expect(app_psn_account_count() >= 2, "the linked accounts are listed side by side");
+    home_reset();
+    home_section_step(1);
+    pump(300);
+    for (int i = 0; i < 8 && home_index() != 2; i++) key(home_index() < 2 ? SDLK_RIGHT : SDLK_LEFT);
+    key(SDLK_DOWN);
+    pump(300);
+    expect(home_section() == HOME_SETTINGS && home_zone() == HOME_PANEL && home_index() == 2 && home_item() == 0 &&
+               find_visible_text(lv_scr_act(), app_psn_account_name(0)) != NULL,
+           "the PSN account panel opens on the first account row");
+    key(SDLK_RETURN);
+    pump(200);
+    expect(home_settings_menu_open() && find_visible_text(lv_scr_act(), "Refresh consoles") != NULL &&
+               find_visible_text(lv_scr_act(), "Sign out") != NULL,
+           "Cross on an account opens Refresh consoles and Sign out");
+    home_section_step(-1); /* L1 */
+    pump(200);
+    expect(!home_settings_menu_open() && home_section() == HOME_CONSOLES, "L1 closes the account menu");
+    home_section_step(1);
+    pump(200);
+    for (int i = 0; i < 8 && home_index() != 2; i++) key(home_index() < 2 ? SDLK_RIGHT : SDLK_LEFT);
+    key(SDLK_DOWN);
+    pump(300);
+    key(SDLK_RETURN); /* the first account's menu */
+    pump(200);
+    key(SDLK_RETURN); /* Refresh consoles */
+    pump(200);
+    expect(!home_settings_menu_open() && app_reg_state() == APP_REG_RUNNING, "Refresh consoles starts a PSN sync");
+    pump(2200);
+    expect(app_reg_state() == APP_REG_SUCCESS && app_reg_status()[0] &&
+               find_visible_text(lv_scr_act(), app_reg_status()) != NULL,
+           "... and its result is in the account's summary");
+    key(SDLK_RETURN);
+    pump(200);
+    key(SDLK_DOWN);
+    key(SDLK_RETURN);
+    pump(200);
+    expect(ui_confirm_active() && find_visible_text(lv_layer_top(), "Sign out") != NULL,
+           "Sign out asks first, naming the account");
+    pad_btn(0x132); /* Cancel */
+    pump(300);
+    expect(!ui_confirm_active() && home_zone() == HOME_PANEL, "Cancel leaves the panel as it was");
+
+    /* Add a PSN account opens straight at the phone sign-in, and Back closes it from there */
+    for (int i = 0; i < app_psn_account_count(); i++) key(SDLK_DOWN);
+    key(SDLK_RETURN);
+    pump(400);
+    expect(ui_register_active() && ui_register_step() == REG_PSN &&
+               find_visible_text(ui_register_root(), "ADD A PSN ACCOUNT") != NULL,
+           "Add a PSN account opens at the sign-in, under its own header");
+    ui_register_back();
+    pump(300);
+    expect(!ui_register_active(), "Back on that step closes it");
+    pad_btn(0x132);
+    pad_btn(0x132);
+    pump(300);
+
+    /* typing an ID with the account picker shown: the keyboard's OK and Back land on the shifted controls */
+    ui_register_open();
+    pump(400);
+    key(SDLK_RETURN); /* PIN */
+    key(SDLK_RETURN); /* which console */
+    key(SDLK_DOWN);   /* from the account segment to Add */
+    key(SDLK_DOWN);   /* to Type the account ID */
+    key(SDLK_RETURN);
+    key(SDLK_RETURN); /* the field: the keyboard comes up */
+    input_remote_text("AQIDBAUGBwg=");
+    bool acc_typed = wait_text("AQIDBAUGBwg=");
+    lv_obj_t *kb_acc = find_type(ui_register_root(), &lv_keyboard_class);
+    if (kb_acc) lv_event_send(kb_acc, LV_EVENT_READY, NULL); /* the keyboard's OK */
+    pump(400);
+    expect(acc_typed && !ui_register_typing() && ui_register_focus() == 4,
+           "the keyboard's OK leaves the focus on Next when the account picker is shown");
+    key(SDLK_LEFT);
+    key(SDLK_RETURN); /* the field again: the keyboard */
+    key(SDLK_ESCAPE); /* the remote's Back: the keyboard goes away */
+    pump(200);
+    expect(!ui_register_typing() && ui_register_focus() == 3,
+           "Back from the keyboard returns to the field, not the hidden option");
+    ui_register_close();
+    pump(300);
+
+    /* with two accounts, pairing a console asks which one it is for */
+    ui_register_open();
+    pump(400);
+    key(SDLK_RETURN); /* the PIN way in */
+    key(SDLK_RETURN); /* which console */
+    expect(ui_register_step() == REG_ACCOUNT, "with two accounts, Add a console asks which one to pair for");
+    key(SDLK_RIGHT); /* the account segment */
+    key(SDLK_RETURN);
+    expect(ui_register_step() == REG_ADDR, "... and Cross on the chosen account goes on to the address");
+    ui_register_close();
+    pump(300);
+
+    /* three and four accounts have the same row count: the panel must still rebuild, so row 3 is the
+     * fourth account and not the Add row; the boundary is crossed one account at a time */
+    const uint8_t more[2][8] = { { 0x81, 0, 0, 0, 0, 0, 0, 1 }, { 0x82, 0, 0, 0, 0, 0, 0, 2 } };
+    config_psn_t extra = { .linked = true };
+    memcpy(extra.account_id, more[0], 8);
+    snprintf(extra.online_id, sizeof(extra.online_id), "Extra0");
+    snprintf(extra.access_token, sizeof(extra.access_token), "token0");
+    snprintf(extra.refresh_token, sizeof(extra.refresh_token), "refresh0");
+    config_psn_add(&extra);
+    home_reset();
+    home_section_step(1);
+    pump(300);
+    for (int i = 0; i < 8 && home_index() != 2; i++) key(home_index() < 2 ? SDLK_RIGHT : SDLK_LEFT);
+    key(SDLK_DOWN);
+    pump(300);
+    home_settings_refresh();
+    pump(400);
+    expect(app_psn_account_count() == 3, "three accounts are stored, with Add as the last row");
+    config_psn_t extra2 = extra; /* the 4th account, added while the panel is on screen */
+    memcpy(extra2.account_id, more[1], 8);
+    snprintf(extra2.online_id, sizeof(extra2.online_id), "Extra1");
+    config_psn_add(&extra2);
+    home_settings_refresh();
+    pump(400);
+    expect(app_psn_account_count() == 4, "the fourth account is added");
+    key(SDLK_DOWN);
+    key(SDLK_DOWN);
+    key(SDLK_DOWN);
+    key(SDLK_RETURN);
+    pump(200);
+    expect(home_settings_menu_open() && find_visible_text(lv_scr_act(), "Refresh consoles") != NULL,
+           "the fourth row is an account, with its menu, not Add");
+    pad_btn(0x132);
+    pump(200);
+    config_psn_remove(3); /* back to three: the Add row must be back */
+    home_settings_refresh();
+    pump(400);
+    expect(app_psn_account_count() == 3, "one account is signed out");
+    key(SDLK_DOWN);
+    key(SDLK_DOWN);
+    key(SDLK_DOWN);
+    key(SDLK_RETURN);
+    pump(400);
+    expect(ui_register_active() && ui_register_step() == REG_PSN, "back to three accounts, Add is the last row again");
+    ui_register_close();
+    pump(300);
+    config_psn_remove(2); /* the extra account of this test */
+    home_settings_refresh();
+    pump(300);
+    home_reset();
+
+    /* signing out of one account keeps the consoles paired with a PIN and drops its PSN-only ones */
+    int accs = app_psn_account_count(), psn_before = count_hosts(false, true), lan_before = count_hosts(true, false);
+    bool out = app_psn_sign_out(1);
+    expect(accs >= 2 && out && app_psn_account_count() == accs - 1 && count_hosts(false, true) < psn_before &&
+               count_hosts(true, false) == lan_before,
+           "signing out of an account drops its PSN-only consoles and keeps the PIN pairings");
+
+    /* signing in again with an account that was signed out rejoins its PIN pairings */
+    uint8_t b_id[8];
+    char b_name[32];
+    memcpy(b_id, config_psn_at(0)->account_id, 8);
+    snprintf(b_name, sizeof(b_name), "%s", app_psn_account_name(0));
+    expect(app_psn_sign_out(0), "the last account can be signed out");
+    config_psn_t back = { .linked = true };
+    memcpy(back.account_id, b_id, 8);
+    snprintf(back.online_id, sizeof(back.online_id), "%s", b_name);
+    snprintf(back.access_token, sizeof(back.access_token), "access");
+    snprintf(back.refresh_token, sizeof(back.refresh_token), "refresh");
+    expect(config_psn_add(&back) == 0, "signing in again stores the same account");
+    config_save();
+    app_init(ui_app_changed);
+    app_psn_refresh(0);
+    pump(2400);
+    int rejoined = -1;
+    for (int i = 0; i < app_host_count(); i++)
+        if (app_host(i)->lan && app_host(i)->psn && app_host(i)->account == 0) rejoined = i;
+    expect(rejoined >= 0 && !strcmp(app_host(rejoined)->addr, "192.168.1.77"),
+           "signing in again rejoins the PIN pairing with its PSN device, one tile with two routes");
+
     /* a console the local network does not reach (".98" in the simulation) goes on over PSN in the
      * same connect, when it has a PSN route; the saved route stays the local network */
-    app_reg_submit_pin("192.168.1.98", "12345678", false, NULL);
+    app_reg_submit_pin("192.168.1.98", "12345678", false, acc_b);
     pump(2600);
     app_reg_cancel();
     int ps4g = -1;
@@ -1431,13 +1714,14 @@ int main(int argc, char **argv) {
     pump(600);
 
     /* a console in rest mode (".97") is woken first; the session starts once it answers ready */
-    app_reg_submit_pin("192.168.1.97", "12345678", true, NULL);
+    app_reg_submit_pin("192.168.1.97", "12345678", true, 0);
     pump(2600);
     app_reg_cancel();
     int rest = app_selected();
     pump(800);
     expect(app_host(rest) && app_host(rest)->state == HOST_STANDBY && !strcmp(app_host(rest)->addr, "192.168.1.97"),
            "a console in rest mode is heard as such");
+    key(SDLK_DOWN); /* the README still shows Start Remote Play focused */
     shot("home-rest-mode");
     app_connect();
     pump(300);
@@ -1486,7 +1770,7 @@ int main(int argc, char **argv) {
 
     /* a simulated PIN registration stores the console, selects it, and it is still there after a reload */
     int hosts0 = app_host_count(), entries0 = config_host_count();
-    app_reg_submit_pin(" 192.168.1.60 ", "12345678", true, NULL);
+    app_reg_submit_pin(" 192.168.1.60 ", "12345678", true, 0);
     expect(app_reg_state() == APP_REG_RUNNING, "PIN registration starts");
     pump(2600);
     expect(app_reg_state() == APP_REG_SUCCESS && app_host_count() == hosts0 + 1 && app_selected() == hosts0 &&
@@ -1757,7 +2041,7 @@ int main(int argc, char **argv) {
     /* a console that asks for the login PIN gets the passcode sheet mid-connect: the pad or the
      * remote's digits type it, OK submits it and the handshake carries on */
     int hosts_ln = app_host_count();
-    app_reg_submit_pin("192.168.1.99", "12345678", true, NULL);
+    app_reg_submit_pin("192.168.1.99", "12345678", true, 0);
     pump(2600);
     expect(app_reg_state() == APP_REG_SUCCESS && app_host_count() == hosts_ln + 1, "the login-PIN console registers");
     app_reg_cancel();
