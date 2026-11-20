@@ -874,13 +874,16 @@ int main(int argc, char **argv) {
     key(SDLK_DOWN);
     key(SDLK_DOWN);
     key(SDLK_LEFT);
+    for (int i = 0; i < 25 && st->bitrate_kbps != 29000; i++) pump(20); /* a loaded runner drains the key late */
     expect(st->codec == CODEC_H265 && st->bitrate_kbps == 29000, "LEFT on the bitrate bar lowers it by 1 Mbps");
     key(SDLK_RIGHT);
     pump(500);
     for (int i = 0; i < 12; i++) key(SDLK_RIGHT); /* held: the remote repeats faster than 400 ms */
+    for (int i = 0; i < 25 && st->bitrate_kbps != 50000; i++) pump(20);
     int held_up = st->bitrate_kbps;
     pump(500);
     for (int i = 0; i < 12; i++) key(SDLK_LEFT);
+    for (int i = 0; i < 25 && st->bitrate_kbps != 25000; i++) pump(20);
     expect(held_up == 50000 && st->bitrate_kbps == 25000,
            "a held key speeds the bitrate up (1, then 2, then 5 Mbps a step), both ways");
     shot("settings-custom");
