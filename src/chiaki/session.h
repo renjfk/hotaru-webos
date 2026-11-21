@@ -19,14 +19,15 @@
  *
  * Registration (pairing) has two ways in, both ending in REG_EV_SUCCESS with
  * the keys to store via config_host_add():
- *   PIN: session_reg_begin_pin(addr, pin, ps5) - the PIN from the console's
- *        Settings > System > Remote Play > Link Device (chiaki_regist_start).
+ *   PIN: session_reg_begin_pin(addr, pin, ps5, account_id) - the PIN from the
+ *        console's Settings > System > Remote Play > Link Device; the console is paired for
+ *        that PSN account (chiaki_regist_start).
  *   PSN: show session_reg_psn_url() (QR + text), the user signs in on a phone
  *        and types the `code=` value of the redirect page into
  *        session_reg_submit_code(); that yields REG_EV_PSN_LINKED with the
- *        account and tokens (store via config_psn_set()), then
- *        session_psn_fetch_devices() yields REG_EV_PSN_DEVICES with the consoles
- *        attached to the account (chiaki_holepunch_list_devices).
+ *        account and tokens (store via config_psn_add()), then
+ *        session_psn_fetch_devices(account_id) yields REG_EV_PSN_DEVICES with the
+ *        consoles attached to that account (chiaki_holepunch_list_devices).
  * One operation runs at a time; session_reg_stop() cancels it (REG_EV_CANCELED).
  *
  * STUB: while session_reg_available() is false the operations are simulated
@@ -176,7 +177,7 @@ typedef enum {
 
 #define SESSION_PSN_DEVICES_MAX 8
 
-/* a console attached to the linked PSN account (chiaki_holepunch_list_devices) */
+/* a console attached to a linked PSN account (chiaki_holepunch_list_devices) */
 typedef struct {
     char name[32];
     uint8_t uid[32]; /* PSN device uid */
@@ -191,15 +192,17 @@ typedef struct {
     config_host_t host;                                    /* valid on REG_EV_SUCCESS */
     config_psn_t psn;                                      /* valid on REG_EV_PSN_LINKED */
     session_psn_device_t devices[SESSION_PSN_DEVICES_MAX]; /* valid on REG_EV_PSN_DEVICES */
+    uint8_t account_id[8];                                 /* the account they belong to, valid on REG_EV_PSN_DEVICES */
     int device_count;
     char reason[128]; /* valid on REG_EV_FAILED */
 } session_reg_event_t;
 
 bool session_reg_available(void); /* true when the real libchiaki backend is linked */
-bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5);
+bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5, const uint8_t account_id[8]);
 bool session_reg_begin_psn(const uint8_t account_id[8], bool ps5);
 bool session_reg_submit_code(const char *code); /* PSN redirect `code=` value -> tokens + account id */
-bool session_psn_fetch_devices(void);           /* list the consoles attached to the linked account */
+/* list the consoles attached to one stored account; false when it is not stored or has no token */
+bool session_psn_fetch_devices(const uint8_t account_id[8]);
 void session_reg_stop(void);
 bool session_reg_running(void);
 bool session_reg_poll(session_reg_event_t *out); /* main thread only: next queued event, if any */

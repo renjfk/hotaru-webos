@@ -394,6 +394,8 @@ void ctl_menu_move(ctl_menu_t *m, int dir) {
 
 bool ctl_menu_is_open(const ctl_menu_t *m) { return m->card != NULL; }
 
+lv_coord_t ctl_menu_height(int items) { return MENU_H(LV_CLAMP(1, items, CTL_MENU_MAX)); }
+
 /* ---------- pills ---------- */
 
 lv_obj_t *ctl_pill(lv_obj_t *parent, lv_coord_t w, lv_coord_t h) {

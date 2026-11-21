@@ -28,8 +28,10 @@
  *   stream.codec=1
  *   input.rumble=1
  *   session.sleep_on_disconnect=0
- *   psn.account_id=<16 hex>
+ *   psn.0.account_id=<16 hex>
+ *   psn.0.online_id=renjfk
  *   host.0.nickname=PS5-123
+ *   host.0.psn_account_id=<16 hex>
  *   host.0.rp_key=<32 hex>
  */
 #ifndef HOTARU_CONFIG_H
@@ -38,8 +40,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CONFIG_MAX_HOSTS 16
-#define CONFIG_DUID_LEN  48 /* chiaki's DUID_PREFIX (16 hex) + 16 random bytes as hex */
+#define CONFIG_MAX_HOSTS    16
+#define CONFIG_MAX_ACCOUNTS 4
+#define CONFIG_DUID_LEN     48 /* chiaki's DUID_PREFIX (16 hex) + 16 random bytes as hex */
 
 typedef enum { CODEC_H264, CODEC_H265, CODEC_H265_HDR } video_codec_t;
 
@@ -82,12 +85,14 @@ typedef struct {
     uint8_t server_mac[6]; /* identity of a LAN console (all zero = unknown) */
     uint8_t rp_regist_key[16];
     uint8_t rp_key[16];
-    bool via_psn;        /* found through the PSN account, connect over holepunch */
-    uint8_t psn_uid[32]; /* PSN device uid (all zero = not a PSN console) */
-    bool prefer_psn;     /* on a PSN entry whose console is PIN-paired too: connect over PSN (app.h routes) */
+    bool via_psn;              /* found through the PSN account, connect over holepunch */
+    uint8_t psn_uid[32];       /* PSN device uid (all zero = not a PSN console) */
+    uint8_t psn_account_id[8]; /* the PSN account this pairing belongs to (all zero: none) */
+    bool prefer_psn;           /* on a PSN entry whose console is PIN-paired too: connect over PSN (app.h routes) */
 } config_host_t;
 
-/* the linked PSN account (OAuth via QR + code, see chiaki/session.h) */
+/* a linked PSN account (OAuth via QR + code, see chiaki/session.h); a console is paired per
+ * account, so a shared console has one entry and one tile per account */
 typedef struct {
     bool linked;
     uint8_t account_id[8]; /* PSN account id */
@@ -114,13 +119,14 @@ bool config_host_add(const config_host_t *host); /* false when full, empty or a 
 bool config_host_update(int index, const config_host_t *host);
 bool config_host_remove(int index);
 
-config_psn_t *config_psn(void);
-void config_psn_set(const uint8_t account_id[8], const char *online_id, const char *access_token,
-                    const char *refresh_token);
-void config_psn_set_account_id(const uint8_t account_id[8]); /* manual entry: an id without tokens */
-void config_psn_set_expiry(long long expires_at);            /* access token expiry (unix seconds) */
-bool config_psn_has_account_id(void);                        /* an id is stored (entered or from PSN) */
-void config_psn_clear(void);
+int config_psn_count(void);
+const config_psn_t *config_psn_at(int index);       /* NULL if out of range */
+config_psn_t *config_psn_edit(int index);           /* the backend updates tokens and expiry in place */
+int config_psn_find(const uint8_t account_id[8]);   /* -1 when that account is not stored */
+int config_psn_add(const config_psn_t *account);    /* add, or merge into the account with its id; -1 */
+int config_psn_add_id(const uint8_t account_id[8]); /* manual entry: an id without tokens */
+void config_psn_set_tokens(int index, const char *access_token, const char *refresh_token, long long expires_at);
+void config_psn_remove(int index); /* drops its PSN-only consoles; PIN pairings keep their keys */
 
 const char *config_device_uid(void); /* stable device UID; generated (and saved) on first call */
 

@@ -380,7 +380,7 @@ static bool pin_valid(const char *pin) { return pin && strlen(pin) == 8 && strsp
 bool session_reg_available(void) { return false; }
 bool session_reg_running(void) { return g_sim.op != OP_NONE; }
 
-bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5) {
+bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5, const uint8_t account_id[8]) {
     lock_init();
     if (session_reg_running() || !addr || !*addr || !pin_valid(pin)) return false;
     log_msg("reg: simulated PIN registration with %s", addr);
@@ -390,6 +390,7 @@ bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5) {
     } else {
         g_sim.result = (session_reg_event_t){ .type = REG_EV_SUCCESS, .progress = 100 };
         sim_host(&g_sim.result.host, addr, ps5, fnv1a(addr, strlen(addr)), false);
+        if (account_id) memcpy(g_sim.result.host.psn_account_id, account_id, 8);
     }
     return true;
 }
@@ -410,7 +411,7 @@ bool session_reg_submit_code(const char *code) {
         };
         p->linked = true;
         memcpy(p->account_id, id, sizeof(id));
-        snprintf(p->online_id, sizeof(p->online_id), "SimulatedUser");
+        snprintf(p->online_id, sizeof(p->online_id), "SimUser%06x", h & 0xffffffu); /* one id per code */
         snprintf(p->access_token, sizeof(p->access_token), "simulated-access-token");
         snprintf(p->refresh_token, sizeof(p->refresh_token), "simulated-refresh-token");
     }
@@ -424,16 +425,18 @@ bool session_reg_begin_psn(const uint8_t account_id[8], bool ps5) {
     sim_start(OP_PSN, SIM_PSN_MS);
     g_sim.result = (session_reg_event_t){ .type = REG_EV_SUCCESS, .progress = 100 };
     sim_host(&g_sim.result.host, NULL, ps5, fnv1a(account_id, 8), true);
+    memcpy(g_sim.result.host.psn_account_id, account_id, 8);
     return true;
 }
 
-bool session_psn_fetch_devices(void) {
+bool session_psn_fetch_devices(const uint8_t account_id[8]) {
     lock_init();
-    if (session_reg_running() || !config_psn_has_account_id()) return false;
+    if (session_reg_running() || config_psn_find(account_id) < 0) return false;
     log_msg("reg: simulated PSN device list");
     sim_start(OP_DEVICES, SIM_DEVICES_MS);
     memset(&g_sim.result, 0, sizeof(g_sim.result));
     g_sim.result.type = REG_EV_PSN_DEVICES;
+    memcpy(g_sim.result.account_id, account_id, sizeof(g_sim.result.account_id));
     const struct {
         const char *name;
         bool ps5;

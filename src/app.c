@@ -87,12 +87,15 @@ static struct {
 static struct {
     app_reg_state_t state;
     app_reg_method_t method;
+    int account;           /* the PSN account this operation uses */
+    uint8_t account_id[8]; /* ... its id (all zero when it has none) */
+    uint8_t linked_id[8];  /* the account the last PSN link added, all zero when none */
     bool ps5;
     bool linking;  /* PSN path: still exchanging the code for tokens */
     bool via_code; /* PSN path: started from a code, so the progress is split */
     int progress;
     char status[128], error[128];
-} g_reg;
+} g_reg = { .account = -1 };
 
 static void notify(app_change_t what) {
     if (g_listener) g_listener(what);
@@ -112,6 +115,16 @@ static bool psn_only(const config_host_t *c) { return has_psn(c) && !has_lan(c);
 /* the PSN device list and a PIN pairing name the console alike (its nickname) */
 static bool same_name(const config_host_t *a, const config_host_t *b) {
     return a->nickname[0] && a->is_ps5 == b->is_ps5 && !strcasecmp(a->nickname, b->nickname);
+}
+
+/* ... and belong to the same account: a console paired twice is two consoles, one per account */
+static bool same_account(const config_host_t *a, const config_host_t *b) {
+    return !memcmp(a->psn_account_id, b->psn_account_id, sizeof(a->psn_account_id));
+}
+
+static const config_psn_t *entry_account(const config_host_t *c) {
+    int i = config_psn_find(c->psn_account_id);
+    return i >= 0 ? config_psn_at(i) : NULL;
 }
 
 /* the route choice lives on the PSN entry (config prefer_psn) and is saved at once */
@@ -145,7 +158,7 @@ static void hosts_sync(void) {
         if (!psn_only(c)) continue;
         for (int j = 0; j < n && joins[i] < 0; j++) {
             const config_host_t *d = config_host(j);
-            if (taken[j] || !has_lan(d) || has_psn(d) || !same_name(c, d)) continue;
+            if (taken[j] || !has_lan(d) || has_psn(d) || !same_name(c, d) || !same_account(c, d)) continue;
             joins[i] = j;
             taken[j] = true;
         }
@@ -175,6 +188,8 @@ static void hosts_sync(void) {
         h->lan = lan != NULL;
         h->psn = psn != NULL;
         h->route = !lan || (psn && psn->prefer_psn) ? ROUTE_PSN : ROUTE_LAN; /* the PIN pairing first */
+        const config_psn_t *acc = entry_account(c);
+        h->account = acc ? config_psn_find(acc->account_id) : -1;
     }
     if (g_selected >= g_host_count) g_selected = g_host_count - 1;
     if (g_selected < 0 && g_host_count > 0) g_selected = 0;
@@ -473,10 +488,11 @@ bool app_conn_waking(void) { return g_conn == CONN_CONNECTING && g_wake.on; }
  * refreshed by the backend). The saved route stays as it is: at home the PIN pairing wins again. */
 static bool fall_back_to_psn(const char *why) {
     const app_host_t *h = app_host(g_conn_host);
-    const config_psn_t *psn = config_psn();
+    const config_host_t *psn_entry = g_conn_host >= 0 ? config_host(g_routes[g_conn_host].psn) : NULL;
+    const config_psn_t *psn = psn_entry ? entry_account(psn_entry) : NULL;
     config_host_t ch;
-    if (!h || !h->psn || !g_conn_cfg.addr[0] || g_conn_fallback || (!psn->access_token[0] && !psn->refresh_token[0]) ||
-        !route_entry_for(g_conn_host, ROUTE_PSN, &ch))
+    if (!h || !h->psn || !g_conn_cfg.addr[0] || g_conn_fallback || !psn ||
+        (!psn->access_token[0] && !psn->refresh_token[0]) || !route_entry_for(g_conn_host, ROUTE_PSN, &ch))
         return false;
     log_event(LOG_WARN, "NET", "%s %s: trying over PSN", h->name, why);
     if (!session_start(&ch, &config_get()->stream)) return false;
@@ -699,12 +715,16 @@ const char *app_reg_status(void) { return g_reg.status; }
 const char *app_reg_error(void) { return g_reg.error; }
 const char *app_reg_psn_url(void) { return session_reg_psn_url(); }
 
-static bool reg_begin(app_reg_method_t method, bool ps5) {
+static bool reg_begin(app_reg_method_t method, bool ps5, int account) {
     if (g_reg.state == APP_REG_RUNNING) {
         log_msg("reg: a registration is already running");
         return false;
     }
     g_reg.method = method;
+    g_reg.account = account;
+    memset(g_reg.account_id, 0, sizeof(g_reg.account_id));
+    const config_psn_t *acc = config_psn_at(account);
+    if (acc) memcpy(g_reg.account_id, acc->account_id, sizeof(g_reg.account_id));
     g_reg.ps5 = ps5;
     g_reg.linking = g_reg.via_code = false;
     g_reg.progress = 0;
@@ -727,7 +747,10 @@ static void reg_fail(const char *reason) {
     notify(APP_CHANGED_REG);
 }
 
-static void reg_success(const config_host_t *host) {
+static void reg_success(const config_host_t *paired) {
+    config_host_t partnered = *paired;
+    memcpy(partnered.psn_account_id, g_reg.account_id, sizeof(partnered.psn_account_id));
+    const config_host_t *host = &partnered;
     int i = config_host_find(host);
     bool ok = i >= 0 ? config_host_update(i, host) : config_host_add(host);
     if (!ok) {
@@ -750,6 +773,13 @@ static void reg_success(const config_host_t *host) {
 }
 
 static void reg_devices(const session_reg_event_t *ev) {
+    if (config_psn_find(ev->account_id) < 0) { /* signed out while the list was on its way */
+        g_reg.state = APP_REG_SUCCESS;
+        g_reg.progress = 100;
+        snprintf(g_reg.status, sizeof(g_reg.status), "The PSN account was signed out");
+        notify(APP_CHANGED_REG);
+        return;
+    }
     int added = 0;
     for (int i = 0; i < ev->device_count && i < SESSION_PSN_DEVICES_MAX; i++) {
         const session_psn_device_t *d = &ev->devices[i];
@@ -759,6 +789,7 @@ static void reg_devices(const session_reg_event_t *ev) {
         h.is_ps5 = d->ps5;
         h.via_psn = true;
         memcpy(h.psn_uid, d->uid, sizeof(h.psn_uid));
+        memcpy(h.psn_account_id, ev->account_id, sizeof(h.psn_account_id));
         int idx = config_host_find(&h);
         bool ok;
         if (idx >= 0) {
@@ -767,6 +798,7 @@ static void reg_devices(const session_reg_event_t *ev) {
             cur.is_ps5 = d->ps5;
             cur.via_psn = true;
             memcpy(cur.psn_uid, d->uid, sizeof(cur.psn_uid));
+            memcpy(cur.psn_account_id, ev->account_id, sizeof(cur.psn_account_id));
             ok = config_host_update(idx, &cur);
         } else {
             ok = config_host_add(&h);
@@ -783,8 +815,11 @@ static void reg_devices(const session_reg_event_t *ev) {
     }
     g_reg.state = APP_REG_SUCCESS;
     g_reg.progress = 100;
-    if (added) snprintf(g_reg.status, sizeof(g_reg.status), "Found %d console(s) on PSN", added);
-    else snprintf(g_reg.status, sizeof(g_reg.status), "%s", "No consoles on this PSN account");
+    const char *who = app_psn_account_name(config_psn_find(g_reg.account_id));
+    if (added)
+        snprintf(g_reg.status, sizeof(g_reg.status), "Found %d console%s%s%s", added, added == 1 ? "" : "s",
+                 who[0] ? " for " : "", who);
+    else snprintf(g_reg.status, sizeof(g_reg.status), "No consoles on this PSN account");
     log_event(LOG_OK, "REG", "PSN consoles attached: %d", added);
     if (added) {
         notify(APP_CHANGED_HOSTS);
@@ -806,19 +841,29 @@ static void reg_event(const session_reg_event_t *ev) {
             }
             break;
         }
-        case REG_EV_PSN_LINKED:
-            config_psn_set(ev->psn.account_id, ev->psn.online_id, ev->psn.access_token, ev->psn.refresh_token);
-            config_psn_set_expiry(ev->psn.expires_at);
+        case REG_EV_PSN_LINKED: {
+            int k = config_psn_add(&ev->psn);
+            if (k < 0) {
+                reg_fail(config_psn_count() >= CONFIG_MAX_ACCOUNTS ? "Too many PSN accounts: sign one out first"
+                                                                   : "Could not store the PSN account");
+                break;
+            }
+            g_reg.account = k;
+            memcpy(g_reg.account_id, ev->psn.account_id, sizeof(g_reg.account_id));
+            memcpy(g_reg.linked_id, ev->psn.account_id, sizeof(g_reg.linked_id));
             config_save();
+            hosts_sync(); /* its PIN pairings get their account back before the console list arrives */
+            notify(APP_CHANGED_HOSTS);
             log_event(LOG_OK, "REG", "PSN account %s linked", ev->psn.online_id);
             g_reg.linking = false;
             g_reg.progress = PSN_CODE_SHARE;
-            if (!session_psn_fetch_devices()) {
+            if (!session_psn_fetch_devices(g_reg.account_id)) {
                 reg_fail("Could not list the consoles on this PSN account");
                 break;
             }
             reg_running("Looking for your consoles");
             break;
+        }
         case REG_EV_PSN_DEVICES: reg_devices(ev); break;
         case REG_EV_SUCCESS: reg_success(&ev->host); break;
         case REG_EV_FAILED: reg_fail(ev->reason[0] ? ev->reason : "The console did not accept the registration"); break;
@@ -869,28 +914,71 @@ static bool b64_decode8(const char *s, uint8_t out[8]) {
     return n == 8;
 }
 
-bool app_psn_set_account_id(const char *b64) {
-    uint8_t id[8];
-    bool nonzero = false;
-    if (!b64 || !b64_decode8(b64, id)) return false;
-    for (int i = 0; i < 8; i++)
-        if (id[i]) nonzero = true;
-    if (!nonzero) return false;
-    if (!config_psn_has_account_id() || memcmp(id, config_psn()->account_id, 8) != 0) {
-        config_psn_set_account_id(id);
-        config_save();
-        log_event(LOG_OK, "REG", "PSN account ID saved");
-    }
-    return true;
+/* the linked accounts, for Settings and Add a console */
+int app_psn_account_count(void) { return config_psn_count(); }
+
+const char *app_psn_account_name(int account) {
+    const config_psn_t *p = config_psn_at(account);
+    if (!p) return "";
+    return p->online_id[0] ? p->online_id : "PSN account";
 }
 
-void app_reg_submit_pin(const char *addr, const char *pin, bool ps5, const char *account_id_b64) {
-    if (!reg_begin(APP_REG_METHOD_PIN, ps5)) return;
-    /* an optional manually entered PSN account id: needed by a PS5 and a PS4 on 7.0+ */
-    if (account_id_b64 && *account_id_b64 && !app_psn_set_account_id(account_id_b64)) {
-        reg_fail("The PSN account ID must be base64 of 8 non-zero bytes");
-        return;
+bool app_psn_account_linked(int account) {
+    const config_psn_t *p = config_psn_at(account);
+    return p && p->linked && (p->access_token[0] || p->refresh_token[0]);
+}
+
+int app_psn_linked_account(void) { return config_psn_find(g_reg.linked_id); }
+
+const char *app_psn_account_status(int account) {
+    const config_psn_t *p = config_psn_at(account);
+    if (!p || memcmp(p->account_id, g_reg.account_id, sizeof(p->account_id)) != 0) return ""; /* its run only */
+    if (g_reg.state == APP_REG_FAILED) return g_reg.error;
+    if (g_reg.state == APP_REG_RUNNING || g_reg.state == APP_REG_SUCCESS) return g_reg.status;
+    return "";
+}
+
+/* consoles (not entries) on Home that are paired with the account: a PIN pairing and its PSN
+ * device are one console, so a host counts once */
+int app_psn_account_consoles(int account) {
+    const config_psn_t *p = config_psn_at(account);
+    if (!p) return 0;
+    int n = 0;
+    for (int k = 0; k < g_host_count; k++) {
+        bool owns = false;
+        for (int r = 0; r < 2 && !owns; r++) {
+            int e = r ? g_routes[k].psn : g_routes[k].lan;
+            const config_host_t *c = e >= 0 ? config_host(e) : NULL;
+            owns = c && !memcmp(c->psn_account_id, p->account_id, sizeof(p->account_id));
+        }
+        if (owns) n++;
     }
+    return n;
+}
+
+int app_psn_set_account_id(const char *b64) {
+    uint8_t id[8];
+    bool nonzero = false;
+    if (!b64 || !b64_decode8(b64, id)) return -1;
+    for (int i = 0; i < 8; i++)
+        if (id[i]) nonzero = true;
+    if (!nonzero) return -1;
+    int i = config_psn_find(id);
+    if (i >= 0) return i; /* a typed id never replaces that account's tokens */
+    i = config_psn_add_id(id);
+    if (i < 0) {
+        log_event(LOG_WARN, "REG", "No room for another PSN account");
+        return -1;
+    }
+    config_save();
+    hosts_sync(); /* the PIN pairings of that account get their label back at once */
+    notify(APP_CHANGED_HOSTS);
+    log_event(LOG_OK, "REG", "PSN account ID saved");
+    return i;
+}
+
+void app_reg_submit_pin(const char *addr, const char *pin, bool ps5, int account) {
+    if (!reg_begin(APP_REG_METHOD_PIN, ps5, account)) return;
     char a[64];
     if (!trim_copy(a, sizeof(a), addr)) {
         reg_fail("Enter the console's IP address");
@@ -900,40 +988,65 @@ void app_reg_submit_pin(const char *addr, const char *pin, bool ps5, const char 
         reg_fail("The PIN has 8 digits, as shown on the console");
         return;
     }
-    if (session_available() && !config_psn_has_account_id()) {
-        reg_fail("PIN pairing needs your PSN account ID: sign in to PSN or type the ID");
+    if (account < 0 || !config_psn_at(account)) {
+        reg_fail(session_available() ? "PIN pairing needs a PSN account: sign in or type its ID"
+                                     : "Choose a PSN account first");
         return;
     }
-    if (!session_reg_begin_pin(a, pin, ps5)) {
+    if (!session_reg_begin_pin(a, pin, ps5, g_reg.account_id)) {
         reg_fail("Could not start the registration");
         return;
     }
-    log_event(LOG_INFO, "REG", "Registering with %s (PIN)", a);
+    log_event(LOG_INFO, "REG", "Registering with %s (PIN, %s)", a, app_psn_account_name(account));
     reg_running("Registering with the console");
 }
 
-/* list the consoles attached to the linked PSN account and add them to the host list */
-void app_psn_refresh(void) {
-    if (!reg_begin(APP_REG_METHOD_PSN, true)) return;
-    if (!config_psn_has_account_id()) {
-        reg_fail("Link a PSN account first");
+/* list the consoles attached to one account and sync them with Home */
+void app_psn_refresh(int account) {
+    const config_psn_t *p = config_psn_at(account);
+    if (!reg_begin(APP_REG_METHOD_PSN, true, account)) return;
+    if (!p) {
+        reg_fail("That PSN account is not signed in");
         return;
     }
-    if (!config_psn()->access_token[0]) {
+    if (!p->access_token[0]) {
         reg_fail("Sign in to PSN to list your consoles");
         return;
     }
-    if (!session_psn_fetch_devices()) {
+    if (!session_psn_fetch_devices(p->account_id)) {
         reg_fail("Could not list the PSN consoles");
         return;
     }
-    log_event(LOG_INFO, "REG", "Looking for PSN consoles");
+    log_event(LOG_INFO, "REG", "Looking for the consoles on %s", app_psn_account_name(account));
     reg_running("Looking for your consoles");
+}
+
+/* Signing out drops the account and its PSN-only consoles; PIN pairings keep their keys. A running
+ * session or registration on that account must end first. */
+bool app_psn_sign_out(int account) {
+    const config_psn_t *p = config_psn_at(account);
+    if (!p) return false;
+    uint8_t id[8];
+    memcpy(id, p->account_id, sizeof(id));
+    if (g_conn != CONN_IDLE && !memcmp(g_conn_cfg.psn_account_id, id, sizeof(id))) {
+        log_event(LOG_WARN, "REG", "Disconnect before signing out of %s", app_psn_account_name(account));
+        return false;
+    }
+    if (g_reg.state == APP_REG_RUNNING && !memcmp(g_reg.account_id, id, sizeof(id))) app_reg_cancel();
+    char name[32];
+    snprintf(name, sizeof(name), "%s", app_psn_account_name(account));
+    config_psn_remove(account);
+    config_save();
+    hosts_sync();
+    log_event(LOG_WARN, "REG", "Signed out of PSN account %s", name);
+    notify(APP_CHANGED_HOSTS);
+    notify(APP_CHANGED_REG);
+    return true;
 }
 
 /* accepts the bare code or the whole redirect URL (its code= parameter) */
 void app_reg_submit_psn_code(const char *code, bool ps5) {
-    if (!reg_begin(APP_REG_METHOD_PSN, ps5)) return;
+    if (!reg_begin(APP_REG_METHOD_PSN, ps5, -1)) return;
     char in[SESSION_PSN_CODE_MAX + 1], c[SESSION_PSN_CODE_MAX + 1];
     trim_copy(in, sizeof(in), code);
     const char *p = strstr(in, "code=");

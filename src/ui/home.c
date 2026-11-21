@@ -309,6 +309,18 @@ static tile_t *new_tile(int sec, uint32_t top, uint32_t bottom) {
     return t;
 }
 
+/* the account's initials, in the tile's corner: a console paired twice is two tiles */
+static void tile_owner(tile_t *t, const char *name) {
+    if (!name[0]) return;
+    lv_obj_t *b = ctl_rect(t->tile, 44, 44, LV_RADIUS_CIRCLE, 0, LV_OPA_COVER);
+    ctl_grad(b, COL_PSN, COL_PSN_DEEP);
+    char ini[3] = { name[0], name[1], 0 };
+    for (int i = 0; i < 2; i++)
+        if (ini[i] >= 'a' && ini[i] <= 'z') ini[i] = (char)(ini[i] - 'a' + 'A');
+    lv_obj_center(ctl_label(b, FONT_SMALL, COL_TEXT, ini));
+    lv_obj_align(b, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+}
+
 /* the art is made for the focused size and zooms down with the tile */
 static void tile_art(tile_t *t, lv_obj_t *art) {
     t->art = art;
@@ -352,6 +364,7 @@ static void build_console_tiles(void) {
         const app_host_t *h = app_host(i);
         tile_t *t = new_tile(HOME_CONSOLES, h->ps5 ? TILE_PS5 : TILE_PS4, TILE_LOW);
         tile_art(t, art_box(t->tile, art_console(h->ps5), TILE_F * 88 / 100, TILE_F * 80 / 100));
+        tile_owner(t, h->account >= 0 ? app_psn_account_name(h->account) : "");
         if (h->psn && !h->lan) { /* reached through PSN only: a small badge */
             lv_obj_t *b = ctl_rect(t->tile, LV_SIZE_CONTENT, 30, LV_RADIUS_CIRCLE, COL_SHADE, LV_OPA_50);
             lv_obj_set_style_pad_hor(b, 10, 0);
@@ -661,9 +674,13 @@ static void build_topbar(void) {
 }
 
 static void topbar_refresh(void) {
-    const config_psn_t *psn = config_psn();
-    if (psn->linked && psn->online_id[0]) {
-        char ini[3] = { psn->online_id[0], psn->online_id[1], 0 };
+    /* the account of the console in focus, so the avatar says who the next stream would be */
+    const app_host_t *h = app_host(app_selected());
+    const char *name = h && h->account >= 0 ? app_psn_account_name(h->account)
+                       : config_psn_count() ? app_psn_account_name(0)
+                                            : "";
+    if (name[0]) {
+        char ini[3] = { name[0], name[1], 0 };
         for (int i = 0; i < 2; i++)
             if (ini[i] >= 'a' && ini[i] <= 'z') ini[i] = (char)(ini[i] - 'a' + 'A');
         lv_label_set_text(g.avatar_lbl, ini);
@@ -807,10 +824,13 @@ static void ttl_set(bool anim, int dir) {
     if (g.sec == HOME_CONSOLES) {
         const app_host_t *h = app_host(f);
         lv_label_set_text(g.ttl_name, h ? h->name : "Add a console");
-        lv_label_set_text(g.ttl_sub, !h                 ? "PIN or PSN account"
-                                     : h->lan && h->psn ? "Local network and PSN"
-                                     : h->lan           ? "Local network"
-                                                        : "PSN");
+        const char *what = !h                 ? "PIN or PSN account"
+                           : h->lan && h->psn ? "Local network and PSN"
+                           : h->lan           ? "Local network"
+                                              : "PSN";
+        if (h && h->account >= 0)
+            lv_label_set_text_fmt(g.ttl_sub, "%s" BULLET "%s", app_psn_account_name(h->account), what);
+        else lv_label_set_text(g.ttl_sub, what);
     } else {
         lv_label_set_text(g.ttl_name, home_settings_name(f));
         lv_label_set_text(g.ttl_sub, home_settings_caption(f));
@@ -823,6 +843,7 @@ static void ttl_set(bool anim, int dir) {
 
 static void section_set(int sec, bool anim) {
     if (ctl_menu_is_open(&g.menu)) ctl_menu_close(&g.menu);
+    home_settings_menu_close(); /* the PSN account menu over its panel */
     g.sec = sec;
     for (int s = 0; s < SEC__N; s++) {
         if (s == sec) lv_obj_clear_flag(g.row[s], LV_OBJ_FLAG_HIDDEN);
@@ -904,7 +925,7 @@ static void menu_choose(void) {
     const char *msg = h->lan && h->psn
                           ? "Its PIN pairing and its PSN entry leave this TV. Add it again to play it here."
                       : h->lan ? "Its pairing keys leave this TV. Pair it again with its PIN to play it here."
-                               : "It leaves Home. Find my consoles, in PSN account, brings it back.";
+                               : "It leaves Home. Settings > PSN account > Refresh consoles brings it back.";
     ui_confirm(ttl, msg, "Forget", art_console(h->ps5), forget_confirmed, NULL);
 }
 
@@ -1040,6 +1061,10 @@ bool home_back(void) {
         g.menu_kind = MENU_NONE;
         return true;
     }
+    if (home_settings_menu_open()) { /* the PSN account menu over its panel */
+        home_settings_menu_close();
+        return true;
+    }
     bool used = true;
     switch (g.zone) {
         case HOME_TOP: g.zone = HOME_ROW; break;
@@ -1056,6 +1081,17 @@ bool home_back(void) {
     }
     paint();
     return used;
+}
+
+void home_settings_panel_rebuilt(int panel) {
+    if (g.sec != HOME_SETTINGS || g.zone != HOME_PANEL || g.focus[HOME_SETTINGS] != panel) return;
+    g.item = home_settings_first_row(panel);
+    if (g.item < 0) { /* nothing left to focus */
+        g.zone = HOME_ROW;
+        g.item = 0;
+    }
+    home_settings_focus(panel, g.item);
+    paint();
 }
 
 void home_section_step(int dir) {
@@ -1087,6 +1123,7 @@ void home_app_changed(app_change_t what) {
     switch (what) {
         case APP_CHANGED_HOSTS: hosts_changed(); break;
         case APP_CHANGED_HOST:
+            topbar_refresh();
             if (g.sec == HOME_CONSOLES && app_selected() >= 0 && app_selected() != g.focus[HOME_CONSOLES]) {
                 g.focus[HOME_CONSOLES] = app_selected();
                 ttl_set(false, 1);

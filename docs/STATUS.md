@@ -26,14 +26,14 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | Hardware video (H.264, H.265) and 48 kHz audio through NDL DirectMedia | TV |
 | The media library opened at runtime (`libNDL_directmedia.so.1`, the v2 entry points resolved by name) | TV (webOS 6.5; a v1-only 4.4 TV: [TV-CHECKS](TV-CHECKS.md) 16) |
 | 60 fps with no socket drops or FEC failures; Smooth playback hides the Wi-Fi stalls | TV |
-| PSN sign-in (OAuth code from the phone), the account's console list, token refresh | TV + host |
-| Settings, consoles and the PSN account kept in `conf/hotaru.conf` | TV + host |
+| PSN sign-in (OAuth code from the phone), each account's console list, token refresh | TV + host |
+| Settings, consoles and the linked PSN accounts kept in `conf/hotaru.conf` | TV + host |
 | DualShock 4: grab, the button map, forwarding to the console, rumble | TV (probe + earlier builds) + host |
 | DualShock 4 battery on Home, the Controller panel and the stream menu (sysfs `power_supply`) | TV (probe) + host |
 | DualShock 3 on hid-sony: the Sixaxis layout normalised, the D-pad as buttons, the triggers as pressures, no rumble | TV (a tester's pass on an OLED C8: [TV-CHECKS](TV-CHECKS.md) 17) + host |
 | Home, Add a console, the dialogs, the menu over the game (this UI) | host + simulator: the earlier tabbed UI ran on the TV |
 | Console discovery: state, firmware, waking before connecting, following an address | host (simulated console) |
-| One console with two routes, PSN fallback, the saved route choice | host |
+| One console per PSN account, two routes, PSN fallback, the saved route choice | host |
 | PIN pairing | host: the libchiaki path is real but not yet run against a console |
 | HDR10 (`NDL_DirectVideoSetHDRInfo` with the VUI codes) | TV: a 1080p H.265 HDR stream plays and the call succeeds with the HDR10 defaults (no SEI in the first 120 frames); reading the SEI values is not yet seen on the TV, and the picture is not graded |
 | DualSense on webOS 6: the button map (the DualShock 4's); no rumble or touches reach the app | TV (probe) + host |

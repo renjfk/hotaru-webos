@@ -5,9 +5,10 @@
  * right, a progress line on top; blue on the local-network path, teal on the PSN one. Steps:
  *   PIN: how -> which console -> [your PSN account] -> its address -> its PIN -> pairing -> ready
  *   PSN: how -> sign in with the phone (QR, then the code) -> signing in -> the consoles found
- * The account step comes up when no PSN account ID is stored (PIN pairing needs it): sign in on
- * the phone (the flow then goes on to the address) or type the ID. The address starts on this
- * TV's network. Pairing and sign-in run through app_reg_*; the flow follows APP_CHANGED_REG.
+ * The account step comes up when no PSN account is stored, or more than one (a console is paired
+ * per account): sign in on the phone (the flow then goes on to the address), type the ID, or pick
+ * one of the accounts. With exactly one account it is skipped. The address starts on this TV's
+ * network. Pairing and sign-in run through app_reg_*; the flow follows APP_CHANGED_REG.
  *
  * Focus driven, no LVGL group: ui.c hands it every key from the key sink while it is open
  * (ui_register_key: LV_KEY_*, or a typed character from the remote's digits or a USB keyboard)
@@ -22,8 +23,9 @@
 #include <stdint.h>
 #include <lvgl.h>
 
-void ui_register_open(void);  /* the first step; no-op while open */
-void ui_register_close(void); /* cancels a running registration */
+void ui_register_open(void);         /* the first step; no-op while open */
+void ui_register_open_psn_add(void); /* straight to the phone sign-in, for Settings > PSN account */
+void ui_register_close(void);        /* cancels a running registration; no-op while closed */
 bool ui_register_active(void);
 void ui_register_refresh(void); /* app registration state changed */
 void ui_register_key(uint32_t key);

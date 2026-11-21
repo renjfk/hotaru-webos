@@ -3,10 +3,12 @@
  * The UI only displays this state and calls these functions; connection logic
  * never lives in widgets. Changes are announced through one listener.
  * The host list is the consoles behind config's entries (config_host()), in
- * registration order; it may be empty (app_selected() is then -1). One console can
- * have two entries, a PIN pairing (LAN) and the linked PSN account's device: they are
- * one app host with two routes when the PSN entry has the LAN entry's name and kind
- * (the only thing they share; chiaki-ng matches them the same way). Connect uses the
+ * registration order; it may be empty (app_selected() is then -1). A console is paired
+ * per PSN account, so there is one host per console and account: the same console under
+ * two accounts is two hosts, two tiles. One host can have two entries, a PIN pairing
+ * (LAN) and that account's PSN device: they are one app host with two routes when the
+ * PSN entry has the LAN entry's name and kind (chiaki-ng matches them the same way).
+ * Connect uses the
  * host's route: the LAN when it has one, unless app_set_route() picked PSN (saved in
  * config). When the LAN attempt never reaches the console (it is not on this network,
  * or asleep) and the host has a PSN route, the same connect carries on over PSN
@@ -51,6 +53,7 @@ typedef struct {
     bool ps5;
     bool lan, psn;      /* the routes it has: a PIN pairing on the LAN, the PSN account's device */
     host_route_t route; /* the one app_connect() uses */
+    int account;        /* the linked PSN account this pairing belongs to, -1 when it has none or is signed out */
 } app_host_t;
 
 typedef enum { CONN_IDLE, CONN_CONNECTING, CONN_STREAMING } conn_state_t;
@@ -129,12 +132,22 @@ bool app_probe_forced(void);
 typedef enum { APP_REG_METHOD_PIN, APP_REG_METHOD_PSN } app_reg_method_t;
 typedef enum { APP_REG_IDLE, APP_REG_RUNNING, APP_REG_SUCCESS, APP_REG_FAILED } app_reg_state_t;
 
-/* account_id_b64 is optional (base64; a PS5 or a PS4 on 7.0+ needs it) */
-void app_reg_submit_pin(const char *addr, const char *pin, bool ps5, const char *account_id_b64);
-void app_psn_refresh(void);                   /* list the PSN account's consoles */
-bool app_psn_set_account_id(const char *b64); /* base64 of 8 non-zero bytes: stored and saved; false if not */
-void app_reg_submit_psn_code(const char *code, bool ps5); /* PSN path: code -> tokens -> register */
-void app_reg_cancel(void); /* stops a running registration, or clears a result back to IDLE */
+/* account: the PSN account to pair the console with, an index into the linked accounts; -1 is refused
+ * (a PS5 and a PS4 on 7.0+ need one) */
+void app_reg_submit_pin(const char *addr, const char *pin, bool ps5, int account);
+void app_reg_submit_psn_code(const char *code, bool ps5); /* PSN path: code -> tokens -> add the account */
+
+/* the linked accounts, for Settings and Add a console */
+int app_psn_account_count(void);
+const char *app_psn_account_name(int account);   /* "" when out of range; "PSN account" without an online ID */
+bool app_psn_account_linked(int account);        /* signed in (tokens stored) */
+int app_psn_account_consoles(int account);       /* consoles on Home paired with it */
+int app_psn_linked_account(void);                /* the account the last link added, -1 when none */
+const char *app_psn_account_status(int account); /* progress/result of its last PSN operation, "" when none */
+void app_psn_refresh(int account);               /* list that account's consoles and sync them with Home */
+bool app_psn_sign_out(int account);              /* drops the account and its PSN-only consoles; false if in use */
+int app_psn_set_account_id(const char *b64);     /* base64 of 8 non-zero bytes: stored and saved; -1 if not */
+void app_reg_cancel(void);                       /* stops a running registration, or clears a result back to IDLE */
 
 app_reg_state_t app_reg_state(void);
 app_reg_method_t app_reg_method(void);

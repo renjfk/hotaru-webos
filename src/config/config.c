@@ -27,7 +27,8 @@ static const config_t g_defaults = { DEFAULT_CONFIG };
 static config_t g_config = { DEFAULT_CONFIG };
 static config_host_t g_hosts[CONFIG_MAX_HOSTS];
 static int g_host_count;
-static config_psn_t g_psn;
+static config_psn_t g_psn[CONFIG_MAX_ACCOUNTS];
+static int g_psn_count;
 static char g_duid[CONFIG_DUID_LEN + 1];
 static char g_dir[512], g_path[600];
 
@@ -118,12 +119,17 @@ static void write_all(FILE *f) {
     put_int(f, "input.touch", c->input.touchpad);
     put_int(f, "session.sleep_on_disconnect", c->session.sleep_on_disconnect);
     put_int(f, "debug.probe", c->debug.probe);
-    if (g_psn.linked || config_psn_has_account_id()) {
-        put_int(f, "psn.linked", g_psn.linked ? 1 : 0);
-        put_hex(f, "psn.account_id", g_psn.account_id, sizeof(g_psn.account_id));
-        put_str(f, "psn.online_id", g_psn.online_id);
-        put_str(f, "psn.access_token", g_psn.access_token);
-        put_str(f, "psn.refresh_token", g_psn.refresh_token);
+    for (int i = 0; i < g_psn_count; i++) {
+        const config_psn_t *p = &g_psn[i];
+        char key[48];
+#define PKEY(field) (snprintf(key, sizeof(key), "psn.%d." field, i), key)
+        put_int(f, PKEY("linked"), p->linked ? 1 : 0);
+        put_hex(f, PKEY("account_id"), p->account_id, sizeof(p->account_id));
+        put_str(f, PKEY("online_id"), p->online_id);
+        put_str(f, PKEY("access_token"), p->access_token);
+        put_str(f, PKEY("refresh_token"), p->refresh_token);
+        if (p->expires_at) fprintf(f, "%s=%lld\n", PKEY("expires_at"), p->expires_at);
+#undef PKEY
     }
     for (int i = 0; i < g_host_count; i++) {
         const config_host_t *h = &g_hosts[i];
@@ -137,6 +143,7 @@ static void write_all(FILE *f) {
         put_hex(f, KEY("rp_key"), h->rp_key, sizeof(h->rp_key));
         put_int(f, KEY("via_psn"), h->via_psn);
         put_hex(f, KEY("psn_uid"), h->psn_uid, sizeof(h->psn_uid));
+        put_hex(f, KEY("psn_account_id"), h->psn_account_id, sizeof(h->psn_account_id));
         if (h->prefer_psn) put_int(f, KEY("prefer_psn"), 1);
 #undef KEY
     }
@@ -237,11 +244,48 @@ static void apply_host(const char *k, const char *v, config_host_t *hosts, bool 
     else if (!strcmp(field, "rp_key")) ok = get_hex(v, h->rp_key, sizeof(h->rp_key));
     else if (!strcmp(field, "via_psn")) ok = get_bool(v, &h->via_psn);
     else if (!strcmp(field, "psn_uid")) ok = get_hex(v, h->psn_uid, sizeof(h->psn_uid));
+    else if (!strcmp(field, "psn_account_id")) ok = get_hex(v, h->psn_account_id, sizeof(h->psn_account_id));
     else if (!strcmp(field, "prefer_psn")) ok = get_bool(v, &h->prefer_psn);
     if (ok) seen[i] = true;
 }
 
 /* invalid values keep what is there (the defaults); unknown keys are ignored */
+/* accounts read while loading, and the one-key-per-field psn block of an older file */
+static config_psn_t g_rd_accounts[CONFIG_MAX_ACCOUNTS];
+static bool g_rd_seen[CONFIG_MAX_ACCOUNTS];
+static config_psn_t g_rd_legacy;
+static bool g_rd_legacy_seen;
+
+static void apply_psn(const char *k, const char *v) {
+    /* psn.<i>.<field> now; a file from before multiple accounts has psn.<field> */
+    const char *field = k;
+    int i = -1;
+    char *end;
+    long n = strtol(k, &end, 10);
+    if (end != k && *end == '.' && n >= 0 && n < CONFIG_MAX_ACCOUNTS) {
+        i = (int)n;
+        field = end + 1;
+    }
+    config_psn_t *p = i >= 0 ? &g_rd_accounts[i] : &g_rd_legacy;
+    bool *read = i >= 0 ? &g_rd_seen[i] : &g_rd_legacy_seen;
+    bool ok = false;
+    if (!strcmp(field, "linked")) ok = get_bool(v, &p->linked);
+    else if (!strcmp(field, "account_id")) ok = get_hex(v, p->account_id, sizeof(p->account_id));
+    else if (!strcmp(field, "online_id")) ok = get_str(v, p->online_id, sizeof(p->online_id));
+    else if (!strcmp(field, "access_token")) ok = get_str(v, p->access_token, sizeof(p->access_token));
+    else if (!strcmp(field, "refresh_token")) ok = get_str(v, p->refresh_token, sizeof(p->refresh_token));
+    else if (!strcmp(field, "expires_at")) {
+        char *e;
+        errno = 0;
+        long long t = strtoll(v, &e, 10);
+        if (!errno && e != v && !*e && t >= 0) {
+            p->expires_at = t;
+            ok = true;
+        }
+    }
+    if (ok && read) *read = true;
+}
+
 static void apply(const char *k, const char *v, config_host_t *hosts, bool *seen) {
     stream_settings_t *s = &g_config.stream;
     input_settings_t *in = &g_config.input;
@@ -265,11 +309,7 @@ static void apply(const char *k, const char *v, config_host_t *hosts, bool *seen
     else if (!strcmp(k, "input.touch")) get_bool(v, &in->touchpad);
     else if (!strcmp(k, "session.sleep_on_disconnect")) get_bool(v, &g_config.session.sleep_on_disconnect);
     else if (!strcmp(k, "debug.probe")) get_bool(v, &g_config.debug.probe);
-    else if (!strcmp(k, "psn.linked")) get_bool(v, &g_psn.linked);
-    else if (!strcmp(k, "psn.account_id")) get_hex(v, g_psn.account_id, sizeof(g_psn.account_id));
-    else if (!strcmp(k, "psn.online_id")) get_str(v, g_psn.online_id, sizeof(g_psn.online_id));
-    else if (!strcmp(k, "psn.access_token")) get_str(v, g_psn.access_token, sizeof(g_psn.access_token));
-    else if (!strcmp(k, "psn.refresh_token")) get_str(v, g_psn.refresh_token, sizeof(g_psn.refresh_token));
+    else if (!strncmp(k, "psn.", 4)) apply_psn(k + 4, v);
 }
 
 /* only the combinations Settings > Stream offers */
@@ -287,7 +327,8 @@ static void reset(void) {
     g_config = g_defaults;
     memset(g_hosts, 0, sizeof(g_hosts));
     g_host_count = 0;
-    memset(&g_psn, 0, sizeof(g_psn));
+    memset(g_psn, 0, sizeof(g_psn));
+    g_psn_count = 0;
     g_duid[0] = '\0';
 }
 
@@ -302,6 +343,10 @@ bool config_load(void) {
     static config_host_t hosts[CONFIG_MAX_HOSTS];
     bool seen[CONFIG_MAX_HOSTS] = { false };
     memset(hosts, 0, sizeof(hosts));
+    memset(g_rd_accounts, 0, sizeof(g_rd_accounts));
+    memset(g_rd_seen, 0, sizeof(g_rd_seen));
+    memset(&g_rd_legacy, 0, sizeof(g_rd_legacy));
+    g_rd_legacy_seen = false;
     char line[LINE_MAX_LEN];
     while (fgets(line, sizeof(line), f)) {
         size_t len = strlen(line);
@@ -318,12 +363,33 @@ bool config_load(void) {
     }
     fclose(f);
     validate();
-    /* a linked account is only meaningful with an account id or a token; drop an empty psn block */
-    if (g_psn.linked && !config_psn_has_account_id() && !g_psn.refresh_token[0] && !g_psn.access_token[0])
-        memset(&g_psn, 0, sizeof(g_psn));
+    /* accounts: the indexed block, else the single account an older file stored */
+    for (int i = 0; i < CONFIG_MAX_ACCOUNTS; i++) {
+        config_psn_t *p = &g_rd_accounts[i];
+        bool id = false;
+        for (int b = 0; b < 8; b++)
+            if (p->account_id[b]) id = true;
+        if (!g_rd_seen[i] || !id) continue; /* an account needs its id: it names the pairings */
+        p->linked = p->linked || p->access_token[0] || p->refresh_token[0];
+        g_psn[g_psn_count++] = *p;
+    }
+    bool legacy = false;
+    for (int b = 0; b < 8; b++)
+        if (g_rd_legacy.account_id[b]) legacy = true;
+    if (!g_psn_count && g_rd_legacy_seen && legacy) {
+        g_rd_legacy.linked = g_rd_legacy.linked || g_rd_legacy.access_token[0] || g_rd_legacy.refresh_token[0];
+        g_psn[g_psn_count++] = g_rd_legacy;
+        for (int i = 0; i < CONFIG_MAX_HOSTS; i++) { /* what was paired before belonged to that one account */
+            bool paired = false;
+            for (int b = 0; b < 8; b++)
+                if (hosts[i].psn_account_id[b]) paired = true;
+            if (seen[i] && !paired)
+                memcpy(hosts[i].psn_account_id, g_rd_legacy.account_id, sizeof(hosts[i].psn_account_id));
+        }
+    }
     for (int i = 0; i < CONFIG_MAX_HOSTS; i++)
         if (seen[i]) config_host_add(&hosts[i]); /* drops entries without an identity and duplicates */
-    log_msg("config: loaded %s (%d console(s), PSN %s)", g_path, g_host_count, g_psn.linked ? "linked" : "not linked");
+    log_msg("config: loaded %s (%d console(s), %d PSN account(s))", g_path, g_host_count, g_psn_count);
     return true;
 }
 
@@ -342,6 +408,8 @@ static bool uid_set(const uint8_t uid[32]) {
 }
 
 static bool same_console(const config_host_t *a, const config_host_t *b) {
+    /* a pairing belongs to a PSN account: the same console under two accounts is two consoles */
+    if (memcmp(a->psn_account_id, b->psn_account_id, sizeof(a->psn_account_id)) != 0) return false;
     /* PSN uid, then MAC when both are known; the address is only a fallback (DHCP reassigns it,
      * and a PSN console has no address at all) */
     if (uid_set(a->psn_uid) && uid_set(b->psn_uid)) return !memcmp(a->psn_uid, b->psn_uid, sizeof(a->psn_uid));
@@ -388,35 +456,84 @@ bool config_host_remove(int index) {
     return true;
 }
 
-/* ---------- PSN account ---------- */
+/* ---------- PSN accounts ---------- */
 
-config_psn_t *config_psn(void) { return &g_psn; }
+int config_psn_count(void) { return g_psn_count; }
 
-void config_psn_set(const uint8_t account_id[8], const char *online_id, const char *access_token,
-                    const char *refresh_token) {
-    memset(&g_psn, 0, sizeof(g_psn));
-    g_psn.linked = true;
-    if (account_id) memcpy(g_psn.account_id, account_id, sizeof(g_psn.account_id));
-    snprintf(g_psn.online_id, sizeof(g_psn.online_id), "%s", online_id ? online_id : "");
-    snprintf(g_psn.access_token, sizeof(g_psn.access_token), "%s", access_token ? access_token : "");
-    snprintf(g_psn.refresh_token, sizeof(g_psn.refresh_token), "%s", refresh_token ? refresh_token : "");
-}
+const config_psn_t *config_psn_at(int index) { return index >= 0 && index < g_psn_count ? &g_psn[index] : NULL; }
 
-void config_psn_set_expiry(long long expires_at) { g_psn.expires_at = expires_at; }
+config_psn_t *config_psn_edit(int index) { return index >= 0 && index < g_psn_count ? &g_psn[index] : NULL; }
 
-void config_psn_set_account_id(const uint8_t account_id[8]) {
-    if (memcmp(g_psn.account_id, account_id, sizeof(g_psn.account_id)) == 0) return;
-    memset(&g_psn, 0, sizeof(g_psn)); /* a different id does not belong to any stored PSN tokens */
-    memcpy(g_psn.account_id, account_id, sizeof(g_psn.account_id));
-}
-
-bool config_psn_has_account_id(void) {
-    for (size_t i = 0; i < sizeof(g_psn.account_id); i++)
-        if (g_psn.account_id[i]) return true;
+static bool id_set(const uint8_t id[8]) {
+    for (int i = 0; i < 8; i++)
+        if (id[i]) return true;
     return false;
 }
 
-void config_psn_clear(void) { memset(&g_psn, 0, sizeof(g_psn)); }
+int config_psn_find(const uint8_t account_id[8]) {
+    for (int i = 0; account_id && i < g_psn_count; i++)
+        if (!memcmp(g_psn[i].account_id, account_id, sizeof(g_psn[i].account_id))) return i;
+    return -1;
+}
+
+int config_psn_add(const config_psn_t *account) {
+    if (!account || !id_set(account->account_id)) return -1;
+    int i = config_psn_find(account->account_id);
+    if (i < 0) {
+        if (g_psn_count >= CONFIG_MAX_ACCOUNTS) return -1;
+        i = g_psn_count++;
+        memset(&g_psn[i], 0, sizeof(g_psn[i]));
+        memcpy(g_psn[i].account_id, account->account_id, sizeof(g_psn[i].account_id));
+    }
+    config_psn_t *p = &g_psn[i];
+    p->linked = account->linked || account->access_token[0] || account->refresh_token[0];
+    if (account->online_id[0]) snprintf(p->online_id, sizeof(p->online_id), "%s", account->online_id);
+    if (account->access_token[0]) snprintf(p->access_token, sizeof(p->access_token), "%s", account->access_token);
+    if (account->refresh_token[0]) snprintf(p->refresh_token, sizeof(p->refresh_token), "%s", account->refresh_token);
+    if (account->expires_at) p->expires_at = account->expires_at;
+    return i;
+}
+
+int config_psn_add_id(const uint8_t account_id[8]) {
+    if (!id_set(account_id)) return -1;
+    int i = config_psn_find(account_id);
+    if (i >= 0) return i; /* the id alone never replaces a signed-in account's tokens */
+    config_psn_t acc = { 0 };
+    memcpy(acc.account_id, account_id, sizeof(acc.account_id));
+    snprintf(acc.online_id, sizeof(acc.online_id), "PSN %02X%02X", account_id[0], account_id[1]); /* a label */
+    return config_psn_add(&acc);
+}
+
+void config_psn_set_tokens(int index, const char *access_token, const char *refresh_token, long long expires_at) {
+    config_psn_t *p = config_psn_edit(index);
+    if (!p) return;
+    if (access_token) snprintf(p->access_token, sizeof(p->access_token), "%s", access_token);
+    if (refresh_token) snprintf(p->refresh_token, sizeof(p->refresh_token), "%s", refresh_token);
+    p->expires_at = expires_at;
+    p->linked = p->access_token[0] || p->refresh_token[0];
+}
+
+void config_psn_remove(int index) {
+    const config_psn_t *p = config_psn_at(index);
+    if (!p) return;
+    uint8_t id[8];
+    memcpy(id, p->account_id, sizeof(id));
+    memmove(&g_psn[index], &g_psn[index + 1], sizeof(g_psn[0]) * (size_t)(g_psn_count - index - 1));
+    g_psn_count--;
+    memset(&g_psn[g_psn_count], 0, sizeof(g_psn[0]));
+    /* its PSN-only consoles leave with it; a PIN pairing keeps its keys and loses the PSN route */
+    for (int i = g_host_count - 1; i >= 0; i--) {
+        config_host_t *h = &g_hosts[i];
+        if (memcmp(h->psn_account_id, id, sizeof(id)) != 0) continue;
+        if (h->via_psn && !h->addr[0]) {
+            config_host_remove(i);
+            continue;
+        }
+        /* the pairing keeps its account stamp: signing in again rejoins it, and a re-pair updates it */
+        h->via_psn = false;
+        h->prefer_psn = false;
+    }
+}
 
 /* ---------- device UID ---------- */
 

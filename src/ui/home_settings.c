@@ -36,8 +36,8 @@
 #define PAD_BATT_H 14
 #define PAD_BATT_Y 326
 
-typedef enum { ROW_SEG, ROW_METER, ROW_TOGGLE, ROW_ACTION, ROW_INFO } row_kind_t;
-typedef enum { ACT_NONE, ACT_ADD, ACT_FIND, ACT_SIGN_OUT } row_action_t;
+typedef enum { ROW_SEG, ROW_METER, ROW_TOGGLE, ROW_ACTION, ROW_INFO, ROW_ACCOUNT } row_kind_t;
+typedef enum { ACT_NONE, ACT_ADD_ACCOUNT } row_action_t;
 
 typedef struct {
     lv_obj_t *row, *caption;
@@ -82,12 +82,11 @@ static struct {
     lv_obj_t *panel[SET__N];
     prow_t rows[SET__N][MAX_ROWS];
     int nrows[SET__N];
-    lv_obj_t *sum_big, *sum_txt, *sum_fill, *sum_note;                       /* Stream */
-    lv_obj_t *pad_art_box, *pad_art, *pad_name, *pad_state, *pad_note;       /* Controller */
-    lv_obj_t *pad_batt, *pad_batt_fill, *pad_batt_pct;                       /* Controller: the battery gauge */
-    lv_obj_t *acc_avatar, *acc_initials, *acc_name, *acc_state, *acc_status; /* PSN account */
-    lv_obj_t *log_card, *log;                                                /* Log */
-    lv_obj_t *about_ver, *about_net;                                         /* About */
+    lv_obj_t *sum_big, *sum_txt, *sum_fill, *sum_note;                 /* Stream */
+    lv_obj_t *pad_art_box, *pad_art, *pad_name, *pad_state, *pad_note; /* Controller */
+    lv_obj_t *pad_batt, *pad_batt_fill, *pad_batt_pct;                 /* Controller: the battery gauge */
+    lv_obj_t *log_card, *log;                                          /* Log */
+    lv_obj_t *about_ver, *about_net;                                   /* About */
     art_id_t pad_art_id;
     int shown;
 } g = { .shown = -1 };
@@ -305,28 +304,145 @@ static void build_pad(void) {
     g.pad_art_id = ART__N;
 }
 
-static void build_account(void) {
-    row_action(add_row(SET_ACCOUNT, "Add a console", "Pair with the console's PIN, or sign in to PSN"), ACT_ADD,
-               LV_SYMBOL_PLUS, false);
-    row_action(add_row(SET_ACCOUNT, "Find my consoles", "List the consoles on your PSN account"), ACT_FIND,
-               LV_SYMBOL_REFRESH, false);
-    row_action(add_row(SET_ACCOUNT, "Sign out of PSN", "Keeps the consoles paired with a PIN"), ACT_SIGN_OUT,
-               LV_SYMBOL_CLOSE, true);
-    lv_obj_t *c = summary(SET_ACCOUNT, "PLAYSTATION NETWORK");
-    g.acc_avatar = ctl_rect(c, 120, 120, LV_RADIUS_CIRCLE, 0, LV_OPA_COVER);
-    ctl_grad(g.acc_avatar, COL_PSN, COL_PSN_DEEP);
-    lv_obj_set_pos(g.acc_avatar, 0, 44);
-    g.acc_initials = ctl_label(g.acc_avatar, FONT_HERO, COL_TEXT, "");
-    lv_obj_center(g.acc_initials);
-    g.acc_name = ctl_label(c, FONT_TITLE, COL_TEXT, "");
-    lv_obj_set_pos(g.acc_name, 0, 190);
-    g.acc_state = ctl_label(c, FONT_CAPTION, COL_MUTED, "");
-    lv_obj_set_pos(g.acc_state, 0, 236);
-    g.acc_status = ctl_label(c, FONT_CAPTION, COL_ACCENT_HI, "");
-    lv_obj_set_width(g.acc_status, SUM_CW);
-    lv_label_set_long_mode(g.acc_status, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(g.acc_status, 0, 280);
+/* ---------- the PSN account panel: one row per linked account, and the focused one's summary ---------- */
+
+static struct {
+    lv_obj_t *card, *avatar, *ini, *name, *state, *dot[2], *list[2], *more, *status;
+    int focus;
+    int built; /* the account count the rows were built for: 3 and 4 both make four rows, with different ones */
+} A = { .built = -1 };
+
+static ctl_menu_t g_acc_menu;
+static int g_acc_menu_row = -1;
+
+static const char *account_name(int i) {
+    const char *n = app_psn_account_name(i);
+    return n[0] ? n : "PSN account";
 }
+
+static void account_initials(char out[8], const char *name) {
+    memset(out, 0, 8);
+    if (!name[0]) {
+        snprintf(out, 8, "%s", LV_SYMBOL_WIFI);
+        return;
+    }
+    for (int i = 0; i < 2 && name[i]; i++) {
+        char c = name[i];
+        out[i] = c >= 'a' && c <= 'z' ? (char)(c - 'a' + 'A') : c;
+    }
+}
+
+static void account_caption(int i, char *out, size_t cap) {
+    int n = app_psn_account_consoles(i);
+    snprintf(out, cap, "%d console%s" BULLET "%s", n, n == 1 ? "" : "s",
+             app_psn_account_linked(i) ? "signed in" : "not signed in");
+}
+
+static void account_summary_refresh(void) {
+    if (!A.card) return;
+    int n = app_psn_account_count();
+    int i = A.focus;
+    if (i < 0 || i >= n) i = n ? 0 : -1;
+    const char *name = i >= 0 ? account_name(i) : "Not signed in";
+    char ini[8];
+    account_initials(ini, i >= 0 ? name : "");
+    lv_label_set_text(A.ini, ini);
+    lv_label_set_text(A.name, name);
+    lv_label_set_text(A.state, i < 0                       ? "Sign in to find your consoles"
+                               : app_psn_account_linked(i) ? "Signed in on this TV"
+                                                           : "Account ID only: not signed in");
+    const char *consoles[2];
+    int got = 0, total = 0;
+    for (int h = 0; h < app_host_count(); h++) {
+        const app_host_t *host = app_host(h);
+        if (i < 0 || host->account != i) continue;
+        total++;
+        if (got < 2) consoles[got++] = host->name;
+    }
+    for (int k = 0; k < 2; k++) {
+        bool on = k < got;
+        if (on) lv_label_set_text(A.list[k], consoles[k]);
+        if (on) {
+            lv_obj_clear_flag(A.list[k], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(A.dot[k], LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(A.list[k], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(A.dot[k], LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    if (total > 2) {
+        lv_label_set_text_fmt(A.more, "and %d more", total - 2);
+        lv_obj_clear_flag(A.more, LV_OBJ_FLAG_HIDDEN);
+    } else lv_obj_add_flag(A.more, LV_OBJ_FLAG_HIDDEN);
+    const char *msg = i >= 0 ? app_psn_account_status(i) : "";
+    bool bad = msg[0] && app_reg_state() == APP_REG_FAILED && !strcmp(msg, app_reg_error());
+    lv_label_set_text(A.status, msg);
+    lv_obj_set_style_text_color(A.status, C(bad ? COL_DANGER_TEXT : COL_ACCENT_HI), 0);
+}
+
+static void account_summary_build(void) {
+    lv_obj_t *c = A.card = summary(SET_ACCOUNT, "PLAYSTATION NETWORK");
+    A.avatar = ctl_rect(c, 120, 120, LV_RADIUS_CIRCLE, 0, LV_OPA_COVER);
+    ctl_grad(A.avatar, COL_PSN, COL_PSN_DEEP);
+    lv_obj_set_pos(A.avatar, 0, 28);
+    A.ini = ctl_label(A.avatar, FONT_HERO, COL_TEXT, "");
+    lv_obj_center(A.ini);
+    A.name = ctl_label(c, FONT_TITLE, COL_TEXT, "");
+    lv_obj_set_pos(A.name, 0, 160);
+    lv_obj_set_width(A.name, SUM_CW);
+    lv_label_set_long_mode(A.name, LV_LABEL_LONG_DOT);
+    A.state = ctl_label(c, FONT_CAPTION, COL_MUTED, "");
+    lv_obj_set_pos(A.state, 0, 200);
+    lv_obj_t *over = ctl_label(c, FONT_SMALL, COL_ACCENT_HI, "CONSOLES ON THIS ACCOUNT");
+    lv_obj_set_style_text_letter_space(over, 3, 0);
+    lv_obj_set_pos(over, 0, 244);
+    for (int k = 0; k < 2; k++) {
+        A.dot[k] = ctl_dot(c, 10, COL_OK);
+        lv_obj_set_pos(A.dot[k], 2, 280 + k * 32);
+        A.list[k] = ctl_label(c, FONT_BODY, COL_TEXT, "");
+        lv_obj_set_pos(A.list[k], 26, 268 + k * 32);
+        lv_obj_set_width(A.list[k], SUM_CW - 26);
+        lv_label_set_long_mode(A.list[k], LV_LABEL_LONG_DOT);
+    }
+    A.more = ctl_label(c, FONT_CAPTION, COL_MUTED, "");
+    lv_obj_set_pos(A.more, 26, 332);
+    A.status = ctl_label(c, FONT_CAPTION, COL_ACCENT_HI, "");
+    lv_obj_set_width(A.status, SUM_CW);
+    lv_label_set_long_mode(A.status, LV_LABEL_LONG_WRAP);
+    lv_obj_set_pos(A.status, 0, 366);
+}
+
+static void account_rows_build(void) {
+    lv_obj_t *p = g.panel[SET_ACCOUNT];
+    if (g_acc_menu.card) ctl_menu_close(&g_acc_menu);
+    g_acc_menu_row = -1;
+    lv_obj_clean(p);
+    memset(g.rows[SET_ACCOUNT], 0, sizeof(g.rows[SET_ACCOUNT]));
+    g.nrows[SET_ACCOUNT] = 0;
+    for (int i = 0; i < app_psn_account_count(); i++) {
+        char cap[80];
+        account_caption(i, cap, sizeof(cap));
+        prow_t *r = add_row(SET_ACCOUNT, account_name(i), cap);
+        r->kind = ROW_ACCOUNT;
+        lv_obj_t *av = ctl_rect(r->row, 56, 56, LV_RADIUS_CIRCLE, 0, LV_OPA_COVER);
+        ctl_grad(av, COL_PSN, COL_PSN_DEEP);
+        lv_obj_set_pos(av, 24, 18);
+        char ini[8];
+        account_initials(ini, account_name(i));
+        lv_obj_center(ctl_label(av, FONT_CAPTION, COL_TEXT, ini));
+        lv_obj_set_pos(lv_obj_get_child(r->row, 0), 100, 14);
+        lv_obj_set_pos(lv_obj_get_child(r->row, 1), 100, 52);
+    }
+    if (app_psn_account_count() < CONFIG_MAX_ACCOUNTS) { /* the panel is five rows: no room for a fifth */
+        prow_t *add = add_row(SET_ACCOUNT, "Add a PSN account", "Sign in on your phone; it sits next to the others");
+        row_action(add, ACT_ADD_ACCOUNT, LV_SYMBOL_PLUS, false);
+    }
+    A.built = app_psn_account_count();
+    account_summary_build();
+    account_summary_refresh();
+}
+
+static void build_account(void) { account_rows_build(); }
 
 static void build_log(void) {
     g.log_card = ctl_rect(g.panel[SET_LOG], HOME_PANEL_W, SUM_H, 30, COL_SHADE, LV_OPA_30);
@@ -445,26 +561,25 @@ static void refresh_pad(void) {
 }
 
 static void refresh_account(void) {
-    const config_psn_t *psn = config_psn();
-    char ini[3] = { 0 };
-    if (psn->linked && psn->online_id[0]) {
-        ini[0] = (char)toupper((unsigned char)psn->online_id[0]);
-        if (psn->online_id[1]) ini[1] = (char)toupper((unsigned char)psn->online_id[1]);
+    int n = app_psn_account_count();
+    if (A.built != n) { /* signed in, added, or signed out; 3 and 4 accounts both make four rows */
+        account_rows_build();
+        home_settings_panel_rebuilt(SET_ACCOUNT);
+        return;
     }
-    lv_label_set_text(g.acc_initials, ini[0] ? ini : LV_SYMBOL_WIFI);
-    lv_label_set_text(g.acc_name, psn->linked ? (psn->online_id[0] ? psn->online_id : "Signed in") : "Not signed in");
-    lv_label_set_text(g.acc_state, psn->linked                   ? "Your PSN consoles show up on Home"
-                                   : config_psn_has_account_id() ? "Account ID set for PIN pairing"
-                                                                 : "Sign in to find your consoles");
-    app_reg_state_t rs = app_reg_state();
-    lv_label_set_text(g.acc_status, rs == APP_REG_FAILED ? app_reg_error()
-                                    : rs == APP_REG_IDLE ? ""
-                                                         : app_reg_status());
-    lv_obj_set_style_text_color(g.acc_status, C(rs == APP_REG_FAILED ? COL_DANGER_TEXT : COL_ACCENT_HI), 0);
-    /* Find needs a token, Sign out something to sign out of */
-    lv_obj_set_style_opa(g.rows[SET_ACCOUNT][1].row, psn->access_token[0] ? LV_OPA_COVER : LV_OPA_50, 0);
-    lv_obj_set_style_opa(g.rows[SET_ACCOUNT][2].row,
-                         psn->linked || config_psn_has_account_id() ? LV_OPA_COVER : LV_OPA_50, 0);
+    for (int i = 0; i < n; i++) { /* signing an id-only account in gives it a name */
+        prow_t *r = &g.rows[SET_ACCOUNT][i];
+        lv_label_set_text(lv_obj_get_child(r->row, 0), account_name(i));
+        char cap[80], ini[8];
+        account_caption(i, cap, sizeof(cap));
+        lv_label_set_text(r->caption, cap);
+        lv_obj_t *av = lv_obj_get_child(r->row, 2);
+        if (av && lv_obj_get_child_cnt(av)) {
+            account_initials(ini, account_name(i));
+            lv_label_set_text(lv_obj_get_child(av, 0), ini);
+        }
+    }
+    account_summary_refresh();
 }
 
 void home_settings_refresh(void) {
@@ -516,34 +631,74 @@ void home_settings_focus(int panel, int row) {
             if (r->kind == ROW_METER) ctl_meter_focus(&r->meter, on);
         }
     }
+    if (panel == SET_ACCOUNT) {
+        A.focus = row;
+        account_summary_refresh();
+    }
 }
 
 static void bump(lv_obj_t *o, int dir) { motion_from(o, MO_TX, dir * 14, 0, 380, 0, motion_shake); }
 
-static void sign_out_confirmed(void *user) {
-    (void)user;
-    config_psn_clear();
-    config_save();
-    log_event(LOG_WARN, "REG", "Signed out of PSN");
-    home_settings_refresh();
+static void account_sign_out(void *user) {
+    int i = (int)(intptr_t)user;
+    if (app_psn_sign_out(i)) return;
+    if (A.status) { /* in use: say so in the summary */
+        lv_label_set_text(A.status, "Disconnect before signing out");
+        lv_obj_set_style_text_color(A.status, C(COL_DANGER_TEXT), 0);
+    }
+}
+
+static void account_sign_out_ask(int i) {
+    char title[64], msg[256];
+    const char *name = account_name(i);
+    snprintf(title, sizeof(title), "Sign out of %s?", name);
+    snprintf(msg, sizeof(msg), "The consoles found through %s leave Home. Consoles paired with a PIN keep their keys.",
+             name);
+    ui_confirm(title, msg, "Sign out", ART__N, account_sign_out, (void *)(intptr_t)i);
+}
+
+static void account_menu_open(int row) {
+    if (g_acc_menu.card || row < 0 || row >= app_psn_account_count()) return;
+    g_acc_menu_row = row;
+    static const ctl_menu_item_t linked_items[] = {
+        { LV_SYMBOL_REFRESH, "Refresh consoles", "Lists this account's consoles again", false, false },
+        { LV_SYMBOL_CLOSE, "Sign out", "Keeps the consoles paired with a PIN", false, true },
+    };
+    static const ctl_menu_item_t id_only_items[] = {
+        { LV_SYMBOL_DOWNLOAD, "Sign in again", "Sign in on your phone to use this account", false, false },
+        { LV_SYMBOL_CLOSE, "Sign out", "Keeps the consoles paired with a PIN", false, true },
+    };
+    const ctl_menu_item_t *items = app_psn_account_linked(row) ? linked_items : id_only_items;
+    lv_area_t a;
+    lv_obj_update_layout(g.panel[SET_ACCOUNT]);
+    lv_obj_get_coords(g.rows[SET_ACCOUNT][row].row, &a);
+    bool up = a.y2 + SP_M + ctl_menu_height(2) > 1080 - HOME_SAFE_Y; /* the title-safe bottom */
+    ctl_menu_open(&g_acc_menu, lv_obj_get_parent(g.panel[SET_ACCOUNT]), &a, up, items, 2, 0);
+}
+
+bool home_settings_menu_open(void) { return g_acc_menu.card != NULL; }
+
+void home_settings_menu_close(void) {
+    ctl_menu_close(&g_acc_menu);
+    g_acc_menu_row = -1;
+}
+
+static void account_menu_choose(void) {
+    int sel = g_acc_menu.sel, row = g_acc_menu_row;
+    ctl_menu_close(&g_acc_menu);
+    g_acc_menu_row = -1;
+    if (row < 0) return;
+    if (sel == 0) {
+        if (app_psn_account_linked(row)) {
+            app_psn_refresh(row);
+            home_settings_refresh();
+        } else ui_register_open_psn_add(); /* signing in with that account's id updates the row */
+    } else account_sign_out_ask(row);
 }
 
 static void run_action(prow_t *r) {
-    const config_psn_t *psn = config_psn();
     switch (r->action) {
-        case ACT_ADD: ui_register_open(); break;
-        case ACT_FIND:
-            if (psn->access_token[0]) app_psn_refresh();
-            else bump(r->row, 1);
-            break;
-        case ACT_SIGN_OUT:
-            if (psn->linked || config_psn_has_account_id())
-                ui_confirm("Sign out of PSN",
-                           "The consoles found through your PSN account stay on Home but cannot "
-                           "connect over PSN until you sign in again.",
-                           "Sign out", ART__N, sign_out_confirmed, NULL);
-            else bump(r->row, 1);
-            break;
+        case ACT_ADD_ACCOUNT: ui_register_open_psn_add(); break;
         case ACT_NONE: break;
     }
 }
@@ -601,6 +756,9 @@ static void edit_row(int panel, int row, uint32_t key) {
             }
             break;
         }
+        case ROW_ACCOUNT:
+            if (key == LV_KEY_ENTER && panel == SET_ACCOUNT) account_menu_open(row);
+            return;
         case ROW_ACTION:
             if (key == LV_KEY_ENTER) run_action(r);
             return;
@@ -611,6 +769,12 @@ static void edit_row(int panel, int row, uint32_t key) {
 }
 
 bool home_settings_key(int panel, int *row, uint32_t key) {
+    if (panel == SET_ACCOUNT && g_acc_menu.card) { /* the account's menu takes every key */
+        if (key == LV_KEY_UP) ctl_menu_move(&g_acc_menu, -1);
+        else if (key == LV_KEY_DOWN) ctl_menu_move(&g_acc_menu, 1);
+        else if (key == LV_KEY_ENTER) account_menu_choose();
+        return true;
+    }
     if (panel == SET_LOG) { /* the console: UP/DOWN scroll it, UP at the top leaves */
         lv_coord_t step = 3 * (lv_font_get_line_height(FONT_BODY) + SP_S);
         if (key == LV_KEY_UP) {
@@ -637,7 +801,6 @@ bool home_settings_key(int panel, int *row, uint32_t key) {
 
 const char *home_settings_caption(int panel) {
     static char buf[64];
-    const config_psn_t *psn = config_psn();
     const stream_settings_t *s = &config_get()->stream;
     switch (panel) {
         case SET_STREAM:
@@ -645,7 +808,13 @@ const char *home_settings_caption(int panel) {
                      s->fps, s->bitrate_kbps / 1000);
             return buf;
         case SET_PAD: return input_pad_state() == PAD_ONLINE ? input_pad_name() : "No controller";
-        case SET_ACCOUNT: return psn->linked ? (psn->online_id[0] ? psn->online_id : "Signed in") : "Not signed in";
+        case SET_ACCOUNT: {
+            int n = app_psn_account_count();
+            if (!n) return "Not signed in";
+            if (n == 1) return account_name(0);
+            snprintf(buf, sizeof(buf), "%s + %d", account_name(0), n - 1);
+            return buf;
+        }
         case SET_LOG: return "What just happened";
         case SET_ABOUT: return "Versions, network, diagnostics";
     }

@@ -57,14 +57,16 @@ On a **PS4**:
 
 ## Adding a console
 
-Open Hotaru and choose **Add a console** (the + tile on Home, or Settings > PSN account). There are two ways
-in; a console added both ways stays one console that uses the local network first.
+Open Hotaru and choose **Add a console** (the + tile on Home). There are two ways in; a console added both
+ways for the same PSN account stays one console that uses the local network first. A console is paired per PSN
+account, so two players on one console get a tile each.
 
 **With the console's PIN** (on the same network as the TV):
 
 1. Pick the console kind.
-2. The first time, the app asks for your PSN account ID, which pairing needs: sign in with your phone (below) and
-   it is filled in, or type it if another Remote Play app showed it to you.
+2. The account to pair it with: with none stored the app asks for your PSN account ID, which pairing needs, and
+   you sign in with your phone (below) or type it. With two or more accounts stored, choose one on the account
+   step, or add another.
 3. The address: when the app finds the console on the network it is filled in already; otherwise the start of it
    is (most homes are one network) and you type the rest. The console shows it under Settings > Network > Connection
    Status.
@@ -77,7 +79,15 @@ in; a console added both ways stays one console that uses the local network firs
 2. The last page stays blank: its address bar holds `...redirect?code=...`. Type the part after `code=` into the
    field (the on-screen keyboard, or a USB keyboard plugged into the TV) and choose **Link**. On the on-screen
    keyboard, **L2** or **R2** switches between capitals and small letters, like its **ABC** key.
-3. The consoles on the account are added. A console you also paired with its PIN joins it.
+3. The consoles on the account are added. A console you also paired with its PIN for that same account joins it.
+
+## Two players, one console
+
+A console is paired per PSN account. To let someone else play on the same console, sign their account in under
+Settings > PSN account > **Add a PSN account**, then pair the console again with its PIN while their account is
+chosen. Home then has a tile for each account, with that account's initials on it; Start Remote Play on a tile
+starts the session as that player. Signing out of one account drops only its PSN-found consoles: pairings made
+with a PIN keep their keys.
 
 ## Playing
 
@@ -116,7 +126,9 @@ Settings. The TV remote's arrows, OK and Back do the same.
   nor its click reach the console. Adaptive trigger effects never reach the console on either version. A
   DualShock 4 rumbles and its touchpad works. A DualShock 3 plays with every button, both sticks, its D-pad and its
   analog L2/R2, but it has no touchpad and no rumble, and Select + Start opens the menu over the game.
-- **PSN account**: add a console, find the consoles on your account again, sign out.
+- **PSN account**: one row per linked account, with how many consoles each has. Cross on one opens **Refresh
+  consoles** (lists that account's consoles again, adding the new ones to Home) and **Sign out**; **Add a PSN
+  account** signs in another one next to it.
 - **Log**: what just happened (the right stick scrolls it).
 - **About**: the version, the network, and **Diagnostics**, which logs details for a bug report.
 
@@ -124,6 +136,8 @@ Settings. The TV remote's arrows, OK and Back do the same.
 
 - **The console is not found**: the TV and the console must be on the same network for the PIN way; check the
   console's Remote Play setting. Away from home, add it with your PSN account.
+- **The same console appears twice**: it is paired for two PSN accounts. Each tile plays as the account on it;
+  forget the one you do not need from its options button.
 - **It does not wake up**: check the rest mode settings above. A console that is fully off cannot be woken.
 - **"Remote Play is already in use"**: the console keeps a finished session for a few seconds; the app retries on
   its own.

@@ -101,7 +101,7 @@ static unsigned g_fetch_gen;      /* generation of the in-flight device fetch */
 static bool g_psn_connect_active; /* a PSN holepunch connect is being set up on a worker */
 static bool g_psn_cancel;         /* the user disconnected during that setup */
 
-static bool psn_ensure_token(void); /* refresh the access token if it has expired (defined below) */
+static bool psn_ensure_token(int ai); /* refresh the access token if it has expired (defined below) */
 static char g_regist_addr[64];
 static session_reg_event_t g_regq[EV_QUEUE];
 static unsigned g_reg_head, g_reg_tail;
@@ -498,13 +498,14 @@ static bool session_start_lan(const config_host_t *host, const stream_settings_t
     info.host = host->addr;
     memcpy(info.regist_key, host->rp_regist_key, sizeof(info.regist_key)); /* 16, \0-padded */
     memcpy(info.morning, host->rp_key, sizeof(info.morning));              /* the console's rp_key, as chiaki-ng does */
+    int account = config_psn_find(host->psn_account_id);                   /* the account the pairing was made with */
+    if (account >= 0) memcpy(info.psn_account_id, config_psn_at(account)->account_id, CHIAKI_PSN_ACCOUNT_ID_SIZE);
     info.video_profile_auto_downgrade = true;
     info.enable_idr_on_fec_failure = true;
     /* TODO(input): enable_dualsense needs a haptics sink (chiaki_session_set_haptics_sink) to be wired first */
     fill_video_profile(&info, host, stream);
     /* Wi-Fi only: let congestion control trim the bitrate rather than never seeing loss (chiaki-ng default) */
     info.packet_loss_max = 0.05;
-    if (config_psn_has_account_id()) memcpy(info.psn_account_id, config_psn()->account_id, CHIAKI_PSN_ACCOUNT_ID_SIZE);
 
     ChiakiErrorCode err = chiaki_session_init(&g_session, &info, &g_log);
     if (err != CHIAKI_ERR_SUCCESS) {
@@ -655,12 +656,13 @@ done:
 }
 
 static bool session_start_psn(const config_host_t *host, const stream_settings_t *stream) {
-    if (!config_psn_has_account_id()) {
-        log_event(LOG_ERR, "NET", "Sign in to PSN before connecting to %s", host->nickname);
+    int ai = config_psn_find(host->psn_account_id);
+    if (ai < 0) {
+        log_event(LOG_ERR, "NET", "This console is paired with a PSN account that is not signed in");
         return false;
     }
-    psn_ensure_token(); /* refresh an expired access token before the holepunch handshake */
-    const config_psn_t *psn = config_psn();
+    psn_ensure_token(ai); /* refresh an expired access token before the holepunch handshake */
+    const config_psn_t *psn = config_psn_at(ai);
     if (!psn->access_token[0]) {
         log_event(LOG_ERR, "NET", "Sign in to PSN again to connect to %s", host->nickname);
         return false;
@@ -1038,7 +1040,7 @@ int session_discovery_list(session_found_t *out, int max, unsigned *gen) {
 bool session_reg_available(void) { return true; }
 bool session_reg_running(void) { return g_regist_active; }
 
-bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5) {
+bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5, const uint8_t account_id[8]) {
     lib_init();
     if (g_regist_active || !addr || !*addr || !pin) return false;
     memset(&g_regist, 0, sizeof(g_regist));
@@ -1049,7 +1051,8 @@ bool session_reg_begin_pin(const char *addr, const char *pin, bool ps5) {
     info.host = g_regist_addr;
     info.broadcast = false;
     info.pin = (uint32_t)strtoul(pin, NULL, 10);
-    if (config_psn_has_account_id()) memcpy(info.psn_account_id, config_psn()->account_id, CHIAKI_PSN_ACCOUNT_ID_SIZE);
+    int account = config_psn_find(account_id);
+    if (account >= 0) memcpy(info.psn_account_id, config_psn_at(account)->account_id, CHIAKI_PSN_ACCOUNT_ID_SIZE);
 
     g_regist_gen = ++g_reg_gen;
     ChiakiErrorCode err = chiaki_regist_start(&g_regist, &g_log, &info, regist_cb, NULL);
@@ -1157,8 +1160,9 @@ static int json_int(json_object *o, const char *key, int dflt) {
 /* ---------- PSN access token refresh (grant_type=refresh_token) ---------- */
 
 /* Exchange the refresh token for a fresh access token and store it (chiaki-ng PSNToken::RefreshPsnToken). */
-static bool psn_token_refresh(void) {
-    const config_psn_t *p = config_psn();
+static bool psn_token_refresh(int ai) {
+    const config_psn_t *p = config_psn_at(ai);
+    if (!p) return false;
     char refresh[256];
     snprintf(refresh, sizeof(refresh), "%s", p->refresh_token);
     uint8_t account_id[8];
@@ -1184,9 +1188,12 @@ static bool psn_token_refresh(void) {
         if (j && json_string(j, "access_token", access, sizeof(access))) {
             json_string(j, "refresh_token", new_refresh, sizeof(new_refresh));
             int expires = json_int(j, "expires_in", 3600);
-            config_psn_set(account_id, online_id, access, new_refresh[0] ? new_refresh : refresh);
-            config_psn_set_expiry((long long)time(NULL) + (expires > 0 ? expires : 3600));
-            config_save();
+            int k = config_psn_find(account_id); /* it may have been signed out meanwhile */
+            if (k >= 0) {
+                config_psn_set_tokens(k, access, new_refresh[0] ? new_refresh : refresh,
+                                      (long long)time(NULL) + (expires > 0 ? expires : 3600));
+                config_save();
+            }
             ok = true;
             log_msg("psn: access token refreshed");
         }
@@ -1200,11 +1207,11 @@ static bool psn_token_refresh(void) {
 
 /* Make sure the stored access token is usable, refreshing when it has expired or its age is
  * unknown. Returns false only when there is no token at all. */
-static bool psn_ensure_token(void) {
-    const config_psn_t *p = config_psn();
-    if (!p->access_token[0]) return false;
+static bool psn_ensure_token(int ai) {
+    const config_psn_t *p = config_psn_at(ai);
+    if (!p || !p->access_token[0]) return false;
     if (p->expires_at && (long long)time(NULL) + 60 < p->expires_at) return true; /* still valid */
-    if (psn_token_refresh()) return true;
+    if (psn_token_refresh(ai)) return true;
     return p->access_token[0] != '\0'; /* refresh failed: fall back to the stored token */
 }
 
@@ -1311,12 +1318,14 @@ bool session_reg_submit_code(const char *code) {
 typedef struct {
     unsigned op;
     char token[256];
+    uint8_t account_id[8];
 } psn_dev_job;
 
 static int psn_devices_thread(void *data) {
     psn_dev_job *job = data;
     unsigned op = job->op;
     session_reg_event_t ev = { .type = REG_EV_PSN_DEVICES, .op = op };
+    memcpy(ev.account_id, job->account_id, sizeof(ev.account_id));
     const ChiakiHolepunchConsoleType types[2] = { CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5,
                                                   CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4 };
     int n = 0;
@@ -1350,14 +1359,16 @@ static int psn_devices_thread(void *data) {
     return 0;
 }
 
-bool session_psn_fetch_devices(void) {
+bool session_psn_fetch_devices(const uint8_t account_id[8]) {
     lib_init();
-    if (g_psn_fetching || !config_psn_has_account_id() || !config_psn()->access_token[0]) return false;
-    psn_ensure_token(); /* refresh an expired access token before listing */
+    int ai = config_psn_find(account_id);
+    if (g_psn_fetching || ai < 0 || !config_psn_at(ai)->access_token[0]) return false;
+    psn_ensure_token(ai); /* refresh an expired access token before listing */
     psn_dev_job *job = malloc(sizeof(*job));
     if (!job) return false;
     job->op = ++g_reg_gen;
-    snprintf(job->token, sizeof(job->token), "%s", config_psn()->access_token);
+    memcpy(job->account_id, config_psn_at(ai)->account_id, sizeof(job->account_id));
+    snprintf(job->token, sizeof(job->token), "%s", config_psn_at(ai)->access_token);
     SDL_Thread *t = SDL_CreateThread(psn_devices_thread, "psn-devices", job);
     if (!t) {
         free(job);
