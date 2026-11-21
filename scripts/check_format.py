@@ -6,7 +6,7 @@ Usage:
     python3 scripts/check_format.py          # check (dry-run)
     python3 scripts/check_format.py --fix    # auto-fix in place
 
-Covers src/, tests/ and design/ (what git tracks or would add). Skips vendored code (src/vendor/) and the
+Covers src/, tests/, design/ and rplab/ (what git tracks or would add). Skips vendored code (src/vendor/) and the
 LVGL configuration headers, which follow LVGL's template. Set CLANG_FORMAT to use another binary; the
 version matters (mise.toml pins it: `mise run format`, `mise run lint:format`).
 """
@@ -23,7 +23,7 @@ SKIP_NAMES = ("lv_conf.h",)
 
 def sources():
     out = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "src", "tests", "design"],
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "src", "tests", "design", "rplab"],
         cwd=PROJECT_DIR, capture_output=True, text=True, check=True,
     ).stdout.split()
     return sorted(

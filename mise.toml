@@ -44,8 +44,16 @@ description = "Host tests (macOS): the whole UI offscreen, with a fake controlle
 run = "tests/host/run.sh"
 
 [tasks.tv]
-description = "On the TV: key, install, launch [--probe], stop, running, log [-f], save"
+description = "On the TV: key, install, launch [--probe], stop, running, log [-f], save, config [DIR]"
 run = "scripts/tv.sh"
+
+[tasks.rplab]
+description = "Remote Play lab: a headless session to a real console, driven by rplab/rp (run it in the background)"
+run = "rplab/run.sh"
+
+[tasks."rplab:build"]
+description = "Build the lab: libchiaki with its hooks (a patched copy of chiaki-ng) and the daemon"
+run = "rplab/build.sh"
 
 # ---------- design and images ----------
 

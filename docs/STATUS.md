@@ -14,6 +14,8 @@ Evidence comes from three places:
   [pad-battery-observed.txt](pad-battery-observed.txt), [network-capabilities.txt](network-capabilities.txt),
   [wifi-stalls-observed.txt](wifi-stalls-observed.txt)
 - **Host**: `tests/host/run.sh` (the real modules on macOS, a fake controller, a simulated console)
+- **Lab**: `rplab/`, a headless libchiaki session on a Mac against a real console, for what the protocol and the
+  console do: [multi-controller-observed.txt](multi-controller-observed.txt)
 
 What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 
@@ -38,6 +40,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | HDR10 (`NDL_DirectVideoSetHDRInfo` with the VUI codes) | TV: a 1080p H.265 HDR stream plays and the call succeeds with the HDR10 defaults (no SEI in the first 120 frames); reading the SEI values is not yet seen on the TV, and the picture is not graded |
 | DualSense on webOS 6: the button map (the DualShock 4's); no rumble or touches reach the app | TV (probe) + host |
 | DualSense on webOS 11: the standard Linux layout, rumble and battery, touchpad on its own unread node | TV (probe, OLED48C55LA) + host |
+| One controller per session: the TV holds two pads at once, but the PS5 binds one pad to a Remote Play session | TV + lab: [multi-controller-observed.txt](multi-controller-observed.txt) |
 | Remote number keys, Magic Remote, launch parameters | wired for both possibilities; the probe decides |
 | Rest mode on disconnect (the Disconnect card's End and sleep) | TV: the console is in rest mode 6 s after the request; host |
 
@@ -66,6 +69,12 @@ four buttons (no hat), the triggers as pressures on `ABS 0x30`/`0x31`, no force 
 `CONFIG_SONY_FF`) and no touchpad, though its pressure axes carry `ABS_MT_*` names:
 [ds3-map-observed.txt](ds3-map-observed.txt). It is mapped from one probe log and a tester's pass with the PR #14
 build on an OLED55C8PLA (webOS 4.4.3) pressed every control, which read itself.
+
+**Two controllers.** A DualShock 4 and a DualSense connect to the TV at the same time, as two uhid nodes; the app
+grabs one. Two players over Remote Play are not possible: the protocol has four controller slots (an index in each
+button event, up to four states in the stick packet, a controller id when a pad connects), but a PS5 reads only
+the first pad, and none of the session's setup headers or launch spec values changes that (tried in the lab,
+against a working control): [multi-controller-observed.txt](multi-controller-observed.txt).
 
 **Network.** UDP unicast and broadcast, DNS, TCP, TLS 1.3 (OpenSSL linked statically) and listening sockets all work
 for a native app: [network-capabilities.txt](network-capabilities.txt). PSN's TLS needed the CA bundle path set for

@@ -17,11 +17,14 @@
 #
 #   scripts/chiaki-lib-build-macos.sh
 #   REBUILD=1 scripts/chiaki-lib-build-macos.sh      rebuild from scratch
+#
+# CHIAKI_NG_SRC and CHIAKI_STAGING build another chiaki-ng tree into another staging dir (rplab/build.sh
+# builds its patched copy that way); by default it is the submodule into out/chiaki-lib-macos.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-CHIAKI_NG="$ROOT/chiaki-ng"
-STAGING="$ROOT/out/chiaki-lib-macos"
+CHIAKI_NG="${CHIAKI_NG_SRC:-$ROOT/chiaki-ng}"
+STAGING="${CHIAKI_STAGING:-$ROOT/out/chiaki-lib-macos}"
 BUILD="$STAGING/build"
 REBUILD="${REBUILD:-0}"
 JOBS="$(sysctl -n hw.ncpu)"

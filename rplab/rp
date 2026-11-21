@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# rplab/rp - send one command to the Remote Play lab daemon (rplab/run.sh) and print its reply.
+#
+#   rplab/rp help                 the commands
+#   rplab/rp status
+#   rplab/rp lua '<code>'         a one-line Lua chunk
+#   rplab/rp lua - <<'EOF'        a multi-line chunk from stdin (sent as a temporary file)
+#   rplab/rp run <script> [args]  a script: a path, or a name in rplab/scripts/ (".lua" optional)
+#
+# Env: RPLAB_STATE (default out/rplab), where the daemon keeps its socket.
+set -euo pipefail
+LAB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(dirname "$LAB")"
+STATE="${RPLAB_STATE:-$ROOT/out/rplab}"
+SOCK="$STATE/rpd.sock"
+[ -S "$SOCK" ] || { echo "the lab daemon is not running (no $SOCK): start rplab/run.sh" >&2; exit 1; }
+
+send() { printf '%s\n' "$*" | nc -U "$SOCK"; }
+
+if [ "${1:-}" = "lua" ] && [ "${2:-}" = "-" ]; then
+    mkdir -p "$STATE/tmp"
+    tmp="$(mktemp "$STATE/tmp/chunk.XXXXXX")"
+    trap 'rm -f "$tmp"' EXIT
+    cat >"$tmp"
+    send run "$tmp"
+    exit
+fi
+
+if [ "${1:-}" = "run" ] && [ $# -ge 2 ]; then
+    script="$2"
+    shift 2
+    for f in "$script" "$LAB/scripts/$script" "$LAB/scripts/$script.lua"; do
+        if [ -f "$f" ]; then
+            send run "$(cd "$(dirname "$f")" && pwd)/$(basename "$f")" "$@"
+            exit
+        fi
+    done
+    echo "no such script: $script" >&2
+    exit 1
+fi
+
+send "$@"

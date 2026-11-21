@@ -41,13 +41,16 @@ src/
   vendor/           qrcodegen.[ch]: Nayuki's QR encoder, unmodified
 tests/host/         macOS behaviour tests (shim/ fakes <linux/input.h>)
 sim/                macOS simulator: the whole app in a window
+rplab/              Remote Play lab (not in the app): a headless libchiaki session on the Mac with a command
+                    socket and Lua, against a real console; its libchiaki hooks are a patch on a copy of
+                    chiaki-ng (skill: remote-play-lab)
 design/menu/        design studies and their gallery (not in the app); art/ holds the art originals
 docs/               STATUS.md, TV-CHECKS.md, user-guide.md, raw hardware evidence (*-observed.txt)
 screenshots/        README images: app renders from the host tests, demo.mp4 recorded on the TV (made by
                     make-screenshots.sh; `mise run screenshots:check` says whether they are stale)
 scripts/            webos-sdk.sh toolchain + packager; chiaki-lib-build-{webos,macos}.sh libchiaki,
                     chiaki-lib-update.sh moves chiaki-ng forward;
-                    tv.sh install/launch/log on a TV; make-device-art.sh; make-screenshots.sh (README
+                    tv.sh install/launch/log/config on a TV; make-device-art.sh; make-screenshots.sh (README
                     images); check_format.py, check_tidy.py (lint, see mise.toml)
 cmake/              AppVersion.cmake (version from appinfo.json), AresPackage.cmake (CPack -> .ipk)
 LICENSES/           license texts of bundled code that keeps them in headers (the .ipk's licenses/);
@@ -95,6 +98,7 @@ scripts/chiaki-lib-build-webos.sh    # once: libchiaki + static deps -> out/chia
 tests/host/run.sh                    # host tests (brew install sdl2); exit status = failures
 sim/run.sh                           # the app in a window
 scripts/chiaki-lib-update.sh [REF]   # chiaki-ng to its newest commit (or REF), notices updated; then rebuild
+rplab/run.sh                         # the Remote Play lab daemon (run it in the background); rplab/rp help
 mise install                         # once: the pinned lint tools (mise.toml)
 mise run format                      # clang-format the C sources in place
 mise run lint                        # what CI checks: clang-format, clang-tidy, shellcheck, actionlint
@@ -121,6 +125,9 @@ scripts/tv.sh install && scripts/tv.sh launch --probe && scripts/tv.sh log -f
   an assertion for new behaviour
 - The host tests and the simulator do not replace the TV: rendering speed, the controller, discovery on a real
   network and webOS itself are proven on the device ([docs/TV-CHECKS.md](docs/TV-CHECKS.md))
+- What the console and the protocol do (input, session setup, its replies) is tried against a real console
+  with `rplab/`, no TV needed: one session, a positive control per experiment, screenshots read by a subagent
+  (the remote-play-lab skill)
 - The README's images are renders of the app: `mise run screenshots` remakes `screenshots/` from the host tests'
   steps and the design gallery's stand-in game. A change to a screen that `screenshots/` shows makes them stale,
   so run `mise run screenshots:check` (it re-renders and names each image that differs) and commit the

@@ -1,0 +1,541 @@
+rplab/chiaki-probe.patch - experiment hooks for libchiaki (chiaki-ng/lib), used by the Remote Play lab only.
+
+rplab/build.sh applies it to a throwaway copy of chiaki-ng in out/rplab/chiaki-ng and builds that into its own
+staging (out/rplab/chiaki-lib): the submodule, out/chiaki-lib-macos and the app's builds never see it. The hooks
+(lib/include/chiaki/probe.h) do nothing unless rpd calls them: extra controller states per feedback packet,
+ControllerConnection messages, raw feedback history events, session setup headers and the launch spec, and
+readable logs of the console's session and ctrl responses. Edit the copy, then rplab/build.sh --save-patch.
+
+diff --git a/lib/include/chiaki/probe.h b/lib/include/chiaki/probe.h
+new file mode 100644
+index 0000000..16d4610
+--- /dev/null
++++ b/lib/include/chiaki/probe.h
+@@ -0,0 +1,66 @@
++// SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
++
++// HOTARU PROBE: throwaway hooks for the multi-controller experiment (out/probe/rpd.c).
++// Not for upstream; inert unless called.
++
++#ifndef CHIAKI_PROBE_H
++#define CHIAKI_PROBE_H
++
++#include "common.h"
++#include "feedback.h"
++#include "session.h"
++
++#include <stdbool.h>
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define CHIAKI_PROBE_STATES_MAX 4
++
++typedef struct chiaki_probe_feedback_t
++{
++	int count; // states per feedback state packet, 1..CHIAKI_PROBE_STATES_MAX
++	int count_byte; // header byte 3 as sent; -1: count - 1
++	ChiakiFeedbackState extra[CHIAKI_PROBE_STATES_MAX]; // slots 1.. (slot 0 is the session's pad)
++	bool raw[CHIAKI_PROBE_STATES_MAX]; // send raw_bytes for this slot verbatim (slot 0 included)
++	uint8_t raw_bytes[CHIAKI_PROBE_STATES_MAX][CHIAKI_FEEDBACK_STATE_BUF_SIZE_MAX];
++} ChiakiProbeFeedback;
++
++// applies to every following feedback state packet; the next one is hexdumped to the log
++CHIAKI_EXPORT void chiaki_probe_set_feedback(const ChiakiProbeFeedback *feedback);
++
++// a ControllerConnection message; type < 0: the session's default (DualShock 4 or DualSense)
++CHIAKI_EXPORT ChiakiErrorCode chiaki_probe_send_controller_connection(ChiakiSession *session,
++		bool has_controller_id, int32_t controller_id, bool connected, int type);
++
++// one raw feedback history event (up to CHIAKI_HISTORY_EVENT_SIZE_MAX bytes) through the session's
++// feedback sender, numbered like the pad's own events
++CHIAKI_EXPORT ChiakiErrorCode chiaki_probe_push_history_event(ChiakiSession *session, const uint8_t *buf, size_t len);
++
++// session setup knobs, read when a session connects
++typedef struct chiaki_probe_setup_t
++{
++	int controller_type; // RP-ControllerType; < 0: 3
++	int client_type; // RP-ClientType; < 0: 11
++	int con_path; // RP-ConPath; < 0: 1
++	int pad_proc_no; // RP-PadProcNo; -1: 3 on a PS5 (none on a PS4), -2: not sent
++	char ctrl_extra[256]; // more ctrl request header lines, each ending in \r\n
++	char init_extra[256]; // more session request header lines, each ending in \r\n
++	char controllers[128]; // launch spec connectedControllers entries; "": "xinput","ds3","ds4"
++	char game_spec_extra[256]; // more requestGameSpecification members, each starting with a comma
++	unsigned start_cc_mask; // bit i: also announce controller id i in the stream's opening ControllerConnection
++	int start_cc_type; // their type; < 0: the session's default
++	bool start_cc_with_id0; // the session's own announcement carries controller id 0 instead of none
++} ChiakiProbeSetup;
++
++CHIAKI_EXPORT void chiaki_probe_setup_default(ChiakiProbeSetup *setup);
++CHIAKI_EXPORT void chiaki_probe_set_setup(const ChiakiProbeSetup *setup);
++CHIAKI_EXPORT void chiaki_probe_get_setup(ChiakiProbeSetup *setup);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif // CHIAKI_PROBE_H
+diff --git a/lib/src/ctrl.c b/lib/src/ctrl.c
+index 7b1ce49..0f4d9f5 100644
+--- a/lib/src/ctrl.c
++++ b/lib/src/ctrl.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
+ 
+ #include <chiaki/ctrl.h>
++#include <chiaki/probe.h>
+ #include <chiaki/session.h>
+ #include <chiaki/base64.h>
+ #include <chiaki/http.h>
+@@ -14,6 +15,7 @@
+ #include <errno.h>
+ #include <assert.h>
+ #include <inttypes.h>
++#include <pthread.h>
+ 
+ #ifdef _WIN32
+ #include <winsock2.h>
+@@ -74,6 +76,30 @@ typedef enum ctrl_login_state_t {
+ 	CTRL_LOGIN_STATE_PIN_INCORRECT = 0x1
+ } CtrlLoginState;
+ 
++// HOTARU PROBE: see chiaki/probe.h
++static pthread_mutex_t probe_setup_mutex = PTHREAD_MUTEX_INITIALIZER;
++static ChiakiProbeSetup probe_setup = { .controller_type = -1, .client_type = -1, .con_path = -1, .pad_proc_no = -1 };
++
++CHIAKI_EXPORT void chiaki_probe_setup_default(ChiakiProbeSetup *setup)
++{
++	memset(setup, 0, sizeof(*setup));
++	setup->controller_type = setup->client_type = setup->con_path = setup->pad_proc_no = -1;
++}
++
++CHIAKI_EXPORT void chiaki_probe_set_setup(const ChiakiProbeSetup *setup)
++{
++	pthread_mutex_lock(&probe_setup_mutex);
++	probe_setup = *setup;
++	pthread_mutex_unlock(&probe_setup_mutex);
++}
++
++CHIAKI_EXPORT void chiaki_probe_get_setup(ChiakiProbeSetup *setup)
++{
++	pthread_mutex_lock(&probe_setup_mutex);
++	*setup = probe_setup;
++	pthread_mutex_unlock(&probe_setup_mutex);
++}
++
+ struct chiaki_ctrl_message_queue_t
+ {
+ 	ChiakiCtrlMessageQueue *next;
+@@ -1331,15 +1357,29 @@ static ChiakiErrorCode ctrl_connect(ChiakiCtrl *ctrl)
+ 			"RP-Auth: %s\r\n"
+ 			"RP-Version: %s\r\n"
+ 			"RP-Did: %s\r\n"
+-			"RP-ControllerType: 3\r\n"
+-			"RP-ClientType: 11\r\n"
++			"RP-ControllerType: %d\r\n"
++			"RP-ClientType: %d\r\n"
+ 			"RP-OSType: %s\r\n"
+-			"RP-ConPath: 1\r\n"
++			"RP-ConPath: %d\r\n"
+ 			"%s"
+ 			"%s%s%s"
+ 			"%s%s%s"
++			"%s"
+ 			"\r\n";
+ 
++	// HOTARU PROBE: see chiaki/probe.h
++	ChiakiProbeSetup probe;
++	chiaki_probe_get_setup(&probe);
++	char pad_proc_no[32];
++	if(probe.pad_proc_no >= 0)
++		snprintf(pad_proc_no, sizeof(pad_proc_no), "RP-PadProcNo: %d\r\n", probe.pad_proc_no);
++	else if(probe.pad_proc_no == -1 && chiaki_target_is_ps5(session->target))
++		// without it a PS5 sends some adaptive trigger effects (such as Bow) in a form the
++		// controller doesn't apply
++		snprintf(pad_proc_no, sizeof(pad_proc_no), "RP-PadProcNo: 3\r\n");
++	else
++		pad_proc_no[0] = '\0';
++
+ 	const char *path;
+ 	if(session->target == CHIAKI_TARGET_PS4_8 || session->target == CHIAKI_TARGET_PS4_9)
+ 		path = "/sce/rp/session/ctrl";
+@@ -1349,19 +1389,22 @@ static ChiakiErrorCode ctrl_connect(ChiakiCtrl *ctrl)
+ 		path = "/sie/ps4/rp/sess/ctrl";
+ 	const char *rp_version = chiaki_rp_version_string(session->target);
+ 	int port = session->holepunch_session ? chiaki_get_ps_ctrl_port(session->holepunch_session) : SESSION_CTRL_PORT;
+-	char send_buf[512];
++	char send_buf[1024];
+ 	int request_len = snprintf(send_buf, sizeof(send_buf), request_fmt,
+ 			path, session->connect_info.hostname, port, auth_b64,
+-			rp_version ? rp_version : "", did_b64, ostype_b64,
+-			// without it a PS5 sends some adaptive trigger effects (such as Bow) in a form the
+-			// controller doesn't apply
+-			chiaki_target_is_ps5(session->target) ? "RP-PadProcNo: 3\r\n" : "",
++			rp_version ? rp_version : "", did_b64,
++			probe.controller_type >= 0 ? probe.controller_type : 3,
++			probe.client_type >= 0 ? probe.client_type : 11,
++			ostype_b64,
++			probe.con_path >= 0 ? probe.con_path : 1,
++			pad_proc_no,
+ 			have_bitrate ? "RP-StartBitrate: " : "",
+ 			have_bitrate ? bitrate_b64 : "",
+ 			have_bitrate ? "\r\n" : "",
+ 			have_streaming_type ? "RP-StreamingType: " : "",
+ 			have_streaming_type ? streaming_type_b64 : "",
+-			have_streaming_type ? "\r\n" : "");
++			have_streaming_type ? "\r\n" : "",
++			probe.ctrl_extra);
+ 	if(request_len < 0 || request_len >= sizeof(send_buf))
+ 		goto error;
+ 
+@@ -1464,6 +1507,10 @@ static ChiakiErrorCode ctrl_connect(ChiakiCtrl *ctrl)
+ 	}
+ 
+ 	CHIAKI_LOGI(session->log, "Ctrl received ctrl request http response");
++	// HOTARU PROBE: the response headers, readable
++	CHIAKI_LOGI(session->log, "Probe ctrl response: HTTP %d", http_response.code);
++	for(ChiakiHttpHeader *header = http_response.headers; header; header = header->next)
++		CHIAKI_LOGI(session->log, "Probe ctrl response header %s: %s", header->key, header->value);
+ 
+ 	CtrlResponse response;
+ 	parse_ctrl_response(&response, &http_response);
+diff --git a/lib/src/feedbacksender.c b/lib/src/feedbacksender.c
+index 817544a..6250208 100644
+--- a/lib/src/feedbacksender.c
++++ b/lib/src/feedbacksender.c
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
+ 
+ #include <chiaki/feedbacksender.h>
++#include <chiaki/probe.h>
++#include <chiaki/session.h>
+ #include <chiaki/time.h>
+ 
+ #include <string.h>
+@@ -28,6 +30,7 @@ static const uint64_t feedback_history_tail_ms[] = { 20, 50, 100, 200 };
+ #define FEEDBACK_HISTORY_TAIL_COUNT (sizeof(feedback_history_tail_ms) / sizeof(feedback_history_tail_ms[0]))
+ 
+ static void *feedback_sender_thread_func(void *user);
++static void feedback_sender_history_event_pushed(void *user);
+ static void feedback_sender_send_state(ChiakiFeedbackSender *feedback_sender, const ChiakiControllerState *state);
+ static void feedback_sender_send_history_packet(ChiakiFeedbackSender *feedback_sender, ChiakiSeqNum16 seq_num, uint8_t event_count, const uint8_t *buf, size_t buf_size);
+ static void feedback_sender_flush_history_locked(ChiakiFeedbackSender *feedback_sender);
+@@ -118,6 +121,38 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_feedback_sender_set_controller_state(Chiaki
+ 	return CHIAKI_ERR_SUCCESS;
+ }
+ 
++// HOTARU PROBE: see chiaki/probe.h
++CHIAKI_EXPORT ChiakiErrorCode chiaki_probe_push_history_event(ChiakiSession *session, const uint8_t *buf, size_t len)
++{
++	if(!len || len > CHIAKI_HISTORY_EVENT_SIZE_MAX)
++		return CHIAKI_ERR_INVALID_DATA;
++	ChiakiStreamConnection *stream_connection = &session->stream_connection;
++	ChiakiErrorCode err = chiaki_mutex_lock(&stream_connection->feedback_sender_mutex);
++	if(err != CHIAKI_ERR_SUCCESS)
++		return err;
++	if(!stream_connection->feedback_sender_active)
++	{
++		chiaki_mutex_unlock(&stream_connection->feedback_sender_mutex);
++		return CHIAKI_ERR_UNINITIALIZED;
++	}
++	ChiakiFeedbackSender *feedback_sender = &stream_connection->feedback_sender;
++	err = chiaki_mutex_lock(&feedback_sender->state_mutex);
++	if(err == CHIAKI_ERR_SUCCESS)
++	{
++		ChiakiFeedbackHistoryEvent event;
++		memcpy(event.buf, buf, len);
++		event.len = len;
++		chiaki_feedback_history_buffer_push(&feedback_sender->history_buf, &event);
++		feedback_sender_history_event_pushed(feedback_sender);
++		feedback_sender->controller_state_changed = true;
++		chiaki_mutex_unlock(&feedback_sender->state_mutex);
++		chiaki_cond_signal(&feedback_sender->state_cond);
++		CHIAKI_LOGI(feedback_sender->log, "Probe history event pushed (%zu bytes)", len);
++	}
++	chiaki_mutex_unlock(&stream_connection->feedback_sender_mutex);
++	return err;
++}
++
+ static bool controller_state_equals_for_feedback_state(ChiakiControllerState *a, ChiakiControllerState *b)
+ {
+ 	if(!(a->left_x == b->left_x
+diff --git a/lib/src/launchspec.c b/lib/src/launchspec.c
+index abed382..529dd72 100644
+--- a/lib/src/launchspec.c
++++ b/lib/src/launchspec.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
+ 
+ #include <chiaki/launchspec.h>
++#include <chiaki/probe.h>
+ #include <chiaki/session.h>
+ #include <chiaki/base64.h>
+ 
+@@ -47,11 +48,12 @@ static const char launchspec_fmt[] =
+ 			"\"audioChannels\":\"5.1\","
+ 			"\"language\":\"sp\","
+ 			"\"acceptButton\":\"X\","
+-			"\"connectedControllers\":[\"xinput\",\"ds3\",\"ds4\"],"
++			"\"connectedControllers\":[%s],"
+ 			"\"yuvCoefficient\":\"bt601\","
+ 			"\"videoEncoderProfile\":\"hw4.1\","
+ 			"\"audioEncoderProfile\":\"audio1\"" // 6
+ 			"%s"
++			"%s"
+ 		"},"
+ 		"\"userProfile\":{"
+ 			"\"onlineId\":\"psnId\","
+@@ -85,10 +87,15 @@ CHIAKI_EXPORT int chiaki_launchspec_format(char *buf, size_t buf_size, ChiakiLau
+ 	else
+ 		extras[0] = extras[1] = extras[2] = "";
+ 
++	// HOTARU PROBE: see chiaki/probe.h
++	ChiakiProbeSetup probe;
++	chiaki_probe_get_setup(&probe);
++	const char *controllers = probe.controllers[0] ? probe.controllers : "\"xinput\",\"ds3\",\"ds4\"";
++
+ 	int written = snprintf(buf, buf_size, launchspec_fmt,
+ 			launch_spec->width, launch_spec->height, launch_spec->max_fps,
+ 			launch_spec->bw_kbps_sent, launch_spec->mtu, launch_spec->rtt,
+-			extras[0], extras[1], extras[2], handshake_key_b64);
++			controllers, extras[0], probe.game_spec_extra, extras[1], extras[2], handshake_key_b64);
+ 	if(written < 0 || written >= buf_size)
+ 		return -1;
+ 	return written;
+diff --git a/lib/src/session.c b/lib/src/session.c
+index 41c6bbf..a26c77a 100644
+--- a/lib/src/session.c
++++ b/lib/src/session.c
+@@ -5,6 +5,7 @@
+ #include <chiaki/session.h>
+ #include <chiaki/http.h>
+ #include <chiaki/base64.h>
++#include <chiaki/probe.h>
+ #include <chiaki/random.h>
+ 
+ #include <stdlib.h>
+@@ -892,6 +893,7 @@ static ChiakiErrorCode session_thread_request_session(ChiakiSession *session, Ch
+ 			"Content-Length: 0\r\n"
+ 			"RP-Registkey: %s\r\n"
+ 			"Rp-Version: %s\r\n"
++			"%s"
+ 			"\r\n";
+ 	const char *path;
+ 	if(session->target == CHIAKI_TARGET_PS4_8 || session->target == CHIAKI_TARGET_PS4_9)
+@@ -931,15 +933,18 @@ static ChiakiErrorCode session_thread_request_session(ChiakiSession *session, Ch
+ 		return CHIAKI_ERR_INVALID_DATA;
+ 	}
+ 
+-	char send_buf[512];
++	char send_buf[1024];
+ 	int port = SESSION_PORT;
+ 	if(session->holepunch_session)
+ 	{
+ 		chiaki_get_ps_selected_addr(session->holepunch_session, session->connect_info.hostname);
+ 		port = chiaki_get_ps_ctrl_port(session->holepunch_session);
+ 	}
++	// HOTARU PROBE: see chiaki/probe.h
++	ChiakiProbeSetup probe;
++	chiaki_probe_get_setup(&probe);
+ 	int request_len = snprintf(send_buf, sizeof(send_buf), session_request_fmt,
+-			path, session->connect_info.hostname, port, regist_key_hex, rp_version_str);
++			path, session->connect_info.hostname, port, regist_key_hex, rp_version_str, probe.init_extra);
+ 	if(request_len < 0 || request_len >= sizeof(send_buf))
+ 	{
+ 		if(!CHIAKI_SOCKET_IS_INVALID(session_sock))
+@@ -1031,6 +1036,11 @@ static ChiakiErrorCode session_thread_request_session(ChiakiSession *session, Ch
+ 		return CHIAKI_ERR_NETWORK;
+ 	}
+ 
++	// HOTARU PROBE: the response headers, readable
++	CHIAKI_LOGI(session->log, "Probe session response: HTTP %d", http_response.code);
++	for(ChiakiHttpHeader *header = http_response.headers; header; header = header->next)
++		CHIAKI_LOGI(session->log, "Probe session response header %s: %s", header->key, header->value);
++
+ 	SessionResponse response;
+ 	parse_session_response(&response, &http_response);
+ 
+diff --git a/lib/src/streamconnection.c b/lib/src/streamconnection.c
+index afa1a60..6a04801 100644
+--- a/lib/src/streamconnection.c
++++ b/lib/src/streamconnection.c
+@@ -3,6 +3,7 @@
+ 
+ #include "chiaki/common.h"
+ #include <chiaki/streamconnection.h>
++#include <chiaki/probe.h>
+ #include <chiaki/session.h>
+ #include <chiaki/launchspec.h>
+ #include <chiaki/base64.h>
+@@ -990,7 +991,7 @@ static bool chiaki_pb_encode_zero_encrypted_key(pb_ostream_t *stream, const pb_f
+ 	return pb_encode_string(stream, data, sizeof(data));
+ }
+ 
+-#define LAUNCH_SPEC_JSON_BUF_SIZE 1024
++#define LAUNCH_SPEC_JSON_BUF_SIZE 2048
+ 
+ static ChiakiErrorCode stream_connection_send_big(ChiakiStreamConnection *stream_connection)
+ {
+@@ -1071,7 +1072,7 @@ static ChiakiErrorCode stream_connection_send_big(ChiakiStreamConnection *stream
+ 	msg.big_payload.ecdh_sig.arg = &ecdh_sig_buf;
+ 	msg.big_payload.ecdh_sig.funcs.encode = chiaki_pb_encode_buf;
+ 
+-	uint8_t buf[2048];
++	uint8_t buf[4096]; // HOTARU PROBE: room for a longer launch spec
+ 	size_t buf_size;
+ 
+ 	pb_ostream_t stream = pb_ostream_from_buffer(buf, sizeof(buf));
+@@ -1114,7 +1115,40 @@ static ChiakiErrorCode stream_connection_send_big(ChiakiStreamConnection *stream
+ 	return err;
+ }
+ 
++static ChiakiErrorCode stream_connection_send_controller_connection_ex(ChiakiStreamConnection *stream_connection,
++		bool has_controller_id, int32_t controller_id, bool connected, int type);
++
+ static ChiakiErrorCode stream_connection_send_controller_connection(ChiakiStreamConnection *stream_connection)
++{
++	// HOTARU PROBE: see chiaki/probe.h
++	ChiakiProbeSetup probe;
++	chiaki_probe_get_setup(&probe);
++	ChiakiErrorCode err = stream_connection_send_controller_connection_ex(stream_connection,
++			probe.start_cc_with_id0, 0, true, -1);
++	for(int32_t id = 0; id < 8; id++)
++	{
++		if(!(probe.start_cc_mask & (1u << id)))
++			continue;
++		CHIAKI_LOGI(stream_connection->log, "Probe opening controller connection: id %d, type %d", (int)id, probe.start_cc_type);
++		ChiakiErrorCode e = stream_connection_send_controller_connection_ex(stream_connection, true, id, true, probe.start_cc_type);
++		if(err == CHIAKI_ERR_SUCCESS)
++			err = e;
++	}
++	return err;
++}
++
++// HOTARU PROBE: see chiaki/probe.h
++CHIAKI_EXPORT ChiakiErrorCode chiaki_probe_send_controller_connection(ChiakiSession *session,
++		bool has_controller_id, int32_t controller_id, bool connected, int type)
++{
++	CHIAKI_LOGI(session->log, "Probe controller connection: id %s%d, connected %d, type %d",
++			has_controller_id ? "" : "(unset) ", (int)controller_id, (int)connected, type);
++	return stream_connection_send_controller_connection_ex(&session->stream_connection,
++			has_controller_id, controller_id, connected, type);
++}
++
++static ChiakiErrorCode stream_connection_send_controller_connection_ex(ChiakiStreamConnection *stream_connection,
++		bool has_controller_id, int32_t controller_id, bool connected, int type)
+ {
+ 	ChiakiSession *session = stream_connection->session;
+ 	tkproto_TakionMessage msg;
+@@ -1123,12 +1157,16 @@ static ChiakiErrorCode stream_connection_send_controller_connection(ChiakiStream
+ 	msg.type = tkproto_TakionMessage_PayloadType_CONTROLLERCONNECTION;
+ 	msg.has_controller_connection_payload = true;
+ 	msg.controller_connection_payload.has_connected = true;
+-	msg.controller_connection_payload.connected = true;
+-	msg.controller_connection_payload.has_controller_id = false;
++	msg.controller_connection_payload.connected = connected;
++	msg.controller_connection_payload.has_controller_id = has_controller_id;
++	msg.controller_connection_payload.controller_id = controller_id;
+ 	msg.controller_connection_payload.has_controller_type = true;
+-	msg.controller_connection_payload.controller_type = session->connect_info.enable_dualsense
+-		? tkproto_ControllerConnectionPayload_ControllerType_DUALSENSE
+-		: tkproto_ControllerConnectionPayload_ControllerType_DUALSHOCK4;
++	if(type >= 0)
++		msg.controller_connection_payload.controller_type = (tkproto_ControllerConnectionPayload_ControllerType)type;
++	else
++		msg.controller_connection_payload.controller_type = session->connect_info.enable_dualsense
++			? tkproto_ControllerConnectionPayload_ControllerType_DUALSENSE
++			: tkproto_ControllerConnectionPayload_ControllerType_DUALSHOCK4;
+ 
+ 	uint8_t buf[2048];
+ 	size_t buf_size;
+diff --git a/lib/src/takion.c b/lib/src/takion.c
+index 9916009..314a668 100644
+--- a/lib/src/takion.c
++++ b/lib/src/takion.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
+ 
+ #include "chiaki/feedback.h"
++#include <chiaki/probe.h>
+ #include <chiaki/takion.h>
+ #include <chiaki/congestioncontrol.h>
+ #include <chiaki/random.h>
+@@ -8,6 +9,7 @@
+ #include <chiaki/time.h>
+ 
+ #include <fcntl.h>
++#include <pthread.h>
+ #include <stdbool.h>
+ #include <stdio.h>
+ #include <errno.h>
+@@ -784,24 +786,58 @@ beach:
+ 	return err;
+ }
+ 
++// HOTARU PROBE: see chiaki/probe.h
++static pthread_mutex_t probe_feedback_mutex = PTHREAD_MUTEX_INITIALIZER;
++static ChiakiProbeFeedback probe_feedback = { .count = 1, .count_byte = -1 };
++static bool probe_feedback_log_next = false;
++
++CHIAKI_EXPORT void chiaki_probe_set_feedback(const ChiakiProbeFeedback *feedback)
++{
++	pthread_mutex_lock(&probe_feedback_mutex);
++	probe_feedback = *feedback;
++	if(probe_feedback.count < 1)
++		probe_feedback.count = 1;
++	if(probe_feedback.count > CHIAKI_PROBE_STATES_MAX)
++		probe_feedback.count = CHIAKI_PROBE_STATES_MAX;
++	probe_feedback_log_next = true;
++	pthread_mutex_unlock(&probe_feedback_mutex);
++}
++
+ CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_send_feedback_state(ChiakiTakion *takion, ChiakiSeqNum16 seq_num, ChiakiFeedbackState *feedback_state)
+ {
+-	uint8_t buf[0xc + CHIAKI_FEEDBACK_STATE_BUF_SIZE_MAX];
++	pthread_mutex_lock(&probe_feedback_mutex);
++	ChiakiProbeFeedback probe = probe_feedback;
++	bool log_packet = probe_feedback_log_next;
++	probe_feedback_log_next = false;
++	pthread_mutex_unlock(&probe_feedback_mutex);
++
++	size_t state_size = takion->version <= 9 ? CHIAKI_FEEDBACK_STATE_BUF_SIZE_V9 : CHIAKI_FEEDBACK_STATE_BUF_SIZE_V12;
++	uint8_t buf[0xc + CHIAKI_FEEDBACK_STATE_BUF_SIZE_MAX * CHIAKI_PROBE_STATES_MAX];
+ 	buf[0] = TAKION_PACKET_TYPE_FEEDBACK_STATE;
+ 	*((chiaki_unaligned_uint16_t *)(buf + 1)) = htons(seq_num);
+-	buf[3] = 0; // number of states in the packet less one
++	// number of states in the packet less one
++	buf[3] = (uint8_t)(probe.count_byte >= 0 ? probe.count_byte : probe.count - 1);
+ 	*((chiaki_unaligned_uint32_t *)(buf + 4)) = 0; // key pos
+ 	*((chiaki_unaligned_uint32_t *)(buf + 8)) = 0; // gmac
+-	size_t buf_sz;
+-	if(takion->version <= 9)
++	for(int i = 0; i < probe.count; i++)
+ 	{
+-		buf_sz = 0xc + CHIAKI_FEEDBACK_STATE_BUF_SIZE_V9;
+-		chiaki_feedback_state_format_v9(buf + 0xc, feedback_state);
++		uint8_t *slot = buf + 0xc + i * state_size;
++		if(probe.raw[i])
++		{
++			memcpy(slot, probe.raw_bytes[i], state_size);
++			continue;
++		}
++		ChiakiFeedbackState *st = i == 0 ? feedback_state : &probe.extra[i];
++		if(takion->version <= 9)
++			chiaki_feedback_state_format_v9(slot, st);
++		else
++			chiaki_feedback_state_format_v12(slot, st);
+ 	}
+-	else
++	size_t buf_sz = 0xc + probe.count * state_size;
++	if(log_packet)
+ 	{
+-		buf_sz = 0xc + CHIAKI_FEEDBACK_STATE_BUF_SIZE_V12;
+-		chiaki_feedback_state_format_v12(buf + 0xc, feedback_state);
++		CHIAKI_LOGI(takion->log, "Probe feedback state packet (version %u, %d states):", (unsigned)takion->version, probe.count);
++		chiaki_log_hexdump(takion->log, CHIAKI_LOG_INFO, buf, buf_sz);
+ 	}
+ 	return takion_send_feedback_packet(takion, buf, buf_sz);
+ }

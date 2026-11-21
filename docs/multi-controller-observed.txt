@@ -1,0 +1,92 @@
+Two controllers over Remote Play - raw observations (2026-11-21)
+
+Question: can one Remote Play session carry two controllers, so two pads on the TV play as player 1
+and player 2 on the console (local co-op)?
+
+Answer: no. The TV holds two pads at once and the protocol has four controller slots, but the PS5
+binds one pad to a Remote Play session, and nothing in the session or its setup changes that.
+
+Where: the TV is the LG 50UP75003LF (webOS TV Lite 6.5.3), read over SSH. The console side is a PS5
+(PS5-325) on the LAN, driven from a Mac by rplab/ (a headless libchiaki session with experiment
+hooks; the scripts named below are in rplab/scripts/). Every negative result below was taken with a
+positive control in the same session: pad 0's own input moved the focus or opened the Control
+Center, and the screen was checked to be the one the test assumed.
+
+THE TV: TWO PADS AT ONCE, YES
+  /proc/bus/input/devices with a DualShock 4 and a DualSense both connected over Bluetooth:
+
+    I: Bus=0005 Vendor=054c Product=09cc Version=0100
+    N: Name="Wireless Controller"
+    P: Phys=A4:53:85:2F:3F:B8
+    S: Sysfs=/devices/virtual/misc/uhid/0005:054C:09CC.0001/input/input9
+    H: Handlers=js5 event9
+    B: FF=1 7030000 0 0
+
+    I: Bus=0005 Vendor=054c Product=0ce6 Version=0100
+    N: Name="DualSense Wireless Controller"
+    P: Phys=D0:BC:C1:12:AB:DF
+    S: Sysfs=/devices/virtual/misc/uhid/0005:054C:0CE6.0002/input/input10
+    H: Handlers=js6 event10
+
+  Two uhid devices (drivers sony and hid-generic), two event nodes; both pass gamepad.c's checks,
+  which grab the first one only. HID is bthidmanager's and webos-bluetooth-service's (no BlueZ
+  tools); their luna methods are private to the prisoner user.
+
+THE PROTOCOL HAS FOUR CONTROLLER SLOTS
+  - takion.proto: ControllerConnectionPayload { controller_id, connected, controller_type },
+    MicConnectionPayload.controller_id, MicInfoPayload.controller_id. libchiaki sends one
+    ControllerConnection, with no id.
+  - Feedback state packet: header byte 3 is "number of states less one"; libchiaki sends one state.
+  - Feedback history (button) events: the low 2 bits of the event's first byte select a controller.
+    D-pad right sent as <b0> 83 ff / <b0> 83 00 with the Control Center focused (cc_input.lua,
+    then by hand; 9 of 9 predictions held):
+      b0 = 80 84 88 8c 90            moves the focus (index 0)
+      b0 = 81 82 83 85 86 87 8d      accepted, nothing happens (index 1..3), pad 0 still works
+      b0 = a0 b0 e0 f0               malformed: the console drops every history packet that carries
+                                     them, so pad 0 is dead until they leave the 8-event resend window
+  - Sony's macOS client (RemotePlay.app from RemotePlayInstaller.pkg, built 2026-09) has
+    "ControllerId OUT OF RANGE. 4 controllers 0 based. %d" in its Takion client.
+
+THE PS5 BINDS ONE PAD
+  Mid-session (cc_input.lua, stick_states.lua, pad_ps.lua):
+    ControllerConnection, no id / id 0 / id 1..3, connected 0 or 1,   ignored: no reply, pad 0 keeps
+      type DualShock 4 or DualSense                                   working even after "connected 0"
+    feedback states 2 or 4, left stick held in states 1..3,            only state 0 is read
+      header byte 3 forced to 0
+    PS on history index 1 or 2, with and without a ControllerConnection  nothing on screen: no
+      for that id first, 200 ms and 1.2 s presses                       "who is using this controller"
+    Control Center > Accessories                                       one "Controller", then
+                                                                       "BT Keyboard" and
+                                                                       "Microphone on Remote Play Device"
+  Session setup, one reconnect per variant (setup_matrix.lua), PS on index 1 after each:
+    RP-PadProcNo none / 1 / 2 / 4                                      no change
+    RP-ControllerType 0 / 2 / 4 / 5 / 6                                no change
+    RP-ControllerType 1                                                the stream connection fails
+    RP-ReqMoreInfo 1, RP-Option 1 (the official client sends both)     no change
+    launch spec connectedControllers: two or four "ds4"                no change
+    ControllerConnection for ids 1..3 at stream start (own pad as id 0)  no change
+    RP-ClientType 1..16 with all of the above                          no change, but see 14 below
+
+SIDE FINDINGS
+  - The ctrl response (readable through rplab's hooks): RP-Prohibit 0, RP-Device 0, RP-Rssi-Dbm 0,
+    RP-Rssi-Percent 0, RP-Enterkey X, RP-Server-Type, RP-Server-IPv4, RP-Vmode 0, RP-ReqMoreInfo 0,
+    RP-SupportCmd 142300.
+  - RP-SupportCmd on the ctrl request (the official client sends it; libchiaki does not): any decimal
+    from 100000 to 999999 makes the console send two more ctrl messages, 0x17
+    (02 00 04 02 24 00 55 12 34) and 0x8910 (00 00 00 00); 1 or hex digits change nothing. On the
+    session request it is refused: RP-Application-Reason 80108b26.
+  - RP-ClientType 14: the stream plays, but the console ignores all input on every index (a
+    watch-only client); 0x8910 then carries 00 00 01 ff.
+  - Ctrl message 0x41 (00 00 00 00 02 01 00 00) arrives in every session; libchiaki ignores it.
+  - After a session ends the console refuses the next one for ~10 s (0x80108b10, "Remote is
+    already in use").
+
+PUBLIC SOURCES
+  Nothing either way: Sony's pages name one controller per platform and never mention co-op, Share
+  Play cannot run during Remote Play, and no open-source client or issue covers more than one pad
+  (thestr4ng3r/chiaki #290 asked, unanswered).
+
+CONCLUSION
+  A second player has to come from Share Play or a controller on the console itself. In Hotaru,
+  gamepad.c keeps one pad; a second pad on the TV can only add to player 1 (chiaki-ng merges every
+  pad into one state).

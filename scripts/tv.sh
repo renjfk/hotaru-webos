@@ -14,6 +14,8 @@
 #   scripts/tv.sh running              is it running
 #   scripts/tv.sh log [-f]             print /tmp/hotaru.log (-f: follow it)
 #   scripts/tv.sh save                 copy the log to out/tv-logs/<time>.log
+#   scripts/tv.sh config [DIR]         copy the app's config (consoles, pairing keys, PSN tokens) to
+#                                      DIR/hotaru.conf, mode 0600 (default out/rplab/config, for rplab/run.sh)
 #
 # Env: WEBOS_HOST (default LGwebOSTV.local), WEBOS_PORT (9922), WEBOS_USER (prisoner),
 #      WEBOS_KEY (~/.ssh/webos_rsa).
@@ -27,6 +29,7 @@ WEBOS_USER="${WEBOS_USER:-prisoner}"
 WEBOS_KEY="${WEBOS_KEY:-$HOME/.ssh/webos_rsa}"
 TV_TMP="/media/developer/temp"
 TV_LOG="/tmp/hotaru.log"
+TV_CONF="/media/developer/apps/usr/palm/applications/$APP_ID/conf/hotaru.conf"
 PROBE_FLAG="/tmp/hotaru-probe"   # src/main.c: probe mode for the run when it exists
 LUNA="/usr/bin/luna-send-pub"
 
@@ -131,6 +134,18 @@ cmd_save() {
     echo "$file"
 }
 
+cmd_config() {
+    local dir="${1:-$ROOT/out/rplab/config}" tmp
+    mkdir -p "$dir"
+    tmp="$(mktemp "$dir/hotaru.conf.XXXXXX")" # mktemp makes it 0600: the file holds pairing keys and tokens
+    if ! ssh_tv "cat '$TV_CONF'" >"$tmp" || [ ! -s "$tmp" ]; then
+        rm -f "$tmp"
+        die "no config at $TV_CONF (has the app run on this TV?)"
+    fi
+    mv "$tmp" "$dir/hotaru.conf"
+    echo "$dir/hotaru.conf"
+}
+
 case "${1:-}" in
     key) shift; cmd_key "$@" ;;
     install) shift; cmd_install "$@" ;;
@@ -139,5 +154,6 @@ case "${1:-}" in
     running) cmd_running ;;
     log) shift; cmd_log "$@" ;;
     save) cmd_save ;;
-    *) sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 1 ;;
+    config) shift; cmd_config "$@" ;;
+    *) sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
