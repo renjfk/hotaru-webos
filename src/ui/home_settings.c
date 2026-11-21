@@ -307,7 +307,7 @@ static void build_pad(void) {
 /* ---------- the PSN account panel: one row per linked account, and the focused one's summary ---------- */
 
 static struct {
-    lv_obj_t *card, *avatar, *ini, *name, *state, *list[2], *more, *status;
+    lv_obj_t *card, *avatar, *ini, *name, *state, *dot[2], *list[2], *more, *status;
     int focus;
     int built; /* the account count the rows were built for: 3 and 4 both make four rows, with different ones */
 } A = { .built = -1 };
@@ -362,8 +362,13 @@ static void account_summary_refresh(void) {
     for (int k = 0; k < 2; k++) {
         bool on = k < got;
         if (on) lv_label_set_text(A.list[k], consoles[k]);
-        if (on) lv_obj_clear_flag(A.list[k], LV_OBJ_FLAG_HIDDEN);
-        else lv_obj_add_flag(A.list[k], LV_OBJ_FLAG_HIDDEN);
+        if (on) {
+            lv_obj_clear_flag(A.list[k], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(A.dot[k], LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(A.list[k], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(A.dot[k], LV_OBJ_FLAG_HIDDEN);
+        }
     }
     if (total > 2) {
         lv_label_set_text_fmt(A.more, "and %d more", total - 2);
@@ -392,8 +397,8 @@ static void account_summary_build(void) {
     lv_obj_set_style_text_letter_space(over, 3, 0);
     lv_obj_set_pos(over, 0, 244);
     for (int k = 0; k < 2; k++) {
-        lv_obj_t *dot = ctl_dot(c, 10, COL_OK);
-        lv_obj_set_pos(dot, 2, 280 + k * 32);
+        A.dot[k] = ctl_dot(c, 10, COL_OK);
+        lv_obj_set_pos(A.dot[k], 2, 280 + k * 32);
         A.list[k] = ctl_label(c, FONT_BODY, COL_TEXT, "");
         lv_obj_set_pos(A.list[k], 26, 268 + k * 32);
         lv_obj_set_width(A.list[k], SUM_CW - 26);
