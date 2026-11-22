@@ -732,3 +732,33 @@ lv_obj_t *ctl_ps_diamond(lv_obj_t *parent, lv_coord_t s) {
     for (int i = 0; i < 4; i++) lv_obj_align(ctl_ps_glyph(box, pos[i].g, g, COL_FROST, w), pos[i].a, 0, 0);
     return box;
 }
+
+#define AVATAR_IMG_TAG ((void *)0xa7a7)
+
+void ctl_avatar_set(lv_obj_t *circle, const lv_img_dsc_t *img) {
+    if (!circle) return;
+    lv_obj_t *pic = NULL;
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(circle); i++) {
+        lv_obj_t *c = lv_obj_get_child(circle, (int32_t)i);
+        if (lv_obj_get_user_data(c) == AVATAR_IMG_TAG) pic = c;
+        else if (img) lv_obj_add_flag(c, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_clear_flag(c, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (!img || !img->header.w || !img->header.h) {
+        if (pic) lv_obj_del(pic);
+        return;
+    }
+    if (!pic) {
+        pic = lv_img_create(circle);
+        lv_obj_set_user_data(pic, AVATAR_IMG_TAG);
+        lv_obj_clear_flag(pic, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_clip_corner(circle, true, 0); /* the square picture, cut to the circle */
+    }
+    lv_img_set_src(pic, img);
+    lv_obj_update_layout(circle);
+    lv_coord_t side = lv_obj_get_width(circle);
+    lv_coord_t big = img->header.w > img->header.h ? img->header.w : img->header.h;
+    lv_img_set_zoom(pic, (uint16_t)((side * LV_IMG_ZOOM_NONE + big - 1) / big));
+    lv_img_set_antialias(pic, true);
+    lv_obj_center(pic);
+}

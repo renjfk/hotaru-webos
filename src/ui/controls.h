@@ -141,4 +141,8 @@ void ctl_keyboard_pad(lv_obj_t *kb, bool pad); /* a controller: the ABC key also
 /* the four PlayStation shapes as a diamond, white (the PSN emblem) */
 lv_obj_t *ctl_ps_diamond(lv_obj_t *parent, lv_coord_t size);
 
+/* an account's round avatar: img fills the circle and hides its other children (the initials);
+ * NULL takes the picture away and shows them again */
+void ctl_avatar_set(lv_obj_t *circle, const lv_img_dsc_t *img);
+
 #endif

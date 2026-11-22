@@ -30,6 +30,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | 60 fps with no socket drops or FEC failures; Smooth playback hides the Wi-Fi stalls | TV |
 | PSN sign-in (OAuth code from the phone), each account's console list, token refresh | TV + host |
 | Settings, consoles and the linked PSN accounts kept in `conf/hotaru.conf` | TV + host |
+| Each account's PSN avatar (the community `profile2`, which the Remote Play token may read), kept as `conf/avatar-<id>.png` | TV |
 | DualShock 4: grab, the button map, forwarding to the console, rumble | TV (probe + earlier builds) + host |
 | DualShock 4 battery on Home, the Controller panel and the stream menu (sysfs `power_supply`) | TV (probe) + host |
 | DualShock 3 on hid-sony: the Sixaxis layout normalised, the D-pad as buttons, the triggers as pressures, no rumble | TV (a tester's pass on an OLED C8: [TV-CHECKS](TV-CHECKS.md) 17) + host |
@@ -119,7 +120,8 @@ statically: the binary needs no `libssl`, `libcrypto` or `libcurl` (the TV ships
 
 One `key=value` file, written atomically with mode 0600 (it holds the pairing keys and PSN tokens): on the TV
 `$HOME/conf/hotaru.conf`, where the jailer sets `HOME` to the app's install directory. Writing it works and it
-survives reboots; whether it survives an update over the same app id is one of the [TV checks](TV-CHECKS.md). If the
+survives reboots; whether it survives an update over the same app id is one of the [TV checks](TV-CHECKS.md). Each
+signed-in account's avatar is kept beside it as `avatar-<account id>.png` (0600), deleted on sign-out. If the
 directory is not writable the app falls back to `/tmp/hotaru`, which a reboot clears.
 
 ## Constraints

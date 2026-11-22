@@ -85,7 +85,8 @@ account, so two players on one console get a tile each.
 
 A console is paired per PSN account. To let someone else play on the same console, sign their account in under
 Settings > PSN account > **Add a PSN account**, then pair the console again with its PIN while their account is
-chosen. Home then has a tile for each account, with that account's initials on it; Start Remote Play on a tile
+chosen. Home then has a tile for each account, with that account's PSN avatar on it (its initials until the picture has
+been fetched); Start Remote Play on a tile
 starts the session as that player. Signing out of one account drops only its PSN-found consoles: pairings made
 with a PIN keep their keys.
 

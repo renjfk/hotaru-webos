@@ -93,7 +93,8 @@ void ui_app_changed(app_change_t what) {
             break;
         case APP_CHANGED_PROGRESS:
         case APP_CHANGED_STATE:
-        case APP_CHANGED_UPDATE: break;
+        case APP_CHANGED_UPDATE:
+        case APP_CHANGED_AVATAR: break;
     }
 }
 

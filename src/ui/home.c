@@ -7,6 +7,7 @@
 
 #include "../config/config.h"
 #include "../log.h"
+#include "../net/avatar.h"
 #include "art.h"
 #include "controls.h"
 #include "dialog.h"
@@ -309,8 +310,9 @@ static tile_t *new_tile(int sec, uint32_t top, uint32_t bottom) {
     return t;
 }
 
-/* the account's initials, in the tile's corner: a console paired twice is two tiles */
-static void tile_owner(tile_t *t, const char *name) {
+/* the account's avatar, or its initials, in the tile's corner: a console paired twice is two tiles */
+static void tile_owner(tile_t *t, int account) {
+    const char *name = account >= 0 ? app_psn_account_name(account) : "";
     if (!name[0]) return;
     lv_obj_t *b = ctl_rect(t->tile, 44, 44, LV_RADIUS_CIRCLE, 0, LV_OPA_COVER);
     ctl_grad(b, COL_PSN, COL_PSN_DEEP);
@@ -319,6 +321,8 @@ static void tile_owner(tile_t *t, const char *name) {
         if (ini[i] >= 'a' && ini[i] <= 'z') ini[i] = (char)(ini[i] - 'a' + 'A');
     lv_obj_center(ctl_label(b, FONT_SMALL, COL_TEXT, ini));
     lv_obj_align(b, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+    const config_psn_t *p = config_psn_at(account);
+    ctl_avatar_set(b, p ? avatar_image(p->account_id) : NULL);
 }
 
 /* the art is made for the focused size and zooms down with the tile */
@@ -364,7 +368,7 @@ static void build_console_tiles(void) {
         const app_host_t *h = app_host(i);
         tile_t *t = new_tile(HOME_CONSOLES, h->ps5 ? TILE_PS5 : TILE_PS4, TILE_LOW);
         tile_art(t, art_box(t->tile, art_console(h->ps5), TILE_F * 88 / 100, TILE_F * 80 / 100));
-        tile_owner(t, h->account >= 0 ? app_psn_account_name(h->account) : "");
+        tile_owner(t, h->account);
         if (h->psn && !h->lan) { /* reached through PSN only: a small badge */
             lv_obj_t *b = ctl_rect(t->tile, LV_SIZE_CONTENT, 30, LV_RADIUS_CIRCLE, COL_SHADE, LV_OPA_50);
             lv_obj_set_style_pad_hor(b, 10, 0);
@@ -676,15 +680,16 @@ static void build_topbar(void) {
 static void topbar_refresh(void) {
     /* the account of the console in focus, so the avatar says who the next stream would be */
     const app_host_t *h = app_host(app_selected());
-    const char *name = h && h->account >= 0 ? app_psn_account_name(h->account)
-                       : config_psn_count() ? app_psn_account_name(0)
-                                            : "";
+    int account = h && h->account >= 0 ? h->account : config_psn_count() ? 0 : -1;
+    const char *name = account >= 0 ? app_psn_account_name(account) : "";
     if (name[0]) {
         char ini[3] = { name[0], name[1], 0 };
         for (int i = 0; i < 2; i++)
             if (ini[i] >= 'a' && ini[i] <= 'z') ini[i] = (char)(ini[i] - 'a' + 'A');
         lv_label_set_text(g.avatar_lbl, ini);
         lv_obj_clear_flag(g.avatar, LV_OBJ_FLAG_HIDDEN);
+        const config_psn_t *p = config_psn_at(account);
+        ctl_avatar_set(g.avatar, p ? avatar_image(p->account_id) : NULL);
     } else {
         lv_obj_add_flag(g.avatar, LV_OBJ_FLAG_HIDDEN);
     }
@@ -1152,6 +1157,11 @@ void home_app_changed(app_change_t what) {
             if (g.sec == HOME_CONSOLES && !on_add_tile() && focused_host()) hero_state(focused_host());
             break;
         case APP_CHANGED_UPDATE: update_changed(); break;
+        case APP_CHANGED_AVATAR:
+            hosts_changed();
+            topbar_refresh();
+            home_settings_refresh();
+            break;
         case APP_CHANGED_PIN: break;
     }
 }

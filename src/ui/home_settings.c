@@ -14,6 +14,7 @@
 #include "../config/config.h"
 #include "../input/input.h"
 #include "../log.h"
+#include "../net/avatar.h"
 #include "art.h"
 #include "controls.h"
 #include "dialog.h"
@@ -332,6 +333,12 @@ static void account_initials(char out[8], const char *name) {
     }
 }
 
+/* account i's picture in a round avatar, its initials while there is none */
+static void account_avatar(lv_obj_t *circle, int i) {
+    const config_psn_t *p = i >= 0 ? config_psn_at(i) : NULL;
+    ctl_avatar_set(circle, p ? avatar_image(p->account_id) : NULL);
+}
+
 static void account_caption(int i, char *out, size_t cap) {
     int n = app_psn_account_consoles(i);
     snprintf(out, cap, "%d console%s" BULLET "%s", n, n == 1 ? "" : "s",
@@ -347,6 +354,7 @@ static void account_summary_refresh(void) {
     char ini[8];
     account_initials(ini, i >= 0 ? name : "");
     lv_label_set_text(A.ini, ini);
+    account_avatar(A.avatar, i);
     lv_label_set_text(A.name, name);
     lv_label_set_text(A.state, i < 0                       ? "Sign in to find your consoles"
                                : app_psn_account_linked(i) ? "Signed in on this TV"
@@ -430,6 +438,7 @@ static void account_rows_build(void) {
         char ini[8];
         account_initials(ini, account_name(i));
         lv_obj_center(ctl_label(av, FONT_CAPTION, COL_TEXT, ini));
+        account_avatar(av, i);
         lv_obj_set_pos(lv_obj_get_child(r->row, 0), 100, 14);
         lv_obj_set_pos(lv_obj_get_child(r->row, 1), 100, 52);
     }
@@ -577,6 +586,7 @@ static void refresh_account(void) {
         if (av && lv_obj_get_child_cnt(av)) {
             account_initials(ini, account_name(i));
             lv_label_set_text(lv_obj_get_child(av, 0), ini);
+            account_avatar(av, i);
         }
     }
     account_summary_refresh();
