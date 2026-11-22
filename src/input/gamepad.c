@@ -525,13 +525,16 @@ static int g_held_fd[PAD_HELD_MAX] = { -1, -1, -1, -1 };
 static char g_held_path[PAD_HELD_MAX][300];
 static Uint32 g_pad_next_recheck;
 static unsigned g_nodes_sig; /* the event nodes INPUT_DIR listed at the last look */
+static int g_relooks;        /* looks left after a change: a new node can take a moment to open */
+#define PAD_RELOOKS 3
 
-/* a cheap fingerprint of the event nodes present: names only, nothing is opened. Opening every
- * node on a timer stalled the pad on webOS 11, so the full look runs only when this changes. */
-static unsigned nodes_sig(void) {
-    unsigned h = 2166136261u;
-    DIR *d = opendir(INPUT_DIR);
-    if (!d) return 0;
+/* a cheap fingerprint of the input devices present: names only, nothing is opened. Opening every
+ * node on a timer stalled the pad on webOS 11, so the full look runs only when this changes.
+ * webOS keeps event0..31 in /dev/input whether a device is there or not; /sys/class/input lists
+ * only the ones that are, so both are hashed */
+static unsigned dir_sig(const char *dir, unsigned h) {
+    DIR *d = opendir(dir);
+    if (!d) return h;
     for (struct dirent *e; (e = readdir(d));) {
         if (strncmp(e->d_name, "event", 5) != 0) continue;
         unsigned x = 0;
@@ -541,6 +544,7 @@ static unsigned nodes_sig(void) {
     closedir(d);
     return h;
 }
+static unsigned nodes_sig(void) { return dir_sig(SYS_INPUT_DIR, dir_sig(INPUT_DIR, 2166136261u) * 2654435761u); }
 
 static int pad_rank(const char *name) {
     if (strstr(name, "DualSense")) return 0;
@@ -1019,15 +1023,23 @@ void gamepad_tick(void) {
         }
     }
     drain_held();
-    /* a better controller, or one more to hold: only when a node came or went, never while streaming */
-    if (!g_in.streaming && (Sint32)(now - g_pad_next_recheck) >= 0) {
+    /* a better controller, or one more to hold: only when a node came or went (nodes_sig opens
+     * nothing), so also while streaming: a DualSense turned off and on again mid-game takes back
+     * over from the controller that stood in for it */
+    if ((Sint32)(now - g_pad_next_recheck) >= 0) {
         g_pad_next_recheck = now + PAD_RECHECK_MS;
         unsigned sig = nodes_sig();
         if (sig != g_nodes_sig) {
             g_nodes_sig = sig;
+            g_relooks = PAD_RELOOKS;
+        }
+        if (g_relooks > 0) {
+            g_relooks--;
             int count = 0;
             char want[300];
             int rank = pick_pad(want, sizeof(want), &count);
+            log_probe("pad: nodes changed, %d controller(s), best %s (rank %d, using rank %d)", count,
+                      want[0] ? want : "none", rank, pad_rank(g_pad_name));
             if (want[0] && strcmp(want, g_pad_path) != 0 && rank < pad_rank(g_pad_name)) {
                 log_msg("gamepad: %s is preferred over %s", want, g_pad_path);
                 gamepad_lost("a PlayStation controller took over");
