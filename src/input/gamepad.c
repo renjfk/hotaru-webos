@@ -26,15 +26,16 @@
 #include "../log.h"
 #include "input_internal.h"
 
-#define DS4_CROSS    0x131
-#define DS4_CIRCLE   0x132
-#define DS4_L1       0x134
-#define DS4_R1       0x135
-#define DS4_L2       0x136 /* the triggers' clicks; their travel is ABS_RX / ABS_RY */
-#define DS4_R2       0x137
-#define DS4_OPTIONS  0x139
-#define DS4_RSTICK_X ABS_Z /* not ABS_RX: that is the L2 trigger here */
-#define DS4_RSTICK_Y ABS_RZ
+#define DS4_CROSS        0x131
+#define DS4_CIRCLE       0x132
+#define DS4_L1           0x134
+#define DS4_R1           0x135
+#define DS4_L2           0x136 /* the triggers' clicks; their travel is ABS_RX / ABS_RY */
+#define DS4_R2           0x137
+#define DS4_OPTIONS      0x139
+#define DS4_RSTICK_X     ABS_Z /* not ABS_RX: that is the L2 trigger here */
+#define DS4_RSTICK_Y     ABS_RZ
+#define DS_TOUCHPAD_CODE 0x13d /* the Touchpad button in both tables (LG's order) */
 
 /* A DualShock 3 on the kernel's hid-sony driver reports the Sixaxis layout instead
  * (docs/ds3-map-observed.txt): 19 buttons from 0x120 in the pad's own bit order, no hat switch (the
@@ -235,6 +236,15 @@ static char g_pad_path[300], g_pad_name[160];
 static bool g_pad_seen; /* attached at least once: offline vs never found */
 /* what the node offers: a DualSense on webOS 6 has neither (no EV_FF, no ABS_MT_*), a DualShock 4 both */
 static bool g_can_rumble, g_can_touch;
+
+/* webOS 11 (hid-playstation) gives a DualSense's touchpad a node of its own, "<pad name>
+ * Touchpad" with the controller's Bluetooth address as its uniq: the click is BTN_LEFT there and
+ * the touches ABS_MT_*. It is opened and grabbed next to the pad (docs/dualsense-map-linux-observed.txt). */
+static int g_touch_fd = -1, g_touch_slot;
+static axis_t g_tx, g_ty;        /* its ranges */
+static Uint32 g_touch_next_scan; /* the node can show up just after the pad's */
+static int g_touch_tries;        /* looks left for it; a pad without one stops looking */
+#define TOUCH_TRIES 5
 /* probe mode: the travel of each axis, read at grab, so a stick at full range logs a few lines and not hundreds */
 static int g_abs_span[ABS_CNT];
 static Uint32 g_pad_next_scan, g_pad_next_health;
@@ -416,6 +426,67 @@ bool gamepad_battery(int *pct) {
     return ok;
 }
 
+static void touch_close(void) {
+    if (g_touch_fd < 0) return;
+    ioctl(g_touch_fd, EVIOCGRAB, 0);
+    close(g_touch_fd);
+    g_touch_fd = -1;
+}
+
+/* the pad's own touchpad node: the same name with " Touchpad", the same uniq when both have one */
+static bool touch_open(const char *pad_path, int pad_fd, const char *pad_name) {
+    char want[200], uniq[64] = { 0 };
+    snprintf(want, sizeof(want), "%s Touchpad", pad_name);
+    bool have_uniq = ioctl(pad_fd, EVIOCGUNIQ(sizeof(uniq) - 1), uniq) >= 0 && uniq[0];
+    DIR *d = opendir(INPUT_DIR);
+    if (!d) return false;
+    struct dirent *e;
+    while (g_touch_fd < 0 && (e = readdir(d))) {
+        if (strncmp(e->d_name, "event", 5) != 0) continue;
+        char path[300]; /* INPUT_DIR + d_name (up to 255) */
+        snprintf(path, sizeof(path), "%s/%s", INPUT_DIR, e->d_name);
+        if (!strcmp(path, pad_path)) continue;
+        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) continue;
+        char name[200] = { 0 }, u[64] = { 0 };
+        ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name);
+        unsigned char abs[(ABS_CNT + 7) / 8] = { 0 };
+        bool mine = !strcmp(name, want) &&
+                    (!have_uniq || (ioctl(fd, EVIOCGUNIQ(sizeof(u) - 1), u) >= 0 && !strcmp(u, uniq))) &&
+                    ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs)), abs) >= 0 && GETBIT(abs, ABS_MT_POSITION_X);
+        if (!mine) {
+            close(fd);
+            continue;
+        }
+        struct input_absinfo ai;
+        g_tx = (axis_t){ .min = 0, .max = 1919 }; /* hid-playstation's 1920 x 1080 when the node does not say */
+        g_ty = (axis_t){ .min = 0, .max = 1079 };
+        if (ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X), &ai) == 0 && ai.maximum > ai.minimum) {
+            g_tx.min = ai.minimum;
+            g_tx.max = ai.maximum;
+        }
+        if (ioctl(fd, EVIOCGABS(ABS_MT_POSITION_Y), &ai) == 0 && ai.maximum > ai.minimum) {
+            g_ty.min = ai.minimum;
+            g_ty.max = ai.maximum;
+        }
+        if (ioctl(fd, EVIOCGRAB, 1) < 0) log_msg("gamepad: touchpad %s grab FAILED: %s", path, strerror(errno));
+        g_touch_fd = fd;
+        g_touch_slot = 0;
+        log_msg("gamepad: touchpad %s \"%s\" (x %d..%d, y %d..%d)", path, name, g_tx.min, g_tx.max, g_ty.min, g_ty.max);
+    }
+    closedir(d);
+    return g_touch_fd >= 0;
+}
+
+/* every touch leaves here in one range, a PS5's 0..1919 x 0..1079 (chiaki-ng gui/src/streamsession.cpp),
+ * whichever node and pad it came from; app.c rescales it for a PS4 */
+static uint16_t touch_scale(const axis_t *a, int v, int top) {
+    if (a->max <= a->min) return 0;
+    if (v < a->min) v = a->min;
+    if (v > a->max) v = a->max;
+    return (uint16_t)((int32_t)(v - a->min) * top / (a->max - a->min));
+}
+
 bool gamepad_try_acquire(void) {
     DIR *d = opendir(INPUT_DIR);
     if (!d) return false;
@@ -500,6 +571,17 @@ bool gamepad_try_acquire(void) {
         bool has_mt =
             ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs_bits)), abs_bits) >= 0 && GETBIT(abs_bits, ABS_MT_POSITION_X);
         g_can_touch = has_mt && g_layout != LAYOUT_DS3;
+        touch_close();
+        if (g_can_touch) { /* touches on the pad's own node (a DualShock 4 on LG's uhid): a DS4's range */
+            struct input_absinfo ai;
+            g_tx = (axis_t){ .min = 0, .max = 1919 };
+            g_ty = (axis_t){ .min = 0, .max = 941 };
+            if (ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X), &ai) == 0 && ai.maximum > ai.minimum)
+                g_tx = (axis_t){ .min = ai.minimum, .max = ai.maximum };
+            if (ioctl(fd, EVIOCGABS(ABS_MT_POSITION_Y), &ai) == 0 && ai.maximum > ai.minimum)
+                g_ty = (axis_t){ .min = ai.minimum, .max = ai.maximum };
+        }
+        if (!g_can_touch && g_layout == LAYOUT_STD) g_can_touch = touch_open(path, fd, name);
         memset(g_abs_span, 0, sizeof(g_abs_span));
         for (int c = 0; c < ABS_CNT; c++) {
             struct input_absinfo ai;
@@ -507,8 +589,9 @@ bool gamepad_try_acquire(void) {
                 g_abs_span[c] = ai.maximum - ai.minimum;
         }
         log_msg("gamepad: rumble %s, touchpad %s", g_can_rumble ? "yes" : "no",
-                g_can_touch              ? "touches and click"
-                : g_layout == LAYOUT_STD ? "on its own node (not read)"
+                g_touch_fd >= 0          ? "touches and click (own node)"
+                : g_can_touch            ? "touches and click"
+                : g_layout == LAYOUT_STD ? "on its own node, not found yet"
                 : g_layout == LAYOUT_DS3 ? "none"
                                          : "click only");
         probe_device(fd);
@@ -521,6 +604,8 @@ bool gamepad_try_acquire(void) {
         int pct;
         if (gamepad_battery(&pct)) log_msg("gamepad: battery %d%%", pct);
         g_pad_next_health = SDL_GetTicks() + PAD_HEALTH_MS;
+        g_touch_next_scan = SDL_GetTicks() + PAD_RESCAN_MS;
+        g_touch_tries = TOUCH_TRIES;
         g_last_tick = 0;
     }
     closedir(d);
@@ -534,6 +619,7 @@ static void gamepad_lost(const char *why) {
     ioctl(g_pad_fd, EVIOCGRAB, 0);
     close(g_pad_fd);
     g_pad_fd = -1;
+    touch_close();
     scroll_reset();
     g_hatx = g_haty = 0;
     g_ds3_dpad = 0;
@@ -707,6 +793,45 @@ static void stick_nav(float x, float y, Uint32 now) {
     }
 }
 
+/* the touchpad node next to a standard-layout pad: its click is the Touchpad button, slot 0 the touch */
+static void touch_tick(Uint32 now) {
+    if (g_touch_fd < 0) {
+        if (g_layout != LAYOUT_STD || g_can_touch || g_touch_tries <= 0 || (Sint32)(now - g_touch_next_scan) < 0)
+            return;
+        g_touch_next_scan = now + PAD_RESCAN_MS;
+        g_touch_tries--; /* each look opens every node: a pad without a touchpad node stops after a few */
+        if (touch_open(g_pad_path, g_pad_fd, g_pad_name)) {
+            g_can_touch = true;
+            notify_state(); /* Settings > Controller > Touchpad changes its caption */
+        }
+        return;
+    }
+    struct input_event ev;
+    ssize_t n;
+    while ((n = read(g_touch_fd, &ev, sizeof(ev))) == (ssize_t)sizeof(ev)) {
+        if (ev.type == EV_KEY && ev.code == BTN_LEFT) {
+            probe_event(ev.type, ev.code, DS_TOUCHPAD_CODE, ev.value);
+            gamepad_button(DS_TOUCHPAD_CODE, ev.value);
+        } else if (ev.type == EV_ABS) {
+            if (ev.code == ABS_MT_SLOT) g_touch_slot = ev.value;
+            else if (g_touch_slot != 0) continue; /* one finger: the first */
+            else if (ev.code == ABS_MT_TRACKING_ID) g_pad.touch_down = ev.value >= 0;
+            else if (ev.code == ABS_MT_POSITION_X) g_pad.touch_x = touch_scale(&g_tx, ev.value, 1919);
+            else if (ev.code == ABS_MT_POSITION_Y) g_pad.touch_y = touch_scale(&g_ty, ev.value, 1079);
+        }
+    }
+    if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+        log_msg("gamepad: touchpad lost: %s", n == 0 ? "end of stream" : strerror(errno));
+        touch_close();
+        g_can_touch = false;
+        g_pad.touch_down = false;
+        g_pad.buttons &= ~PAD_BTN_TOUCHPAD; /* a click held as the node went is released with it */
+        g_touch_next_scan = now + PAD_RESCAN_MS;
+        g_touch_tries = TOUCH_TRIES;
+        notify_state();
+    }
+}
+
 void gamepad_tick(void) {
     Uint32 now = SDL_GetTicks();
     if (g_pad_fd < 0) {
@@ -754,14 +879,15 @@ void gamepad_tick(void) {
             else if (ev.code == ABS_HAT0X || ev.code == ABS_HAT0Y) dpad_event(ev.code, ev.value);
             /* a DS3 sends button pressures on axes named like these: g_can_touch is off for it */
             else if (g_can_touch && ev.code == ABS_MT_TRACKING_ID) g_pad.touch_down = ev.value >= 0;
-            else if (g_can_touch && ev.code == ABS_MT_POSITION_X) g_pad.touch_x = (uint16_t)ev.value;
-            else if (g_can_touch && ev.code == ABS_MT_POSITION_Y) g_pad.touch_y = (uint16_t)ev.value;
+            else if (g_can_touch && ev.code == ABS_MT_POSITION_X) g_pad.touch_x = touch_scale(&g_tx, ev.value, 1919);
+            else if (g_can_touch && ev.code == ABS_MT_POSITION_Y) g_pad.touch_y = touch_scale(&g_ty, ev.value, 1079);
         }
     }
     if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
         gamepad_lost(n == 0 ? "end of stream" : strerror(errno));
         return;
     }
+    touch_tick(now);
     if (g_in.streaming) return; /* no scrolling or key repeat: the pad is the console's */
     float dt = g_last_tick ? (float)(now - g_last_tick) / 1000.0f : 0.0f;
     g_last_tick = now;

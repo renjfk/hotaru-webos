@@ -78,4 +78,5 @@ CONCLUSIONS
   15 buttons and so 0x13e too. gamepad.c normalises this layout's codes to LG's as they are read;
   the tables stay.
 - Rumble works through the node's FF_RUMBLE.
-- Touchpad touches and the click are on their own node, which the app does not read.
+- Touchpad touches and the click are on their own node; the app finds it by name ("<pad name> Touchpad")
+  and uniq, and reads and grabs it next to the pad.

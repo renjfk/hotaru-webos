@@ -1003,7 +1003,7 @@ int main(int argc, char **argv) {
     pump(1800);
     input_set_streaming(true); /* the presses below stay out of Home */
     expect(input_pad_rumbles() && !input_pad_touches(),
-           "standard layout: rumble reaches the app, the touchpad is on its own unread node");
+           "standard layout: rumble reaches the app, the touchpad is not on the pad's own node");
     static const struct {
         int code;
         uint32_t btn;
@@ -1052,6 +1052,93 @@ int main(int argc, char **argv) {
     pump(60);
     axes = axes && input_pad_get(&p) && p.l2 == 0 && p.r2 == 0 && p.right_x > -300 && p.right_x < 300;
     expect(axes, "standard layout: L2 / R2 on ABS_Z / RZ, the right stick on ABS_RX / RY");
+    pad_unplug();
+    pump(100);
+
+    /* webOS 11 puts the DualSense's touchpad on a node of its own ("<name> Touchpad", the same
+     * uniq): it is opened next to the pad, its click is the Touchpad button and its touches go
+     * out in a PS5's 1919 x 1079 */
+    char touch_node[300];
+    snprintf(touch_node, sizeof(touch_node), "%s/event15", DEV);
+    unlink(touch_node);
+    mkfifo(touch_node, 0600);
+    int touch_r = open(touch_node, O_RDONLY | O_NONBLOCK), touch_w = open(touch_node, O_WRONLY | O_NONBLOCK);
+    setenv("SHIM_TOUCH_NODE", touch_node, 1);
+    pad_plug("event13");
+    pump(1800);
+    bool touch_ok = input_pad_state() == PAD_ONLINE && input_pad_touches();
+    struct input_event tev[3];
+    memset(tev, 0, sizeof(tev));
+    tev[0] = (struct input_event){ .type = EV_KEY, .code = BTN_LEFT, .value = 1 };
+    if (write(touch_w, tev, sizeof(tev[0])) != (ssize_t)sizeof(tev[0])) printf("touch write failed\n");
+    pump(200);
+    bool click = input_pad_get(&p) && p.buttons == PAD_BTN_TOUCHPAD;
+    tev[0].value = 0;
+    if (write(touch_w, tev, sizeof(tev[0])) != (ssize_t)sizeof(tev[0])) printf("touch write failed\n");
+    pump(60);
+    click = click && input_pad_get(&p) && p.buttons == 0;
+    tev[0] = (struct input_event){ .type = EV_ABS, .code = ABS_MT_TRACKING_ID, .value = 7 };
+    tev[1] = (struct input_event){ .type = EV_ABS, .code = ABS_MT_POSITION_X, .value = 1919 };
+    tev[2] = (struct input_event){ .type = EV_ABS, .code = ABS_MT_POSITION_Y, .value = 1079 };
+    if (write(touch_w, tev, sizeof(tev)) != (ssize_t)sizeof(tev)) printf("touch write failed\n");
+    pump(60);
+    bool touched = input_pad_get(&p) && p.touch_down && p.touch_x == 1919 && p.touch_y == 1079;
+    tev[0].value = -1;
+    if (write(touch_w, tev, sizeof(tev[0])) != (ssize_t)sizeof(tev[0])) printf("touch write failed\n");
+    pump(60);
+    touched = touched && input_pad_get(&p) && !p.touch_down;
+    expect(touch_ok && click, "webOS 11 DualSense: its Touchpad node is opened, the click is the Touchpad button");
+    expect(touched, "webOS 11 DualSense: a touch reaches the session in a PS5's 1919 x 1079");
+    close(touch_w);
+    close(touch_r);
+    unlink(touch_node);
+    pump(1800);
+    expect(input_pad_state() == PAD_ONLINE && !input_pad_touches(),
+           "losing the Touchpad node keeps the pad, without touches");
+    unsetenv("SHIM_TOUCH_NODE");
+    pad_unplug();
+    pump(100);
+
+    /* a Touchpad node of another controller (its uniq differs) is not this pad's */
+    mkfifo(touch_node, 0600);
+    touch_r = open(touch_node, O_RDONLY | O_NONBLOCK);
+    touch_w = open(touch_node, O_WRONLY | O_NONBLOCK);
+    setenv("SHIM_TOUCH_NODE", touch_node, 1);
+    setenv("SHIM_TOUCH_UNIQ", "02:11:22:33:44:55", 1);
+    pad_plug("event13");
+    pump(1800);
+    expect(input_pad_state() == PAD_ONLINE && !input_pad_touches(),
+           "a Touchpad node with another controller's uniq is left alone");
+    unsetenv("SHIM_TOUCH_UNIQ");
+    pad_unplug();
+    close(touch_w);
+    close(touch_r);
+    unlink(touch_node);
+    unsetenv("SHIM_TOUCH_NODE");
+    pump(100);
+
+    /* the node can come after the pad has been grabbed: it is found then; a click held as it goes
+     * is released with it */
+    pad_plug("event13");
+    pump(1800);
+    bool none_yet = input_pad_state() == PAD_ONLINE && !input_pad_touches();
+    mkfifo(touch_node, 0600);
+    touch_r = open(touch_node, O_RDONLY | O_NONBLOCK);
+    touch_w = open(touch_node, O_WRONLY | O_NONBLOCK);
+    setenv("SHIM_TOUCH_NODE", touch_node, 1);
+    pump(1800);
+    expect(none_yet && input_pad_touches(), "a Touchpad node that appears after the grab is opened");
+    tev[0] = (struct input_event){ .type = EV_KEY, .code = BTN_LEFT, .value = 1 };
+    if (write(touch_w, tev, sizeof(tev[0])) != (ssize_t)sizeof(tev[0])) printf("touch write failed\n");
+    pump(60);
+    bool held_click = input_pad_get(&p) && (p.buttons & PAD_BTN_TOUCHPAD);
+    close(touch_w);
+    close(touch_r);
+    unlink(touch_node);
+    pump(200);
+    expect(held_click && input_pad_state() == PAD_ONLINE && input_pad_get(&p) && !(p.buttons & PAD_BTN_TOUCHPAD),
+           "a touchpad click held as its node goes is released");
+    unsetenv("SHIM_TOUCH_NODE");
     pad_unplug();
     pump(100);
 
@@ -1694,6 +1781,15 @@ int main(int argc, char **argv) {
     pump(3300);
     expect(app_conn_state() == CONN_STREAMING && app_conn_over_psn() && app_host(ps4g)->route == ROUTE_LAN,
            "the fallback session streams; the saved route stays the local network");
+    /* touches arrive in a PS5's 1919 x 1079 whichever pad sent them; a PS4 gets its own 942 rows */
+    pad_ev(EV_ABS, ABS_MT_TRACKING_ID, 3);
+    pad_ev(EV_ABS, ABS_MT_POSITION_X, 1919);
+    pad_ev(EV_ABS, ABS_MT_POSITION_Y, 941); /* the bottom of a DualShock 4's touchpad */
+    pump(80);
+    expect(session_last_pad()->touch_down && session_last_pad()->touch_x == 1919 && session_last_pad()->touch_y == 942,
+           "a PS4 gets touches in its own 1920 x 942");
+    pad_ev(EV_ABS, ABS_MT_TRACKING_ID, -1);
+    pump(80);
     app_disconnect();
     pump(600);
 
