@@ -41,6 +41,8 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | DualSense on webOS 6: the button map (the DualShock 4's); no rumble or touches reach the app | TV (probe) + host |
 | DualSense on webOS 11: the standard Linux layout, rumble and battery, touchpad read from its own node | TV (probe, OLED48C55LA) + host |
 | One controller per session: the TV holds two pads at once, but the PS5 binds one pad to a Remote Play session | TV + lab: [multi-controller-observed.txt](multi-controller-observed.txt) |
+| Switch Pro Controller on hid-nintendo: mapped by position (B Cross, A Circle), ZL/ZR as full triggers, Minus the touchpad click, Capture + Plus the menu | TV (OLED48C55LA) + host |
+| Two controllers: a PlayStation pad goes first and the other is held (grabbed, its input dropped); it stands in when the first goes and gives it back when it returns, also mid-stream | TV (OLED48C55LA) + host |
 | Remote number keys, Magic Remote, launch parameters | wired for both possibilities; the probe decides |
 | Rest mode on disconnect (the Disconnect card's End and sleep) | TV: the console is in rest mode 6 s after the request; host |
 

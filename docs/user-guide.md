@@ -96,8 +96,8 @@ wakes it first), or **not on this network** (it then plays over PSN if it has th
 Play**.
 
 While playing, the controller drives the console. The TV remote's **Back**, or **Share + Options** together on the
-controller (**Create + Options** on a DualSense, **Select + Start** on a DualShock 3; the Connecting screen reminds
-you), opens the menu over the game:
+controller (**Create + Options** on a DualSense, **Select + Start** on a DualShock 3, **Capture + Plus** on a Switch
+Pro Controller; the Connecting screen reminds you), opens the menu over the game:
 stream quality, smooth playback, the controller, and **Disconnect**. Back or Circle closes it. Changing the video
 settings there restarts the stream when the menu closes. Under the console's name the menu shows the session clock
 and what the stream is actually doing right now (the video rate and the frame rate the console is sending), so you
@@ -126,6 +126,10 @@ Settings. The TV remote's arrows, OK and Back do the same.
   the console too. Adaptive trigger effects never reach the console on either version. A DualShock 4 rumbles and its
   touchpad works. A DualShock 3 plays with every button, both sticks, its D-pad and its analog L2/R2, but it has no
   touchpad and no rumble, and Select + Start opens the menu over the game.
+  A Switch Pro Controller works too, mapped by position as on a PlayStation pad (B is Cross, A Circle, Y Square, X
+  Triangle); ZL and ZR count as fully pressed triggers, Minus is the touchpad click and Capture + Plus opens the menu
+  over the game. With two controllers on, a PlayStation one is used and the other waits; it takes over when the first is
+  turned off, also during a game, and hands back when that one is on again.
 - **PSN account**: one row per linked account, with how many consoles each has. Cross on one opens **Refresh
   consoles** (lists that account's consoles again, adding the new ones to Home) and **Sign out**; **Add a PSN
   account** signs in another one next to it.

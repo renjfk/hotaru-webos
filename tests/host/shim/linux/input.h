@@ -86,7 +86,15 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
         errno = ENOTTY;
         return -1;
     }
-    const char *layout = getenv("SHIM_PAD_LAYOUT");
+    /* SHIM_PAD2_NODE names a second controller's FIFO, which takes SHIM_PAD2_NAME / SHIM_PAD2_LAYOUT */
+    const char *layout = getenv("SHIM_PAD_LAYOUT"), *name_env = getenv("SHIM_PAD_NAME");
+    const char *pad2 = getenv("SHIM_PAD2_NODE");
+    struct stat st2;
+    if (pad2 && stat(pad2, &st2) == 0 && st2.st_ino == st.st_ino && st2.st_dev == st.st_dev) {
+        layout = getenv("SHIM_PAD2_LAYOUT");
+        name_env = getenv("SHIM_PAD2_NAME");
+    }
+    bool nintendo = layout && !strcmp(layout, "nintendo"); /* hid-nintendo: labels, Capture on BTN_Z */
     /* SHIM_TOUCH_NODE names the FIFO that plays webOS 11's DualSense touchpad node: "<pad name>
      * Touchpad", BTN_LEFT and ABS_MT_* (1920 x 1080), no gamepad buttons */
     const char *touch_node = getenv("SHIM_TOUCH_NODE");
@@ -135,6 +143,10 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
             for (int k = 0x2c0; k <= 0x2c2; k++) ((unsigned char *)arg)[k / 8] |= 1 << (k % 8);
             return 0;
         }
+        if (nintendo) {
+            for (int k = 0x130; k <= BTN_THUMBR; k++) ((unsigned char *)arg)[k / 8] |= 1 << (k % 8);
+            return 0;
+        }
         ((unsigned char *)arg)[0x130 / 8] |= 1 << (0x130 % 8);
         if (layout && !strcmp(layout, "linux")) ((unsigned char *)arg)[BTN_THUMBR / 8] |= 1 << (BTN_THUMBR % 8);
         if (layout && !strcmp(layout, "hid"))
@@ -143,14 +155,14 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
     }
     /* SHIM_PAD_NAME picks the controller; a DualSense on webOS 6 has no touches and no rumble, while
      * SHIM_PAD_LAYOUT=linux gives it webOS 11's hid-playstation rumble */
-    const char *name = getenv("SHIM_PAD_NAME") ? getenv("SHIM_PAD_NAME") : "Wireless Controller";
+    const char *name = name_env ? name_env : "Wireless Controller";
     bool dualsense = strstr(name, "DualSense") != NULL, ds3 = layout && !strcmp(layout, "ds3");
     if (req == 0x1000 + EV_ABS) {
         memset(arg, 0, (ABS_CNT + 7) / 8);
         ((unsigned char *)arg)[0] |= 3;
         if (ds3) /* the sticks, then 19 button pressures from 0x28 and the motion axes from 0x3b */
             for (int k = 0x28; k <= 0x3e; k++) ((unsigned char *)arg)[k / 8] |= 1 << (k % 8);
-        else if (!dualsense) ((unsigned char *)arg)[ABS_MT_POSITION_X / 8] |= 1 << (ABS_MT_POSITION_X % 8);
+        else if (!dualsense && !nintendo) ((unsigned char *)arg)[ABS_MT_POSITION_X / 8] |= 1 << (ABS_MT_POSITION_X % 8);
         return 0;
     }
     if (req == 0x1000 + EV_FF) {
@@ -195,8 +207,8 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
     if (req == EVIOCGID) {
         struct input_id *id = arg;
         id->bustype = 5;
-        id->vendor = 0x054c;
-        id->product = 0x09cc;
+        id->vendor = nintendo ? 0x057e : 0x054c;
+        id->product = nintendo ? 0x2009 : 0x09cc;
         id->version = 0x8100;
         return 0;
     }
