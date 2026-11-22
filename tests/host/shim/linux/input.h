@@ -33,6 +33,9 @@ struct input_id { uint16_t bustype, vendor, product, version; };
 #define BTN_C              0x132
 #define BTN_Z              0x135
 #define BTN_THUMBR         0x13e
+#define BTN_LEFT           0x110
+#define ABS_MT_SLOT        0x2f
+#define EVIOCGUNIQ(len)    0x2100
 #define EVIOCGBIT(ev, len) (0x1000 + (ev))
 #define EVIOCGNAME(len)    0x2000
 #define EVIOCGRAB          0x3000
@@ -84,6 +87,45 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
         return -1;
     }
     const char *layout = getenv("SHIM_PAD_LAYOUT");
+    /* SHIM_TOUCH_NODE names the FIFO that plays webOS 11's DualSense touchpad node: "<pad name>
+     * Touchpad", BTN_LEFT and ABS_MT_* (1920 x 1080), no gamepad buttons */
+    const char *touch_node = getenv("SHIM_TOUCH_NODE");
+    struct stat st_touch;
+    bool touch =
+        touch_node && stat(touch_node, &st_touch) == 0 && st_touch.st_ino == st.st_ino && st_touch.st_dev == st.st_dev;
+    if (req == 0x2100) { /* EVIOCGUNIQ: one controller, one Bluetooth address on all its nodes */
+        static const char uniq[] = "02:aa:bb:cc:dd:ee";
+        memcpy(arg, uniq, sizeof(uniq));
+        return 0;
+    }
+    if (touch) {
+        const char *pad_name = getenv("SHIM_PAD_NAME") ? getenv("SHIM_PAD_NAME") : "Wireless Controller";
+        if (req == 0x1000 + EV_KEY) {
+            memset(arg, 0, (KEY_CNT + 7) / 8);
+            ((unsigned char *)arg)[BTN_LEFT / 8] |= 1 << (BTN_LEFT % 8);
+            return 0;
+        }
+        if (req == 0x1000 + EV_ABS) {
+            memset(arg, 0, (ABS_CNT + 7) / 8);
+            ((unsigned char *)arg)[0] |= 3;
+            ((unsigned char *)arg)[ABS_MT_POSITION_X / 8] |= 1 << (ABS_MT_POSITION_X % 8);
+            ((unsigned char *)arg)[ABS_MT_POSITION_Y / 8] |= 1 << (ABS_MT_POSITION_Y % 8);
+            return 0;
+        }
+        if (req == 0x2000) {
+            snprintf(arg, 160, "%s Touchpad", pad_name);
+            return 0;
+        }
+        if (req == 0x3000) return 0;
+        if (req >= 0x4000 && req < 0x4040) {
+            struct input_absinfo *ai = arg;
+            memset(ai, 0, sizeof(*ai));
+            ai->maximum = req == 0x4000 + ABS_MT_POSITION_Y ? 1079 : 1919;
+            return 0;
+        }
+        errno = ENOTTY;
+        return -1;
+    }
     if (req == 0x1000 + EV_KEY) {
         memset(arg, 0, (KEY_CNT + 7) / 8);
         if (layout && !strcmp(layout, "ds3")) {

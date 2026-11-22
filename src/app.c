@@ -1172,6 +1172,10 @@ void app_tick(void) {
                     sp.touch_down = ip.touch_down;
                     sp.touch_x = ip.touch_x;
                     sp.touch_y = ip.touch_y;
+                    /* a DualSense touches in a PS5's 1919 x 1079; a PS4 takes 1920 x 942 (chiaki-ng) */
+                    const app_host_t *ch = app_host(g_conn_host);
+                    if (ch && !ch->ps5 && input_pad_kind() == PAD_KIND_DUALSENSE)
+                        sp.touch_y = (uint16_t)(ip.touch_y * 942u / 1079u);
                 }
                 session_set_pad(&sp);
             }
