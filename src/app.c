@@ -410,10 +410,8 @@ void app_init(app_listener_t listener) {
     probe_apply();
     disc_set(true);
     update_start();
-    for (int i = 0; i < config_psn_count(); i++) { /* the kept pictures show at once; these refresh them */
-        const config_psn_t *p = config_psn_at(i);
-        if (p && p->linked) avatar_fetch(p->account_id, p->access_token);
-    }
+    /* no avatar fetch here: the stored token has mostly expired by the next start (it lasts about an
+     * hour), so the kept pictures show and sign-in or Refresh consoles fetch a new one */
 }
 bool app_running(void) { return g_running; }
 void app_quit(void) {

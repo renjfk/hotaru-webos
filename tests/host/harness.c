@@ -25,6 +25,7 @@
 #include "log.h"
 #include "media/feeder.h"
 #include "media/pacer.h"
+#include "net/avatar.h"
 #include "net/update.h"
 #include "platform/tv.h"
 #include "ui/dialog.h"
@@ -628,6 +629,42 @@ static void test_pacer(void) {
     expect(p.restarts == before + 1, "a stall longer than the delay restarts the cadence");
 }
 
+/* net/avatar.c: a kept picture shows without the network, a broken one leaves the initials, and
+ * signing out deletes it */
+static void test_avatar(void) {
+    static const unsigned char png[] = {
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x06, 0x00, 0x00, 0x00, 0x72,
+        0xb6, 0x0d, 0x24, 0x00, 0x00, 0x00, 0x12, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8,
+        0xcf, 0xc0, 0xf0, 0x1f, 0x84, 0x19, 0xa0, 0xf4, 0x7f, 0x00, 0x43, 0xce, 0x07, 0xf9, 0xfa,
+        0x81, 0x4a, 0xfd, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+    }; /* 2 x 2, red on top, blue below */
+    const uint8_t kept[8] = { 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8 };
+    const uint8_t broken[8] = { 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8 };
+    const uint8_t none[8] = { 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8 };
+    char path[600];
+    snprintf(path, sizeof(path), "%s/avatar-a1a2a3a4a5a6a7a8.png", CONFIG_DIR);
+    FILE *f = fopen(path, "wb");
+    if (f) {
+        fwrite(png, 1, sizeof(png), f);
+        fclose(f);
+    }
+    char bad[600];
+    snprintf(bad, sizeof(bad), "%s/avatar-b1b2b3b4b5b6b7b8.png", CONFIG_DIR);
+    f = fopen(bad, "wb");
+    if (f) {
+        fwrite(png, 1, 20, f); /* cut short */
+        fclose(f);
+    }
+    const lv_img_dsc_t *img = avatar_image(kept);
+    const uint8_t *px = img ? img->data : NULL;
+    expect(img && img->header.w == 2 && img->header.h == 2 && px && px[2] == 0xff && px[0] == 0 && px[3] == 0xff,
+           "a kept avatar shows without the network (LVGL's B, G, R, A: the top-left pixel red)");
+    expect(!avatar_image(broken) && !avatar_image(none), "a broken or missing picture leaves the initials");
+    avatar_forget(kept);
+    expect(!avatar_image(kept) && access(path, F_OK) != 0, "signing out deletes the account's picture");
+}
+
 /* net/update.c: the latest release's tag (vMAJOR.MINOR) against the installed version (three numbers) */
 static void test_update_versions(void) {
     expect(update_newer("v0.3", "0.2.0") && update_newer("v1.0", "0.9.0") && update_newer("0.2.1", "0.2.0") &&
@@ -669,6 +706,7 @@ int main(int argc, char **argv) {
         test_tv_identity();
         test_host_identity();
         test_psn_account_id();
+        test_avatar();
         test_feeder();
         test_pacer();
         test_update_versions();
