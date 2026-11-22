@@ -261,6 +261,15 @@ static lv_obj_t *find_visible_text(lv_obj_t *o, const char *txt) {
     }
     return NULL;
 }
+/* a visible label that contains `txt`, for the ones that carry a value or a symbol beside it */
+static lv_obj_t *find_visible_part(lv_obj_t *o, const char *txt) {
+    if (lv_obj_check_type(o, &lv_label_class) && visible(o) && strstr(lv_label_get_text(o), txt)) return o;
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) {
+        lv_obj_t *r = find_visible_part(lv_obj_get_child(o, (int32_t)i), txt);
+        if (r) return r;
+    }
+    return NULL;
+}
 static lv_obj_t *find_type(lv_obj_t *o, const lv_obj_class_t *cls) {
     if (lv_obj_check_type(o, cls)) return o;
     for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) {
@@ -1670,6 +1679,34 @@ int main(int argc, char **argv) {
     expect(rejoined >= 0 && !strcmp(app_host(rejoined)->addr, "192.168.1.77"),
            "signing in again rejoins the PIN pairing with its PSN device, one tile with two routes");
 
+    /* a lone entry that carries both routes (a hand-edited file lands like this, with no MAC to
+     * match on): pairing it again with a PIN keeps its PSN route, its uid and the route choice */
+    config_host_t combined;
+    memset(&combined, 0, sizeof(combined));
+    snprintf(combined.nickname, sizeof(combined.nickname), "Attic PS5");
+    snprintf(combined.addr, sizeof(combined.addr), "192.168.1.60");
+    combined.is_ps5 = true;
+    combined.via_psn = true;
+    combined.prefer_psn = true;
+    combined.psn_uid[0] = 0x5a;
+    memcpy(combined.psn_account_id, config_psn_at(0)->account_id, sizeof(combined.psn_account_id));
+    expect(config_host_add(&combined), "an entry with both routes and no MAC can be stored");
+    app_init(ui_app_changed);
+    int comb = -1, comb_entry = config_host_find(&combined);
+    for (int i = 0; i < app_host_count(); i++)
+        if (!strcmp(app_host(i)->addr, "192.168.1.60")) comb = i;
+    expect(comb >= 0 && app_host(comb)->psn && app_host(comb)->route == ROUTE_PSN,
+           "it shows as one console with both routes, over PSN as chosen");
+    app_reg_submit_pin("192.168.1.60", "12345678", true, 0);
+    pump(2600);
+    app_reg_cancel();
+    const config_host_t *after = config_host(comb_entry);
+    expect(comb_entry >= 0 && after && after->via_psn && after->prefer_psn && after->psn_uid[0] == 0x5a &&
+               app_host(comb)->psn && app_host(comb)->lan && app_host(comb)->route == ROUTE_PSN,
+           "pairing it again with a PIN keeps its PSN route, its uid and the chosen route");
+    if (comb_entry >= 0) config_host_remove(comb_entry);
+    app_init(ui_app_changed);
+
     /* a console the local network does not reach (".98" in the simulation) goes on over PSN in the
      * same connect, when it has a PSN route; the saved route stays the local network */
     app_reg_submit_pin("192.168.1.98", "12345678", false, acc_b);
@@ -1685,11 +1722,13 @@ int main(int argc, char **argv) {
     app_connect();
     bool lan_first = app_conn_state() == CONN_CONNECTING && session_active_host() &&
                      !strcmp(session_active_host()->addr, "192.168.1.98") && !app_conn_over_psn();
-    pump(1500);
+    for (int i = 0; i < 30 && !app_conn_fallback(); i++) pump(100); /* the fallback starts under 60% */
     expect(lan_first && app_conn_state() == CONN_CONNECTING && session_active_host() &&
                session_active_host()->via_psn && !session_active_host()->addr[0] && app_conn_fallback() &&
                home_connecting(),
            "no answer on the local network: the same connect goes on over PSN");
+    expect(find_visible_part(lv_scr_act(), "Local connection failed, trying over PSN") != NULL,
+           "... and the Connecting screen says the local attempt failed, not that the console is away");
     shot("home-connecting-fallback");
     pump(3300);
     expect(app_conn_state() == CONN_STREAMING && app_conn_over_psn() && app_host(ps4g)->route == ROUTE_LAN,
@@ -1713,6 +1752,8 @@ int main(int argc, char **argv) {
     expect(app_conn_state() == CONN_CONNECTING && app_conn_fallback() && app_conn_over_psn() && session_active_host() &&
                session_active_host()->via_psn,
            "an offline console with a PSN route connects over PSN at once");
+    expect(!app_conn_local_tried() && find_visible_part(lv_scr_act(), "Not on this network, trying over PSN") != NULL,
+           "... and the Connecting screen does not claim a local attempt failed");
     app_disconnect();
     pump(600);
 
