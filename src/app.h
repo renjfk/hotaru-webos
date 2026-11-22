@@ -98,9 +98,10 @@ const char *app_stream_blocked(void);
 
 /* true on a TV whose media API plays H.264 SDR only (webOS 4): Settings > Stream offers no other codec */
 bool app_stream_h264_only(void);
-bool app_conn_over_psn(void); /* the session (or the attempt) runs over PSN */
-bool app_conn_fallback(void); /* ... because the local network did not reach the console */
-bool app_conn_waking(void);   /* connecting: waiting for a console in rest mode to wake up */
+bool app_conn_over_psn(void);    /* the session (or the attempt) runs over PSN */
+bool app_conn_fallback(void);    /* ... because the local attempt was skipped or did not start a session */
+bool app_conn_local_tried(void); /* this connect made a local-network attempt (wake or session) */
+bool app_conn_waking(void);      /* connecting: waiting for a console in rest mode to wake up */
 
 /* The console negotiates the video settings when the session starts, so an edit made while
  * connected only applies through a restart: pending = they differ from what the session started

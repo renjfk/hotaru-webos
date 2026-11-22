@@ -55,6 +55,7 @@ static stream_settings_t g_stream_used;         /* the video settings the runnin
 static int g_conn_host = -1;                    /* the console it runs with */
 static config_host_t g_conn_cfg;                /* ... and the entry it was started from (route applied) */
 static bool g_conn_fallback;                    /* that entry is the PSN fallback after the local network failed */
+static bool g_conn_local;                       /* this connect made a local-network attempt (wake or session) */
 static char g_conn_error_what[CONN_ERROR_WHAT]; /* the last failure, "" when nothing failed */
 static char g_conn_error_why[CONN_ERROR_WHY];
 static unsigned g_conn_error_gen; /* counts failures: the UI shows each one once, the same text included */
@@ -481,11 +482,13 @@ static void conn_fail(const char *what, const char *why) {
 
 bool app_conn_over_psn(void) { return g_conn != CONN_IDLE && !g_conn_cfg.addr[0]; }
 bool app_conn_fallback(void) { return g_conn != CONN_IDLE && g_conn_fallback; }
+bool app_conn_local_tried(void) { return g_conn != CONN_IDLE && g_conn_local; }
 bool app_conn_waking(void) { return g_conn == CONN_CONNECTING && g_wake.on; }
 
-/* A local-network attempt that never reached the console: try the same console over PSN, once
- * per connect. Needs the console's PSN entry and a signed-in account (an expired access token is
- * refreshed by the backend). The saved route stays as it is: at home the PIN pairing wins again. */
+/* A local-network attempt that did not start a session (no answer, or the console answered and
+ * refused it): try the same console over PSN, once per connect. Needs the console's PSN entry and a
+ * signed-in account (an expired access token is refreshed by the backend). The saved route stays as
+ * it is: at home the PIN pairing wins again. */
 static bool fall_back_to_psn(const char *why) {
     const app_host_t *h = app_host(g_conn_host);
     const config_host_t *psn_entry = g_conn_host >= 0 ? config_host(g_routes[g_conn_host].psn) : NULL;
@@ -525,6 +528,7 @@ void app_connect(void) {
     g_conn_host = g_selected;
     g_conn_cfg = ch;
     g_conn_fallback = false;
+    g_conn_local = false;
     g_stream_used = config_get()->stream;
     g_progress = 0;
     if (ch.addr[0] && h->state == HOST_STANDBY) { /* in rest mode: wake it, start once it answers ready */
@@ -533,6 +537,7 @@ void app_connect(void) {
         g_wake.until = g_wake.start + WAKE_TIMEOUT_MS;
         g_wake.resend = 0;
         g_wake.on = true; /* before set_conn: the Connecting screen it brings up says waking */
+        g_conn_local = true;
         set_conn(CONN_CONNECTING);
         return;
     }
@@ -540,6 +545,7 @@ void app_connect(void) {
     bool started = ch.addr[0] && h->state == HOST_OFFLINE && g_disc.heard && fall_back_to_psn("is not on this network");
     if (!started) {
         log_event(LOG_INFO, "NET", "Connecting to %s (%s)", h->name, ch.addr[0] ? ch.addr : "over PSN");
+        g_conn_local = ch.addr[0] != '\0';
         started = session_start(&ch, &config_get()->stream) || fall_back_to_psn("could not start on the local network");
     }
     if (!started) {
@@ -750,9 +756,21 @@ static void reg_fail(const char *reason) {
 static void reg_success(const config_host_t *paired) {
     config_host_t partnered = *paired;
     memcpy(partnered.psn_account_id, g_reg.account_id, sizeof(partnered.psn_account_id));
-    const config_host_t *host = &partnered;
-    int i = config_host_find(host);
-    bool ok = i >= 0 ? config_host_update(i, host) : config_host_add(host);
+    int i = config_host_find(&partnered);
+    bool ok;
+    if (i >= 0) {
+        /* the pairing owns the local fields; a PSN route already stored for this console stays
+         * (a PIN pairing and a PSN entry are one console, and the entry may hold the only one).
+         * An address-only match can name another console at a reused address: then its route is
+         * not this console's, so the kind has to agree before any of it is kept. */
+        const config_host_t *stored = config_host(i);
+        if (stored->is_ps5 == partnered.is_ps5) {
+            memcpy(partnered.psn_uid, stored->psn_uid, sizeof(partnered.psn_uid));
+            partnered.via_psn = stored->via_psn;
+            partnered.prefer_psn = stored->prefer_psn;
+        }
+        ok = config_host_update(i, &partnered);
+    } else ok = config_host_add(&partnered);
     if (!ok) {
         reg_fail(config_host_count() >= CONFIG_MAX_HOSTS ? "Too many consoles: forget one first"
                                                          : "Could not store the console");
@@ -1118,7 +1136,7 @@ static void session_ev(const session_event_t *ev) {
             g_restart_tries = 0;
             if (g_conn == CONN_CONNECTING && ev->unreachable) {
                 session_stop();
-                if (fall_back_to_psn("is not reachable on the local network")) break;
+                if (fall_back_to_psn("did not start a session on the local network")) break;
             }
             if (g_conn != CONN_IDLE) {
                 session_stop(); /* the console ended it (or an error): release the backend */

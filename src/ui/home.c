@@ -750,12 +750,12 @@ static void connecting_text(void) {
         snprintf(buf, sizeof(buf), "Connecting to %s%s", h ? h->name : "the console",
                  app_conn_over_psn() ? " over PSN" : "");
     set_text(g.conn_title, buf);
-    snprintf(buf, sizeof(buf), "%s" BULLET "%d%%",
-             app_conn_waking()               ? "It was in rest mode"
-             : app_conn_fallback() && p < 60 ? "Not on this network, trying over PSN"
-             : p < 60                        ? "Reaching the console"
-                                             : "Starting Remote Play",
-             p);
+    const char *line = app_conn_waking()        ? "It was in rest mode"
+                       : p >= 60                ? "Starting Remote Play"
+                       : !app_conn_fallback()   ? "Reaching the console"
+                       : app_conn_local_tried() ? "Local connection failed, trying over PSN"
+                                                : "Not on this network, trying over PSN";
+    snprintf(buf, sizeof(buf), "%s" BULLET "%d%%", line, p);
     set_text(g.conn_pct, buf);
 }
 

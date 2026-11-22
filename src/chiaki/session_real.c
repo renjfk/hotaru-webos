@@ -382,16 +382,23 @@ static void session_event_cb(ChiakiEvent *event, void *user) {
             ev.rumble_left = event->rumble.left;
             ev.rumble_right = event->rumble.right;
             break;
-        case CHIAKI_EVENT_QUIT:
+        case CHIAKI_EVENT_QUIT: {
             ev.type = SESSION_EV_QUIT;
-            snprintf(ev.reason, sizeof(ev.reason), "%s",
-                     event->quit.reason_str ? event->quit.reason_str : chiaki_quit_reason_string(event->quit.reason));
-            /* the session request is the first contact: these two mean it never got an answer
-             * (connect refused, timed out, or no reply), not that the console said no */
-            ev.unreachable = !g_session.holepunch_session &&
-                             (event->quit.reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED ||
-                              event->quit.reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN);
+            const char *reason =
+                event->quit.reason_str ? event->quit.reason_str : chiaki_quit_reason_string(event->quit.reason);
+            /* A refused local session falls in the same reason as a console that never answered: an
+             * unmapped application reason (0x80108bff is the console saying no) ends up as UNKNOWN,
+             * like a connect that timed out. Both keep the PSN fallback (a quiet console may be
+             * elsewhere), and the message names both because the app cannot tell them apart; the
+             * reason code itself is in libchiaki's own log lines. */
+            bool local = !g_session.holepunch_session;
+            if (local && event->quit.reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN)
+                reason = "The console refused or did not answer: if it is on, pair it again with its PIN";
+            snprintf(ev.reason, sizeof(ev.reason), "%s", reason);
+            ev.unreachable = local && (event->quit.reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED ||
+                                       event->quit.reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN);
             break;
+        }
         default: return; /* keyboard/dualsense/etc. events are not used by the UI yet */
     }
     sess_push(&ev);

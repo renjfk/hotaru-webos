@@ -62,8 +62,9 @@ typedef struct {
     int progress;
     uint8_t rumble_left, rumble_right;
     char reason[128];
-    bool unreachable; /* QUIT of a local-network session that never reached the console (no answer on
-                       * its session port): the console may be elsewhere, so PSN is worth a try */
+    bool unreachable; /* QUIT of a local-network session that did not start a session on this network
+                       * (no answer, or the console answered and refused): it may be elsewhere, so
+                       * PSN is worth a try */
 } session_event_t;
 
 /* session_pad_t.buttons bits: the canonical PS button layout, the same values as
