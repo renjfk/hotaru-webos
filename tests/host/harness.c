@@ -2000,9 +2000,9 @@ int main(int argc, char **argv) {
         unlink(g_node);
         FILE *stale = fopen(g_node, "w");
         if (stale) fclose(stale);
-        char rm[700];
-        snprintf(rm, sizeof(rm), "rm -rf %s", ps_sys);
-        if (system(rm) != 0) printf("no sysfs entry to remove\n");
+        char ps_link[640];
+        snprintf(ps_link, sizeof(ps_link), "%s/device", ps_sys);
+        if (unlink(ps_link) != 0 || rmdir(ps_sys) != 0) printf("no sysfs entry to remove\n");
         pump(4000);
         bool pro_in = input_pad_state() == PAD_ONLINE && input_pad_kind() == PAD_KIND_SWITCH_PRO;
         struct input_event keys[4] = {
