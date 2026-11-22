@@ -93,9 +93,11 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
     struct stat st_touch;
     bool touch =
         touch_node && stat(touch_node, &st_touch) == 0 && st_touch.st_ino == st.st_ino && st_touch.st_dev == st.st_dev;
-    if (req == 0x2100) { /* EVIOCGUNIQ: one controller, one Bluetooth address on all its nodes */
-        static const char uniq[] = "02:aa:bb:cc:dd:ee";
-        memcpy(arg, uniq, sizeof(uniq));
+    if (req == 0x2100) { /* EVIOCGUNIQ: one controller, one Bluetooth address on all its nodes; */
+        static const char uniq[] = "02:aa:bb:cc:dd:ee"; /* SHIM_TOUCH_UNIQ makes the touchpad another pad's */
+        const char *other = getenv("SHIM_TOUCH_UNIQ");
+        if (touch && other) snprintf(arg, 64, "%s", other);
+        else memcpy(arg, uniq, sizeof(uniq));
         return 0;
     }
     if (touch) {
@@ -174,6 +176,10 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
         memset(ai, 0, sizeof(*ai));
         ai->maximum = 255;
         ai->value = 128;
+        if (req == 0x4000 + ABS_MT_POSITION_X || req == 0x4000 + ABS_MT_POSITION_Y) { /* a DS4's touchpad */
+            ai->maximum = req == 0x4000 + ABS_MT_POSITION_X ? 1919 : 941;
+            ai->value = 0;
+        }
         /* the DS3's triggers travel on axes of their own: a range unlike the others tells a grab
          * that reads the right ones from one that asks for ABS_RX / ABS_RY */
         if (ds3 && (req == 0x4000 + 0x30 || req == 0x4000 + 0x31)) {
