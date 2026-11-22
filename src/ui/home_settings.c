@@ -532,9 +532,10 @@ static void refresh_pad(void) {
     }
     pad_kind_t kind = input_pad_kind();
     lv_label_set_text(g.pad_name, input_pad_title());
-    lv_label_set_text(g.pad_note, kind == PAD_KIND_DS3         ? "Select + Start opens the menu while you play"
-                                  : kind == PAD_KIND_DUALSENSE ? "Create + Options opens the menu while you play"
-                                                               : "Share + Options opens the menu while you play");
+    lv_label_set_text(g.pad_note, kind == PAD_KIND_DS3          ? "Select + Start opens the menu while you play"
+                                  : kind == PAD_KIND_DUALSENSE  ? "Create + Options opens the menu while you play"
+                                  : kind == PAD_KIND_SWITCH_PRO ? "Capture + Plus opens the menu while you play"
+                                                                : "Share + Options opens the menu while you play");
     lv_label_set_text(g.pad_state, st == PAD_ONLINE    ? "Connected"
                                    : st == PAD_OFFLINE ? "Offline: turn it on again"
                                                        : "Not found: pair it with the TV");

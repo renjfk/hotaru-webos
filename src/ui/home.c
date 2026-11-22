@@ -720,10 +720,14 @@ static void connecting_hints(void) {
     if (input_pad_state() == PAD_ONLINE) {
         pad_kind_t kind = input_pad_kind();
         ctl_hint_keys(g.conn_hints,
-                      kind == PAD_KIND_DS3         ? "Select"
-                      : kind == PAD_KIND_DUALSENSE ? "Create"
-                                                   : "Share",
-                      kind == PAD_KIND_DS3 ? "Start" : "Options", "The menu during the game");
+                      kind == PAD_KIND_DS3          ? "Select"
+                      : kind == PAD_KIND_DUALSENSE  ? "Create"
+                      : kind == PAD_KIND_SWITCH_PRO ? "Capture"
+                                                    : "Share",
+                      kind == PAD_KIND_DS3          ? "Start"
+                      : kind == PAD_KIND_SWITCH_PRO ? "+"
+                                                    : "Options",
+                      "The menu during the game");
     } else {
         ctl_hint_key(g.conn_hints, "Back", "The menu during the game");
     }

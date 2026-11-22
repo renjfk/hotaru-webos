@@ -14,7 +14,7 @@
 #include <lvgl.h>
 
 /* ART_UNKNOWN: a console yet to be added, a question mark on its lid */
-typedef enum { ART_PS5, ART_PS4, ART_DS4, ART_DS3, ART_DUALSENSE, ART_UNKNOWN, ART__N } art_id_t;
+typedef enum { ART_PS5, ART_PS4, ART_DS4, ART_DS3, ART_DUALSENSE, ART_UNKNOWN, ART_PAD, ART__N } art_id_t;
 
 /* share of each console drawing's height below where it stands on the floor (its shadow) */
 #define ART_PS5_FLOOR     (10.0f / 1232.0f)
@@ -27,6 +27,7 @@ const lv_img_dsc_t *art_img(art_id_t id, lv_coord_t h);                       /*
 lv_obj_t *art_create(lv_obj_t *parent, art_id_t id, lv_coord_t h);            /* an lv_img, pivot in the centre */
 lv_obj_t *art_box(lv_obj_t *parent, art_id_t id, lv_coord_t w, lv_coord_t h); /* the largest that fits */
 art_id_t art_console(bool ps5);
-art_id_t art_pad(const char *pad_name); /* the DualSense's, DualShock 3's or else the DualShock 4's drawing */
+/* the DualSense's, DualShock 3's, a plain one for a pad that is not Sony's, or else the DualShock 4's drawing */
+art_id_t art_pad(const char *pad_name);
 
 #endif

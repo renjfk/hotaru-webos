@@ -109,7 +109,7 @@ static size_t g_btn_map_n = sizeof(g_ds4_buttons) / sizeof(g_ds4_buttons[0]);
  * on the tables as they are. The standard layout's codes are normalised to the uhid ones as they
  * are read, so the tables and everything after them stay as they are. A DualShock 3 is the third
  * layout, told apart by name and normalised the same way (ds3_key(), ds3_abs()). */
-typedef enum { LAYOUT_UHID, LAYOUT_STD, LAYOUT_DS3 } layout_t;
+typedef enum { LAYOUT_UHID, LAYOUT_STD, LAYOUT_DS3, LAYOUT_NINTENDO } layout_t;
 static layout_t g_layout = LAYOUT_UHID;
 
 static int std_key(int code) {
@@ -139,6 +139,31 @@ static int std_abs(int code) {
         case ABS_RX: return ABS_Z;
         case ABS_RY: return ABS_RZ;
         default: return code;
+    }
+}
+
+/* A Nintendo Switch Pro Controller on hid-nintendo: the standard codes, but by label (A on
+ * BTN_SOUTH, B on BTN_EAST) and with Capture on BTN_Z, which keeps it off the standard rule. It is
+ * mapped by position like the console's own pads: the bottom button (B) is Cross, the right one
+ * (A) Circle. Capture is Create, + Options, Home PS, and Minus the touchpad click it lacks. ZL/ZR
+ * are buttons only: they count as fully pressed triggers. */
+static int nintendo_key(int code) {
+    switch (code) {
+        case 0x131: return 0x131; /* B, bottom  Cross    */
+        case 0x130: return 0x132; /* A, right   Circle   */
+        case 0x134: return 0x130; /* Y, left    Square   */
+        case 0x133: return 0x133; /* X, top     Triangle */
+        case 0x136: return 0x134; /* L          L1       */
+        case 0x137: return 0x135; /* R          R1       */
+        case 0x138: return 0x136; /* ZL         L2       */
+        case 0x139: return 0x137; /* ZR         R2       */
+        case 0x135: return 0x138; /* Capture    Create   */
+        case 0x13b: return 0x139; /* +          Options  */
+        case 0x13c: return 0x13c; /* Home       PS       */
+        case 0x13a: return 0x13d; /* -          Touchpad */
+        case 0x13d: return 0x13a; /* L stick    L3       */
+        case 0x13e: return 0x13b; /* R stick    R3       */
+        default: return -1;
     }
 }
 
@@ -175,11 +200,12 @@ static int ds3_abs(int code) {
 static int layout_key(int code) {
     if (g_layout == LAYOUT_STD) return std_key(code);
     if (g_layout == LAYOUT_DS3) return ds3_key(code);
+    if (g_layout == LAYOUT_NINTENDO) return nintendo_key(code);
     return code;
 }
 
 static int layout_abs(int code) {
-    if (g_layout == LAYOUT_STD) return std_abs(code);
+    if (g_layout == LAYOUT_STD || g_layout == LAYOUT_NINTENDO) return std_abs(code);
     if (g_layout == LAYOUT_DS3) return ds3_abs(code);
     return code;
 }
@@ -487,7 +513,137 @@ static uint16_t touch_scale(const axis_t *a, int v, int top) {
     return (uint16_t)((int32_t)(v - a->min) * top / (a->max - a->min));
 }
 
+/* ---------- more than one controller ----------
+ * A session carries one controller. With several attached the scan used to take the first in
+ * directory order (in practice the one switched on last), and webOS read the others as arrow keys.
+ * Now a PlayStation pad goes first (DualSense, DualShock 4, DualShock 3, then any other), the
+ * others are held too (grabbed and their input dropped, so webOS does not act on them), and a
+ * better one that turns up later takes over. */
+#define PAD_HELD_MAX   4
+#define PAD_RECHECK_MS 3000 /* attached: look for a better or an extra controller this often */
+static int g_held_fd[PAD_HELD_MAX] = { -1, -1, -1, -1 };
+static char g_held_path[PAD_HELD_MAX][300];
+static Uint32 g_pad_next_recheck;
+static unsigned g_nodes_sig; /* the event nodes INPUT_DIR listed at the last look */
+
+/* a cheap fingerprint of the event nodes present: names only, nothing is opened. Opening every
+ * node on a timer stalled the pad on webOS 11, so the full look runs only when this changes. */
+static unsigned nodes_sig(void) {
+    unsigned h = 2166136261u;
+    DIR *d = opendir(INPUT_DIR);
+    if (!d) return 0;
+    for (struct dirent *e; (e = readdir(d));) {
+        if (strncmp(e->d_name, "event", 5) != 0) continue;
+        unsigned x = 0;
+        for (const char *c = e->d_name; *c; c++) x = x * 31u + (unsigned char)*c;
+        h ^= x * 16777619u; /* order-free: directory order may change */
+    }
+    closedir(d);
+    return h;
+}
+
+static int pad_rank(const char *name) {
+    if (strstr(name, "DualSense")) return 0;
+    if (strstr(name, "Wireless Controller")) return 1; /* a DualShock 4 on hid-sony or uhid */
+    if (strstr(name, "PLAYSTATION(R)3")) return 2;
+    return 3;
+}
+
+static bool is_tv_node(const char *name) {
+    return strncmp(name, "LGE", 3) == 0 || strncmp(name, "LG ", 3) == 0 || strcmp(name, "Smart Remote RCU Input") == 0;
+}
+
+/* the best controller in INPUT_DIR: its path into best ("" when none), its rank, and how many there are */
+static int pick_pad(char *best, size_t cap, int *count) {
+    int rank = 99;
+    *count = 0;
+    best[0] = '\0';
+    DIR *d = opendir(INPUT_DIR);
+    if (!d) return rank;
+    for (struct dirent *e; (e = readdir(d));) {
+        if (strncmp(e->d_name, "event", 5) != 0) continue;
+        char path[300];
+        snprintf(path, sizeof(path), "%s/%s", INPUT_DIR, e->d_name);
+        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) continue;
+        char name[160] = { 0 };
+        ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name);
+        bool pad = !is_tv_node(name) && looks_like_gamepad(fd);
+        close(fd);
+        if (!pad) continue;
+        (*count)++;
+        int r = pad_rank(name);
+        if (r < rank) {
+            rank = r;
+            snprintf(best, cap, "%s", path);
+        }
+    }
+    closedir(d);
+    return rank;
+}
+
+static bool held(const char *path) {
+    for (int i = 0; i < PAD_HELD_MAX; i++)
+        if (g_held_fd[i] >= 0 && !strcmp(g_held_path[i], path)) return true;
+    return false;
+}
+
+static void release_held(void) {
+    for (int i = 0; i < PAD_HELD_MAX; i++)
+        if (g_held_fd[i] >= 0) {
+            ioctl(g_held_fd[i], EVIOCGRAB, 0);
+            close(g_held_fd[i]);
+            g_held_fd[i] = -1;
+        }
+}
+
+/* grab every other controller, so webOS does not turn its buttons into arrow keys */
+static void hold_others(void) {
+    DIR *d = opendir(INPUT_DIR);
+    if (!d) return;
+    for (struct dirent *e; (e = readdir(d));) {
+        if (strncmp(e->d_name, "event", 5) != 0) continue;
+        char path[300];
+        snprintf(path, sizeof(path), "%s/%s", INPUT_DIR, e->d_name);
+        if (!strcmp(path, g_pad_path) || held(path)) continue;
+        int slot = -1;
+        for (int i = 0; i < PAD_HELD_MAX && slot < 0; i++)
+            if (g_held_fd[i] < 0) slot = i;
+        if (slot < 0) break;
+        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) continue;
+        char name[160] = { 0 };
+        ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name);
+        if (is_tv_node(name) || !looks_like_gamepad(fd) || ioctl(fd, EVIOCGRAB, 1) < 0) {
+            close(fd);
+            continue;
+        }
+        g_held_fd[slot] = fd;
+        snprintf(g_held_path[slot], sizeof(g_held_path[slot]), "%s", path);
+        log_msg("gamepad %s \"%s\" held, not used (one controller at a time)", path, name);
+        log_event(LOG_OK, "INPUT", "Two controllers: using %s", g_pad_name);
+    }
+    closedir(d);
+}
+
+/* drop what the held controllers send; one that is gone frees its slot */
+static void drain_held(void) {
+    struct input_event ev;
+    for (int i = 0; i < PAD_HELD_MAX; i++) {
+        if (g_held_fd[i] < 0) continue;
+        ssize_t n;
+        while ((n = read(g_held_fd[i], &ev, sizeof(ev))) == (ssize_t)sizeof(ev)) {}
+        if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+            close(g_held_fd[i]);
+            g_held_fd[i] = -1;
+        }
+    }
+}
+
 bool gamepad_try_acquire(void) {
+    int count = 0;
+    char want[300];
+    pick_pad(want, sizeof(want), &count);
     DIR *d = opendir(INPUT_DIR);
     if (!d) return false;
     struct dirent *e;
@@ -515,20 +671,24 @@ bool gamepad_try_acquire(void) {
                   strcmp(name, "Smart Remote RCU Input") == 0,
              pad = !lg && looks_like_gamepad(fd);
         log_probe("pad: %s \"%s\": %s", path, name, lg ? "the TV's own, skipped" : pad ? "a gamepad" : "not a gamepad");
-        if (!pad) {
+        if (!pad || (want[0] && strcmp(path, want) != 0)) { /* not a pad, or not the best of several */
             close(fd);
             continue;
         }
         unsigned char keys[(KEY_CNT + 7) / 8] = { 0 };
         bool std = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) >= 0 && GETBIT(keys, BTN_THUMBR) &&
                    !GETBIT(keys, BTN_Z) && !GETBIT(keys, BTN_C);
+        struct input_id id = { 0 };
+        bool nintendo = ioctl(fd, EVIOCGID, &id) >= 0 && id.vendor == 0x057e && GETBIT(keys, BTN_THUMBR);
         g_layout = LAYOUT_UHID;
         if (std) g_layout = LAYOUT_STD;
+        else if (nintendo) g_layout = LAYOUT_NINTENDO;
         else if (strstr(name, "PLAYSTATION(R)3")) g_layout = LAYOUT_DS3;
         log_msg("gamepad %s: %s layout", path,
-                g_layout == LAYOUT_STD   ? "standard Linux (BTN_THUMBR, no BTN_C/Z)"
-                : g_layout == LAYOUT_DS3 ? "hid-sony Sixaxis (DualShock 3)"
-                                         : "LG uhid");
+                g_layout == LAYOUT_STD        ? "standard Linux (BTN_THUMBR, no BTN_C/Z)"
+                : g_layout == LAYOUT_NINTENDO ? "hid-nintendo (Switch Pro Controller), by position"
+                : g_layout == LAYOUT_DS3      ? "hid-sony Sixaxis (DualShock 3)"
+                                              : "LG uhid");
         if (ioctl(fd, EVIOCGRAB, 1) < 0) log_msg("gamepad %s grab FAILED: %s", path, strerror(errno));
         else log_msg("gamepad %s \"%s\" grabbed", path, name);
         struct {
@@ -549,9 +709,10 @@ bool gamepad_try_acquire(void) {
         g_r2.value = g_r2.min;
         /* named by the code each range came from: on the standard layout the right stick is RX/RY
          * and the triggers Z/RZ; a DualShock 3's triggers are pressures on 0x30/0x31 */
-        const char *rsx = g_layout == LAYOUT_STD ? "RX" : "Z", *rsy = g_layout == LAYOUT_STD ? "RY" : "RZ";
-        const char *l2 = g_layout == LAYOUT_STD ? "Z" : g_layout == LAYOUT_DS3 ? "0x30" : "RX";
-        const char *r2 = g_layout == LAYOUT_STD ? "RZ" : g_layout == LAYOUT_DS3 ? "0x31" : "RY";
+        bool std_axes = g_layout == LAYOUT_STD || g_layout == LAYOUT_NINTENDO;
+        const char *rsx = std_axes ? "RX" : "Z", *rsy = std_axes ? "RY" : "RZ";
+        const char *l2 = g_layout == LAYOUT_NINTENDO ? "ZL" : std_axes ? "Z" : g_layout == LAYOUT_DS3 ? "0x30" : "RX";
+        const char *r2 = g_layout == LAYOUT_NINTENDO ? "ZR" : std_axes ? "RZ" : g_layout == LAYOUT_DS3 ? "0x31" : "RY";
         log_msg("pad abs X %d..%d Y %d..%d %s %d..%d %s %d..%d %s %d..%d %s %d..%d", g_lx.min, g_lx.max, g_ly.min,
                 g_ly.max, rsx, g_rx.min, g_rx.max, rsy, g_ry.min, g_ry.max, l2, g_l2.min, g_l2.max, r2, g_r2.min,
                 g_r2.max);
@@ -589,11 +750,12 @@ bool gamepad_try_acquire(void) {
                 g_abs_span[c] = ai.maximum - ai.minimum;
         }
         log_msg("gamepad: rumble %s, touchpad %s", g_can_rumble ? "yes" : "no",
-                g_touch_fd >= 0          ? "touches and click (own node)"
-                : g_can_touch            ? "touches and click"
-                : g_layout == LAYOUT_STD ? "on its own node, not found yet"
-                : g_layout == LAYOUT_DS3 ? "none"
-                                         : "click only");
+                g_touch_fd >= 0               ? "touches and click (own node)"
+                : g_can_touch                 ? "touches and click"
+                : g_layout == LAYOUT_STD      ? "on its own node, not found yet"
+                : g_layout == LAYOUT_DS3      ? "none"
+                : g_layout == LAYOUT_NINTENDO ? "none (Minus is its click)"
+                                              : "click only");
         probe_device(fd);
         memset(&g_pad, 0, sizeof(g_pad));
         g_ds3_dpad = 0;
@@ -609,7 +771,13 @@ bool gamepad_try_acquire(void) {
         g_last_tick = 0;
     }
     closedir(d);
-    if (g_pad_fd >= 0) notify_state();
+    if (g_pad_fd >= 0) {
+        release_held();
+        if (count > 1) hold_others();
+        g_pad_next_recheck = SDL_GetTicks() + PAD_RECHECK_MS;
+        g_nodes_sig = nodes_sig();
+        notify_state();
+    }
     return g_pad_fd >= 0;
 }
 
@@ -620,6 +788,7 @@ static void gamepad_lost(const char *why) {
     close(g_pad_fd);
     g_pad_fd = -1;
     touch_close();
+    release_held(); /* the next scan picks among them again */
     scroll_reset();
     g_hatx = g_haty = 0;
     g_ds3_dpad = 0;
@@ -849,6 +1018,25 @@ void gamepad_tick(void) {
             return;
         }
     }
+    drain_held();
+    /* a better controller, or one more to hold: only when a node came or went, never while streaming */
+    if (!g_in.streaming && (Sint32)(now - g_pad_next_recheck) >= 0) {
+        g_pad_next_recheck = now + PAD_RECHECK_MS;
+        unsigned sig = nodes_sig();
+        if (sig != g_nodes_sig) {
+            g_nodes_sig = sig;
+            int count = 0;
+            char want[300];
+            int rank = pick_pad(want, sizeof(want), &count);
+            if (want[0] && strcmp(want, g_pad_path) != 0 && rank < pad_rank(g_pad_name)) {
+                log_msg("gamepad: %s is preferred over %s", want, g_pad_path);
+                gamepad_lost("a PlayStation controller took over");
+                g_pad_next_scan = now; /* pick it at once */
+                return;
+            }
+            if (count > 1) hold_others();
+        }
+    }
     struct input_event ev;
     ssize_t n;
     while ((n = read(g_pad_fd, &ev, sizeof(ev))) == (ssize_t)sizeof(ev)) {
@@ -867,6 +1055,12 @@ void gamepad_tick(void) {
         } else {
             if (ev.type == EV_ABS) ev.code = (uint16_t)layout_abs(ev.code);
             probe_event(ev.type, raw, ev.code, ev.value);
+        }
+        /* ZL/ZR have no travel: pressed is a full trigger */
+        if (ev.type == EV_KEY && g_layout == LAYOUT_NINTENDO && (ev.code == 0x136 || ev.code == 0x137) &&
+            ev.value != 2) {
+            axis_t *t = ev.code == 0x136 ? &g_l2 : &g_r2;
+            t->value = ev.value ? t->max : t->min;
         }
         if (ev.type == EV_KEY) gamepad_button(ev.code, ev.value);
         else if (ev.type == EV_ABS) {
