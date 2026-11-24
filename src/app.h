@@ -67,6 +67,7 @@ typedef enum {
     APP_CHANGED_PIN,      /* the console asked for the Remote Play login PIN */
     APP_CHANGED_STATE,    /* discovery: a console's state, firmware or running app changed */
     APP_CHANGED_UPDATE,   /* the release check answered: app_update_version() */
+    APP_CHANGED_AVATAR,   /* a PSN account's avatar picture arrived (net/avatar.h) */
 } app_change_t;
 
 typedef void (*app_listener_t)(app_change_t what);

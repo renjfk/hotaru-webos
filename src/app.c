@@ -15,6 +15,7 @@
 #include "config/config.h"
 #include "input/input.h"
 #include "log.h"
+#include "net/avatar.h"
 #include "net/update.h"
 
 #define SETTINGS_SAVE_MS 800  /* quiet time after the last settings edit before it is written */
@@ -409,6 +410,8 @@ void app_init(app_listener_t listener) {
     probe_apply();
     disc_set(true);
     update_start();
+    /* no avatar fetch here: the stored token has mostly expired by the next start (it lasts about an
+     * hour), so the kept pictures show and sign-in or Refresh consoles fetch a new one */
 }
 bool app_running(void) { return g_running; }
 void app_quit(void) {
@@ -828,6 +831,15 @@ static void reg_devices(const session_reg_event_t *ev) {
     notify(APP_CHANGED_REG);
 }
 
+/* Lists an account's consoles and, with the token that listing has just refreshed, fetches its
+ * avatar: once per sign-in and once per Refresh consoles, whatever the list holds */
+static bool psn_list_consoles(const uint8_t account_id[8]) {
+    if (!session_psn_fetch_devices(account_id)) return false;
+    const config_psn_t *p = config_psn_at(config_psn_find(account_id));
+    if (p) avatar_fetch(p->account_id, p->access_token);
+    return true;
+}
+
 static void reg_event(const session_reg_event_t *ev) {
     if (g_reg.state != APP_REG_RUNNING) return; /* canceled: late events are dropped */
     switch (ev->type) {
@@ -857,7 +869,7 @@ static void reg_event(const session_reg_event_t *ev) {
             log_event(LOG_OK, "REG", "PSN account %s linked", ev->psn.online_id);
             g_reg.linking = false;
             g_reg.progress = PSN_CODE_SHARE;
-            if (!session_psn_fetch_devices(g_reg.account_id)) {
+            if (!psn_list_consoles(g_reg.account_id)) {
                 reg_fail("Could not list the consoles on this PSN account");
                 break;
             }
@@ -1013,7 +1025,7 @@ void app_psn_refresh(int account) {
         reg_fail("Sign in to PSN to list your consoles");
         return;
     }
-    if (!session_psn_fetch_devices(p->account_id)) {
+    if (!psn_list_consoles(p->account_id)) {
         reg_fail("Could not list the PSN consoles");
         return;
     }
@@ -1036,6 +1048,7 @@ bool app_psn_sign_out(int account) {
     char name[32];
     snprintf(name, sizeof(name), "%s", app_psn_account_name(account));
     config_psn_remove(account);
+    avatar_forget(id);
     config_save();
     hosts_sync();
     log_event(LOG_WARN, "REG", "Signed out of PSN account %s", name);
@@ -1146,6 +1159,7 @@ void app_tick(void) {
     if (g_save_at && (Sint32)(SDL_GetTicks() - g_save_at) >= 0) save_pending();
     if (g_restart_at && (Sint32)(SDL_GetTicks() - g_restart_at) >= 0) restart_attempt();
     if (update_poll()) notify(APP_CHANGED_UPDATE);
+    if (avatar_poll()) notify(APP_CHANGED_AVATAR);
 
     /* while streaming (and the menu is not up), forward the pad to the console (~120 Hz) */
     bool fwd = g_conn == CONN_STREAMING && input_streaming();

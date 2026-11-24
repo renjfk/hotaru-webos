@@ -85,9 +85,10 @@ account, so two players on one console get a tile each.
 
 A console is paired per PSN account. To let someone else play on the same console, sign their account in under
 Settings > PSN account > **Add a PSN account**, then pair the console again with its PIN while their account is
-chosen. Home then has a tile for each account, with that account's initials on it; Start Remote Play on a tile
-starts the session as that player. Signing out of one account drops only its PSN-found consoles: pairings made
-with a PIN keep their keys.
+chosen. Home then has a tile for each account, with that account's PSN avatar on it (its initials until the picture
+has been fetched). The picture is fetched when the account signs in; after a change on PSN, Settings > PSN account >
+**Refresh consoles** fetches it again. Start Remote Play on a tile starts the session as that player. Signing out of
+one account drops only its PSN-found consoles: pairings made with a PIN keep their keys.
 
 ## Playing
 
@@ -127,8 +128,8 @@ Settings. The TV remote's arrows, OK and Back do the same.
   touchpad works. A DualShock 3 plays with every button, both sticks, its D-pad and its analog L2/R2, but it has no
   touchpad and no rumble, and Select + Start opens the menu over the game.
 - **PSN account**: one row per linked account, with how many consoles each has. Cross on one opens **Refresh
-  consoles** (lists that account's consoles again, adding the new ones to Home) and **Sign out**; **Add a PSN
-  account** signs in another one next to it.
+  consoles** (lists that account's consoles again, adding the new ones to Home, and fetches its avatar again) and
+  **Sign out**; **Add a PSN account** signs in another one next to it.
 - **Log**: what just happened (the right stick scrolls it).
 - **About**: the version, the network, and **Diagnostics**, which logs details for a bug report.
 
