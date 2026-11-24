@@ -342,9 +342,12 @@ void avatar_fetch(const uint8_t account_id[8], const char *access_token) {
 
 #else
 
-/* nothing to fetch with: the kept file is shown again, as a fetched one would be */
+/* nothing to fetch with: a kept file is shown again, as a fetched one would be (no file, no change) */
 void avatar_fetch(const uint8_t account_id[8], const char *access_token) {
     (void)access_token;
+    char path[600];
+    file_path(account_id, path, sizeof(path));
+    if (access(path, F_OK) != 0) return;
     if (!g_lock) g_lock = SDL_CreateMutex();
     if (!g_lock) return;
     SDL_LockMutex(g_lock);

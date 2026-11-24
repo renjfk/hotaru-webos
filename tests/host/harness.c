@@ -1615,6 +1615,7 @@ int main(int argc, char **argv) {
         }
         expect(before == 0 && pics >= 3 && !initials_shown && row,
                "an arriving avatar replaces the initials on the account's tiles, the top bar and its Settings row");
+        unlink(ap); /* the later steps run without it, as before */
     }
     key(SDLK_RETURN);
     pump(200);
