@@ -831,6 +831,15 @@ static void reg_devices(const session_reg_event_t *ev) {
     notify(APP_CHANGED_REG);
 }
 
+/* Lists an account's consoles and, with the token that listing has just refreshed, fetches its
+ * avatar: once per sign-in and once per Refresh consoles, whatever the list holds */
+static bool psn_list_consoles(const uint8_t account_id[8]) {
+    if (!session_psn_fetch_devices(account_id)) return false;
+    const config_psn_t *p = config_psn_at(config_psn_find(account_id));
+    if (p) avatar_fetch(p->account_id, p->access_token);
+    return true;
+}
+
 static void reg_event(const session_reg_event_t *ev) {
     if (g_reg.state != APP_REG_RUNNING) return; /* canceled: late events are dropped */
     switch (ev->type) {
@@ -858,22 +867,16 @@ static void reg_event(const session_reg_event_t *ev) {
             hosts_sync(); /* its PIN pairings get their account back before the console list arrives */
             notify(APP_CHANGED_HOSTS);
             log_event(LOG_OK, "REG", "PSN account %s linked", ev->psn.online_id);
-            avatar_fetch(ev->psn.account_id, ev->psn.access_token);
             g_reg.linking = false;
             g_reg.progress = PSN_CODE_SHARE;
-            if (!session_psn_fetch_devices(g_reg.account_id)) {
+            if (!psn_list_consoles(g_reg.account_id)) {
                 reg_fail("Could not list the consoles on this PSN account");
                 break;
             }
             reg_running("Looking for your consoles");
             break;
         }
-        case REG_EV_PSN_DEVICES: {
-            reg_devices(ev);
-            const config_psn_t *p = config_psn_at(config_psn_find(ev->account_id)); /* a fresh token now */
-            if (p) avatar_fetch(p->account_id, p->access_token);
-            break;
-        }
+        case REG_EV_PSN_DEVICES: reg_devices(ev); break;
         case REG_EV_SUCCESS: reg_success(&ev->host); break;
         case REG_EV_FAILED: reg_fail(ev->reason[0] ? ev->reason : "The console did not accept the registration"); break;
         case REG_EV_CANCELED: reg_fail("The registration was canceled"); break;
@@ -1022,7 +1025,7 @@ void app_psn_refresh(int account) {
         reg_fail("Sign in to PSN to list your consoles");
         return;
     }
-    if (!session_psn_fetch_devices(p->account_id)) {
+    if (!psn_list_consoles(p->account_id)) {
         reg_fail("Could not list the PSN consoles");
         return;
     }

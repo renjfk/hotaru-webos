@@ -122,11 +122,14 @@ void avatar_forget(const uint8_t account_id[8]) {
     file_path(account_id, path, sizeof(path));
     unlink(path);
     slot_t *s = slot_of(account_id, false);
-    if (s) { /* the picture may still be on screen until the UI refreshes: kept as old, freed later */
+    if (s) { /* the slot is free again; its picture may still be on screen until the UI refreshes, so
+              * it is parked and freed at the next sign-out */
+        static uint8_t *parked;
+        free(parked);
+        parked = s->pixels;
         free(s->old);
-        s->old = s->pixels;
-        s->pixels = NULL;
-        s->loaded = true;
+        s->pixels = s->old = NULL;
+        s->used = s->loaded = false; /* dsc stays as it is until slot_of() reuses the slot */
     }
 }
 
@@ -138,11 +141,19 @@ bool avatar_poll(void) {
     memcpy(ready, g_ready, sizeof(ready));
     g_ready_n = 0;
     SDL_UnlockMutex(g_lock);
+    int got = 0;
     for (int i = 0; i < n; i++) {
+        if (config_psn_find(ready[i]) < 0) { /* signed out while it was fetched: no slot, no file */
+            char path[600];
+            file_path(ready[i], path, sizeof(path));
+            unlink(path);
+            continue;
+        }
         slot_t *s = slot_of(ready[i], true);
         if (s) slot_load(s);
+        got++;
     }
-    return n > 0;
+    return got > 0;
 }
 
 /* ---------- fetching ---------- */
@@ -215,6 +226,8 @@ static bool pick_url(const char *json, char *out, size_t cap) {
             for (size_t i = 0; i < json_object_array_length(arr) && !ok; i++) {
                 json_object *e = json_object_array_get_idx(arr, i), *sz = NULL, *u = NULL;
                 if (!json_object_object_get_ex(e, "size", &sz) || !json_object_object_get_ex(e, url_key, &u)) continue;
+                /* a key can be there with a null value: then there is no string to read */
+                if (!json_object_is_type(sz, json_type_string) || !json_object_is_type(u, json_type_string)) continue;
                 if (strcmp(json_object_get_string(sz), pref[p]) != 0) continue;
                 snprintf(out, cap, "%s", json_object_get_string(u));
                 ok = out[0] != '\0';
@@ -238,12 +251,16 @@ static bool save_png(const uint8_t id[8], const struct body *b) {
     }
     char path[600], tmp[620];
     file_path(id, path, sizeof(path));
-    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-    FILE *f = fopen(tmp, "wb");
-    if (!f) return false;
-    bool ok = fwrite(b->data, 1, b->len, f) == b->len;
-    ok = fclose(f) == 0 && ok;
-    chmod(tmp, 0600);
+    snprintf(tmp, sizeof(tmp), "%s.XXXXXX", path); /* one per fetch, 0600 from the start */
+    int fd = mkstemp(tmp);
+    if (fd < 0) return false;
+    bool ok = true;
+    for (size_t done = 0; ok && done < b->len;) {
+        ssize_t w = write(fd, b->data + done, b->len - done);
+        ok = w > 0;
+        if (ok) done += (size_t)w;
+    }
+    ok = close(fd) == 0 && ok;
     if (!ok || rename(tmp, path) != 0) {
         unlink(tmp);
         return false;
@@ -261,7 +278,7 @@ static long legacy_profile(const char *token, struct body *out) {
     }
     json_object *j = base.data ? json_tokener_parse((const char *)base.data) : NULL, *u = NULL;
     char url[512] = "";
-    if (j && json_object_object_get_ex(j, "url", &u))
+    if (j && json_object_object_get_ex(j, "url", &u) && json_object_is_type(u, json_type_string))
         snprintf(url, sizeof(url), PROFILE2_FMT, json_object_get_string(u));
     if (j) json_object_put(j);
     free(base.data);
@@ -325,9 +342,14 @@ void avatar_fetch(const uint8_t account_id[8], const char *access_token) {
 
 #else
 
+/* nothing to fetch with: the kept file is shown again, as a fetched one would be */
 void avatar_fetch(const uint8_t account_id[8], const char *access_token) {
-    (void)account_id;
     (void)access_token;
+    if (!g_lock) g_lock = SDL_CreateMutex();
+    if (!g_lock) return;
+    SDL_LockMutex(g_lock);
+    if (g_ready_n < AVATAR_SLOTS) memcpy(g_ready[g_ready_n++], account_id, 8);
+    SDL_UnlockMutex(g_lock);
 }
 
 #endif

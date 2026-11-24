@@ -5,7 +5,8 @@
  * later starts show it without the network. avatar_poll() tells the main thread a new one
  * arrived; avatar_image() decodes the kept file once and hands LVGL a picture, NULL while there
  * is none (the UI keeps the initials then). Without libcurl (the simulator, the host tests)
- * nothing is fetched and only a kept file is shown. */
+ * nothing is fetched: avatar_fetch() shows the kept file again. A picture that arrives for an
+ * account signed out meanwhile is dropped with its file. */
 #ifndef HOTARU_NET_AVATAR_H
 #define HOTARU_NET_AVATAR_H
 

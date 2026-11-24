@@ -37,7 +37,9 @@ src/
                     (HOTARU_HAVE_LIBCHIAKI), session.c the simulation (host tests, simulator)
   media/            ndl.[ch] NDL hardware video + PCM audio, v2 or v1 (ndl_v1.[ch] the calls a webOS 4 TV
                     has); feeder.[ch] media worker threads; pacer.[ch] even playout cadence for "Smooth playback"
-  net/              update.[ch]: is a newer release out (GitHub's latest release, once per launch)
+  net/              update.[ch]: is a newer release out (GitHub's latest release, once per launch);
+                    avatar.[ch]: each PSN account's avatar, fetched after sign-in and Refresh consoles, kept
+                    next to hotaru.conf and decoded for the UI
   vendor/           qrcodegen.[ch]: Nayuki's QR encoder, unmodified
 tests/host/         macOS behaviour tests (shim/ fakes <linux/input.h>)
 sim/                macOS simulator: the whole app in a window

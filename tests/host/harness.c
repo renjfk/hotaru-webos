@@ -629,16 +629,33 @@ static void test_pacer(void) {
     expect(p.restarts == before + 1, "a stall longer than the delay restarts the cadence");
 }
 
+static const unsigned char k_avatar_png[] = {
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
+    0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x06, 0x00, 0x00, 0x00, 0x72, 0xb6, 0x0d, 0x24, 0x00, 0x00, 0x00, 0x12, 0x49,
+    0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x1f, 0x84, 0x19, 0xa0, 0xf4, 0x7f, 0x00, 0x43, 0xce,
+    0x07, 0xf9, 0xfa, 0x81, 0x4a, 0xfd, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+}; /* a 2 x 2 PNG, red on top, blue below */
+
+/* the avatar pictures ctl_avatar_set() put in round avatars under o, and whether each one's
+ * initials (its other children) are hidden */
+static int count_avatars(lv_obj_t *o, bool *initials_shown) {
+    int n = 0;
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(o); i++) {
+        lv_obj_t *c = lv_obj_get_child(o, (int32_t)i);
+        if (lv_obj_check_type(c, &lv_img_class) && lv_obj_get_user_data(c) == (void *)0xa7a7) {
+            n++;
+            for (uint32_t k = 0; k < lv_obj_get_child_cnt(o); k++) {
+                lv_obj_t *sib = lv_obj_get_child(o, (int32_t)k);
+                if (sib != c && !lv_obj_has_flag(sib, LV_OBJ_FLAG_HIDDEN)) *initials_shown = true;
+            }
+        } else n += count_avatars(c, initials_shown);
+    }
+    return n;
+}
+
 /* net/avatar.c: a kept picture shows without the network, a broken one leaves the initials, and
  * signing out deletes it */
 static void test_avatar(void) {
-    static const unsigned char png[] = {
-        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
-        0x52, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x06, 0x00, 0x00, 0x00, 0x72,
-        0xb6, 0x0d, 0x24, 0x00, 0x00, 0x00, 0x12, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8,
-        0xcf, 0xc0, 0xf0, 0x1f, 0x84, 0x19, 0xa0, 0xf4, 0x7f, 0x00, 0x43, 0xce, 0x07, 0xf9, 0xfa,
-        0x81, 0x4a, 0xfd, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
-    }; /* 2 x 2, red on top, blue below */
     const uint8_t kept[8] = { 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8 };
     const uint8_t broken[8] = { 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8 };
     const uint8_t none[8] = { 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8 };
@@ -646,14 +663,14 @@ static void test_avatar(void) {
     snprintf(path, sizeof(path), "%s/avatar-a1a2a3a4a5a6a7a8.png", CONFIG_DIR);
     FILE *f = fopen(path, "wb");
     if (f) {
-        fwrite(png, 1, sizeof(png), f);
+        fwrite(k_avatar_png, 1, sizeof(k_avatar_png), f);
         fclose(f);
     }
     char bad[600];
     snprintf(bad, sizeof(bad), "%s/avatar-b1b2b3b4b5b6b7b8.png", CONFIG_DIR);
     f = fopen(bad, "wb");
     if (f) {
-        fwrite(png, 1, 20, f); /* cut short */
+        fwrite(k_avatar_png, 1, 20, f); /* cut short */
         fclose(f);
     }
     const lv_img_dsc_t *img = avatar_image(kept);
@@ -663,6 +680,34 @@ static void test_avatar(void) {
     expect(!avatar_image(broken) && !avatar_image(none), "a broken or missing picture leaves the initials");
     avatar_forget(kept);
     expect(!avatar_image(kept) && access(path, F_OK) != 0, "signing out deletes the account's picture");
+
+    /* a picture that arrives for an account signed out meanwhile is dropped with its file */
+    char late[600];
+    snprintf(late, sizeof(late), "%s/avatar-c1c2c3c4c5c6c7c8.png", CONFIG_DIR);
+    f = fopen(late, "wb");
+    if (f) {
+        fwrite(k_avatar_png, 1, sizeof(k_avatar_png), f);
+        fclose(f);
+    }
+    avatar_fetch(none, "token");
+    expect(config_psn_find(none) < 0 && !avatar_poll() && access(late, F_OK) != 0,
+           "an avatar that arrives after its account signed out is dropped with its file");
+
+    /* signing out frees the account's slot: more accounts than slots, one after another, all get one */
+    int got = 0;
+    for (int i = 0; i < 12; i++) {
+        uint8_t id[8] = { 0xd0, (uint8_t)i, 0, 0, 0, 0, 0, 0 };
+        char p2[600];
+        snprintf(p2, sizeof(p2), "%s/avatar-d0%02x000000000000.png", CONFIG_DIR, i);
+        f = fopen(p2, "wb");
+        if (f) {
+            fwrite(k_avatar_png, 1, sizeof(k_avatar_png), f);
+            fclose(f);
+        }
+        if (avatar_image(id)) got++;
+        avatar_forget(id);
+    }
+    expect(got == 12, "a signed-out account's slot is free again for the next one");
 }
 
 /* net/update.c: the latest release's tag (vMAJOR.MINOR) against the installed version (three numbers) */
@@ -1544,6 +1589,33 @@ int main(int argc, char **argv) {
     expect(home_section() == HOME_SETTINGS && home_zone() == HOME_PANEL && home_index() == 2 && home_item() == 0 &&
                find_visible_text(lv_scr_act(), app_psn_account_name(0)) != NULL,
            "the PSN account panel opens on the first account row");
+
+    /* the account's picture arrives: its tiles, the top bar and its row here show it, initials hidden */
+    {
+        const uint8_t *aid = config_psn_at(0)->account_id;
+        char ap[600];
+        snprintf(ap, sizeof(ap), "%s/avatar-%02x%02x%02x%02x%02x%02x%02x%02x.png", CONFIG_DIR, aid[0], aid[1], aid[2],
+                 aid[3], aid[4], aid[5], aid[6], aid[7]);
+        bool shown_before = false;
+        int before = count_avatars(lv_scr_act(), &shown_before);
+        FILE *af = fopen(ap, "wb");
+        if (af) {
+            fwrite(k_avatar_png, 1, sizeof(k_avatar_png), af);
+            fclose(af);
+        }
+        avatar_fetch(aid, "token"); /* without libcurl: the kept file arrives as a fetched one would */
+        pump(200);
+        bool initials_shown = false;
+        int pics = count_avatars(lv_scr_act(), &initials_shown);
+        bool row = false;
+        lv_obj_t *name = find_visible_text(lv_scr_act(), app_psn_account_name(0));
+        for (lv_obj_t *up = name; up && !row; up = lv_obj_get_parent(up)) {
+            bool dummy = false;
+            row = count_avatars(up, &dummy) > 0 && up != lv_scr_act();
+        }
+        expect(before == 0 && pics >= 3 && !initials_shown && row,
+               "an arriving avatar replaces the initials on the account's tiles, the top bar and its Settings row");
+    }
     key(SDLK_RETURN);
     pump(200);
     expect(home_settings_menu_open() && find_visible_text(lv_scr_act(), "Refresh consoles") != NULL &&
