@@ -12,7 +12,7 @@
 
 #define CACHE_MAX 32
 
-static const char *const g_names[ART__N] = { "ps5", "ps4", "ds4", "ds3", "dualsense", "unknown" };
+static const char *const g_names[ART__N] = { "ps5", "ps4", "ds4", "ds3", "dualsense", "unknown", "pad" };
 static struct {
     bool tried;
     unsigned char *rgba;
@@ -176,5 +176,6 @@ art_id_t art_console(bool ps5) { return ps5 ? ART_PS5 : ART_PS4; }
 art_id_t art_pad(const char *pad_name) {
     if (pad_name && strstr(pad_name, "DualSense")) return ART_DUALSENSE;
     if (pad_name && strstr(pad_name, "PLAYSTATION(R)3")) return ART_DS3;
+    if (pad_name && (!strcmp(pad_name, "Pro Controller") || strstr(pad_name, "Switch Pro"))) return ART_PAD;
     return ART_DS4;
 }

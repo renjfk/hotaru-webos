@@ -59,12 +59,15 @@ pad_kind_t input_pad_kind(void) {
     const char *name = gamepad_name();
     if (strstr(name, "DualSense")) return PAD_KIND_DUALSENSE;
     if (strstr(name, "PLAYSTATION(R)3")) return PAD_KIND_DS3;
+    if (!strcmp(name, "Pro Controller") || strstr(name, "Switch Pro"))
+        return PAD_KIND_SWITCH_PRO; /* hid-nintendo's name */
     return PAD_KIND_DS4;
 }
 const char *input_pad_title(void) {
     switch (input_pad_kind()) {
         case PAD_KIND_DUALSENSE: return "DualSense";
         case PAD_KIND_DS3: return "DualShock 3";
+        case PAD_KIND_SWITCH_PRO: return "Switch Pro Controller";
         default: return "DualShock 4";
     }
 }

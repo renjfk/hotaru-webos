@@ -6,6 +6,9 @@ the design gallery show; `unknown.png`, a console with a question mark on its li
 photographs, stock images or official renders went into them, and they carry no logos or wordmarks (the
 face-button shapes are hardware detail). They are distributed with the project, under its license.
 
+`pad.png` shows a controller in the shape of the Switch Pro Controller, without logo or wordmark; it stands in for
+a pad that is not Sony's.
+
 The app ships scaled copies in `assets/devices/`; after changing a drawing here, run `scripts/make-device-art.sh`.
 
 Where each console touches the floor, which Home needs to stand it on its floor line (`ART_PS5_FLOOR` and

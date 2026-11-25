@@ -1959,6 +1959,7 @@ int main(int argc, char **argv) {
     expect(input_streaming() && !ui_overlay_open() && app_selected() == sel_streaming &&
                app_conn_state() == CONN_STREAMING,
            "streaming: the pad's keys do not reach the UI");
+
     input_rumble(200, 100); /* forwarded to the pad; a no-op on the host, must not crash */
     pump(40);
     input_rumble(0, 0);
@@ -1968,6 +1969,80 @@ int main(int argc, char **argv) {
     pad_ev(EV_ABS, ABS_RX, 0);
     pad_ev(EV_ABS, ABS_HAT0Y, 0);
     pump(60);
+
+    /* a second controller while streaming: a Switch Pro Controller is held (its input dropped)
+     * behind the PlayStation pad, stands in for it when that one goes and gives it back when it
+     * returns. webOS keeps its event nodes in /dev/input with no device behind them, so the pad
+     * comes back on the same node, seen only in /sys/class/input */
+    {
+        char pro_node[300], ps_name[64], ps_sys[600];
+        snprintf(pro_node, sizeof(pro_node), "%s/event20", DEV);
+        snprintf(ps_name, sizeof(ps_name), "%s", strrchr(g_node, '/') + 1);
+        snprintf(ps_sys, sizeof(ps_sys), "%s/%s", SYS_INPUT_DIR, ps_name);
+        unlink(pro_node);
+        mkfifo(pro_node, 0600);
+        int pro_r = open(pro_node, O_RDONLY | O_NONBLOCK), pro_w = open(pro_node, O_WRONLY | O_NONBLOCK);
+        setenv("SHIM_PAD2_NODE", pro_node, 1);
+        setenv("SHIM_PAD2_NAME", "Pro Controller", 1);
+        setenv("SHIM_PAD2_LAYOUT", "nintendo", 1);
+        struct input_event pev[2] = { { .type = EV_KEY, .code = 0x131, .value = 1 } }; /* B, the bottom button */
+        pump(3500);
+        if (write(pro_w, pev, sizeof(pev[0])) != (ssize_t)sizeof(pev[0])) printf("pro write failed\n");
+        pump(80);
+        expect(input_pad_kind() != PAD_KIND_SWITCH_PRO && !(session_last_pad()->buttons & SESSION_PAD_BTN_CROSS),
+               "a Switch Pro Controller that joins mid-stream is held: the PlayStation pad keeps the console");
+        pev[0].value = 0;
+        if (write(pro_w, pev, sizeof(pev[0])) != (ssize_t)sizeof(pev[0])) printf("pro write failed\n");
+
+        /* the PlayStation pad goes: its node stays, with nothing behind it */
+        close(g_pad_w);
+        close(g_pad_r);
+        unlink(g_node);
+        FILE *stale = fopen(g_node, "w");
+        if (stale) fclose(stale);
+        char ps_link[640];
+        snprintf(ps_link, sizeof(ps_link), "%s/device", ps_sys);
+        if (unlink(ps_link) != 0 || rmdir(ps_sys) != 0) printf("no sysfs entry to remove\n");
+        pump(4000);
+        bool pro_in = input_pad_state() == PAD_ONLINE && input_pad_kind() == PAD_KIND_SWITCH_PRO;
+        struct input_event keys[4] = {
+            { .type = EV_KEY, .code = 0x131, .value = 1 }, /* B: Cross, by position */
+            { .type = EV_KEY, .code = 0x130, .value = 1 }, /* A: Circle */
+            { .type = EV_KEY, .code = 0x138, .value = 1 }, /* ZL: a full L2 */
+            { .type = EV_KEY, .code = 0x13a, .value = 1 }, /* Minus: the touchpad click */
+        };
+        if (write(pro_w, keys, sizeof(keys)) != (ssize_t)sizeof(keys)) printf("pro write failed\n");
+        pump(80);
+        const session_pad_t *ps = session_last_pad();
+        expect(pro_in && (ps->buttons & SESSION_PAD_BTN_CROSS) && (ps->buttons & SESSION_PAD_BTN_CIRCLE) &&
+                   (ps->buttons & SESSION_PAD_BTN_TOUCHPAD) && ps->l2 == 255,
+               "the Switch Pro Controller stands in: B is Cross, A Circle, ZL a full L2, Minus the touchpad click");
+        for (int i = 0; i < 4; i++) keys[i].value = 0;
+        if (write(pro_w, keys, sizeof(keys)) != (ssize_t)sizeof(keys)) printf("pro write failed\n");
+        pump(80);
+
+        /* the PlayStation pad comes back on its node: it takes the console again */
+        unlink(g_node);
+        mkfifo(g_node, 0600);
+        g_pad_r = open(g_node, O_RDONLY | O_NONBLOCK);
+        g_pad_w = open(g_node, O_WRONLY | O_NONBLOCK);
+        fake_sysfs_pad(ps_name);
+        pump(7000);
+        pad_ev(EV_KEY, 0x131, 1); /* Cross */
+        pump(80);
+        bool back = input_pad_state() == PAD_ONLINE && input_pad_kind() != PAD_KIND_SWITCH_PRO &&
+                    (session_last_pad()->buttons & SESSION_PAD_BTN_CROSS);
+        pad_ev(EV_KEY, 0x131, 0);
+        pump(80);
+        expect(back, "the PlayStation pad that comes back mid-stream takes the console from the stand-in");
+        close(pro_w);
+        close(pro_r);
+        unlink(pro_node);
+        unsetenv("SHIM_PAD2_NODE");
+        unsetenv("SHIM_PAD2_NAME");
+        unsetenv("SHIM_PAD2_LAYOUT");
+        pump(200);
+    }
 
     /* Back over the stream raises the stream menu: per-pixel alpha (display_set_video turns on
      * screen_transp on the TV), the video above it, a translucent sheet, opaque focused card */
