@@ -528,9 +528,11 @@ static unsigned g_nodes_sig; /* the event nodes INPUT_DIR listed at the last loo
 static int g_relooks;        /* looks left after a change: a new node can take a moment to open */
 #define PAD_RELOOKS 3
 /* A controller is grabbed a moment after webOS has seen it: a button pressed then is a key down whose
- * key up never comes, and SDL repeats it in the UI. Shortly after each grab the keyboard is reset. */
-#define KEYS_RESET_MS 800
-static Uint32 g_keys_reset_at;
+ * key up never comes, and SDL repeats it in the UI on its own. After each grab the keyboard is reset,
+ * three times: a key down webOS had queued can still arrive after the first reset (seen 16 ms later). */
+static const Uint32 k_keys_reset_ms[] = { 800, 1600, 3000 };
+static Uint32 g_keys_reset_at, g_keys_grab_at;
+static int g_keys_reset_step;
 static void keys_reset(void) {
     static void (*reset)(void);
     static bool looked;
@@ -546,6 +548,12 @@ static void keys_reset(void) {
     if (!any) return;
     log_msg("gamepad: keys still down after a grab: released (%s)", reset ? "SDL_ResetKeyboard" : "not available");
     if (reset) reset();
+}
+
+static void keys_reset_soon(void) {
+    g_keys_grab_at = SDL_GetTicks();
+    g_keys_reset_step = 0;
+    g_keys_reset_at = g_keys_grab_at + k_keys_reset_ms[0];
 }
 
 /* a cheap fingerprint of the input devices present: names only, nothing is opened. Opening every
@@ -667,6 +675,7 @@ static void hold_others(void) {
         g_held_fd[slot] = fd;
         snprintf(g_held_path[slot], sizeof(g_held_path[slot]), "%s", path);
         log_msg("gamepad %s \"%s\" held, not used (one controller at a time)", path, name);
+        keys_reset_soon(); /* webOS may have read it before the grab, as with the one in use */
         log_event(LOG_OK, "INPUT", "Two controllers: using %s", g_pad_name);
     }
     closedir(d);
@@ -824,7 +833,7 @@ bool gamepad_try_acquire(void) {
     closedir(d);
     if (g_pad_fd >= 0) {
         if (count > 1) hold_others();
-        g_keys_reset_at = SDL_GetTicks() + KEYS_RESET_MS;
+        keys_reset_soon();
         g_pad_next_recheck = SDL_GetTicks() + PAD_RECHECK_MS;
         g_nodes_sig = nodes_sig();
         notify_state();
@@ -1073,8 +1082,9 @@ void gamepad_tick(void) {
     }
     drain_held();
     if (g_keys_reset_at && (Sint32)(now - g_keys_reset_at) >= 0) {
-        g_keys_reset_at = 0;
         keys_reset();
+        int n = (int)(sizeof(k_keys_reset_ms) / sizeof(k_keys_reset_ms[0]));
+        g_keys_reset_at = ++g_keys_reset_step < n ? g_keys_grab_at + k_keys_reset_ms[g_keys_reset_step] : 0;
     }
     /* a better controller, or one more to hold: only when a node came or went (nodes_sig opens
      * nothing), so also while streaming: a DualSense turned off and on again mid-game takes back
