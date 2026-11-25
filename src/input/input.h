@@ -61,6 +61,11 @@ typedef struct {
     int16_t left_x, left_y, right_x, right_y;
     bool touch_down;
     uint16_t touch_x, touch_y;
+    /* the motion sensors (a DualSense's own node on webOS 11): gyro in rad/s, accel in g, and the
+     * sensor's own timestamp in µs; motion_seq counts the reports, so a reader sees each new one */
+    bool motion;
+    uint32_t motion_seq, motion_ts;
+    float gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z;
 } input_pad_t;
 
 #define PAD_CHORD_MS 100 /* how late Share/Options reach the console while streaming */

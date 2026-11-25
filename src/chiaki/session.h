@@ -92,6 +92,9 @@ typedef struct {
     int16_t left_x, left_y, right_x, right_y;
     bool touch_down;
     uint16_t touch_x, touch_y; /* DS4 touchpad, ABS_MT_POSITION_X/Y */
+    bool motion;               /* the sensors below are live (input_pad_t's) */
+    uint32_t motion_seq, motion_ts;
+    float gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z;
 } session_pad_t;
 
 bool session_available(void); /* true when the real libchiaki backend is linked */

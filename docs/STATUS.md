@@ -40,6 +40,7 @@ What still needs the TV is listed in [TV-CHECKS.md](TV-CHECKS.md).
 | HDR10 (`NDL_DirectVideoSetHDRInfo` with the VUI codes) | TV: a 1080p H.265 HDR stream plays and the call succeeds with the HDR10 defaults (no SEI in the first 120 frames); reading the SEI values is not yet seen on the TV, and the picture is not graded |
 | DualSense on webOS 6: the button map (the DualShock 4's); no rumble or touches reach the app | TV (probe) + host |
 | DualSense on webOS 11: the standard Linux layout, rumble and battery, touchpad read from its own node | TV (probe, OLED48C55LA) + host |
+| DualSense on webOS 11: motion sensors read from their own node and sent as gyro, accel and orientation | TV (OLED48C55LA, Astro's Playroom) + host |
 | One controller per session: the TV holds two pads at once, but the PS5 binds one pad to a Remote Play session | TV + lab: [multi-controller-observed.txt](multi-controller-observed.txt) |
 | Remote number keys, Magic Remote, launch parameters | wired for both possibilities; the probe decides |
 | Rest mode on disconnect (the Disconnect card's End and sleep) | TV: the console is in rest mode 6 s after the request; host |
@@ -64,12 +65,14 @@ hid-playstation driver instead: the node reports the standard Linux layout (BTN_
 triggers on `ABS_Z`/`ABS_RZ`, right stick on `ABS_RX`/`ABS_RY`), rumbles through `FF_RUMBLE` and publishes the
 pad's level at `ps-controller-battery-<mac>`, which Home shows; its touchpad (touches and click) is on a separate
 node, "<name> Touchpad" with the same uniq, which the app opens and grabs next to the pad (touches go out in a PS5's
-1919 x 1079, rescaled to 942 rows for a PS4): [dualsense-map-linux-observed.txt](dualsense-map-linux-observed.txt). A
-DualShock 3 is the kernel hid-sony driver with its Sixaxis descriptor, a third layout: its own button order from 0x120,
-the D-pad as four buttons (no hat), the triggers as pressures on `ABS 0x30`/`0x31`, no force feedback (LG builds
-hid-sony without `CONFIG_SONY_FF`) and no touchpad, though its pressure axes carry `ABS_MT_*` names:
-[ds3-map-observed.txt](ds3-map-observed.txt). It is mapped from one probe log and a tester's pass with the PR #14
-build on an OLED55C8PLA (webOS 4.4.3) pressed every control, which read itself.
+1919 x 1079, rescaled to 942 rows for a PS4): [dualsense-map-linux-observed.txt](dualsense-map-linux-observed.txt). Its
+motion sensors are one more node, "<name> Motion Sensors" (accel on `ABS_X`/`ABS_Y`/`ABS_Z` at 8192 per g, gyro on
+`ABS_RX`/`ABS_RY`/`ABS_RZ` at 1024 per degree/s, `MSC_TIMESTAMP` in µs), grabbed the same way; each report goes into
+libchiaki's orientation tracker, as chiaki-ng's Setsu does. A DualShock 3 is the kernel hid-sony driver with its Sixaxis
+descriptor, a third layout: its own button order from 0x120, the D-pad as four buttons (no hat), the triggers as
+pressures on `ABS 0x30`/`0x31`, no force feedback (LG builds hid-sony without `CONFIG_SONY_FF`) and no touchpad, though
+its pressure axes carry `ABS_MT_*` names: [ds3-map-observed.txt](ds3-map-observed.txt). It is mapped from one probe log
+and a tester's pass with the PR #14 build on an OLED55C8PLA (webOS 4.4.3) pressed every control, which read itself.
 
 **Two controllers.** A DualShock 4 and a DualSense connect to the TV at the same time, as two uhid nodes; the app
 grabs one. Two players over Remote Play are not possible: the protocol has four controller slots (an index in each

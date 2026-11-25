@@ -1177,6 +1177,15 @@ void app_tick(void) {
                     const app_host_t *ch = app_host(g_conn_host);
                     if (ch && !ch->ps5) sp.touch_y = (uint16_t)(ip.touch_y * 942u / 1079u);
                 }
+                sp.motion = ip.motion;
+                sp.motion_seq = ip.motion_seq;
+                sp.motion_ts = ip.motion_ts;
+                sp.gyro_x = ip.gyro_x;
+                sp.gyro_y = ip.gyro_y;
+                sp.gyro_z = ip.gyro_z;
+                sp.accel_x = ip.accel_x;
+                sp.accel_y = ip.accel_y;
+                sp.accel_z = ip.accel_z;
                 session_set_pad(&sp);
             }
         }
