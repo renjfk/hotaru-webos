@@ -17,7 +17,11 @@ struct input_event {
 };
 struct input_absinfo { int32_t value, minimum, maximum, fuzz, flat, resolution; };
 struct input_id { uint16_t bustype, vendor, product, version; };
+#define EV_SYN             0x00
+#define SYN_REPORT         0
 #define EV_KEY             0x01
+#define EV_MSC             0x04
+#define MSC_TIMESTAMP      0x05
 #define EV_ABS             0x03
 #define ABS_X              0x00
 #define ABS_Y              0x01
@@ -93,12 +97,45 @@ static int shim_ioctl(int fd, unsigned long req, ...) {
     struct stat st_touch;
     bool touch =
         touch_node && stat(touch_node, &st_touch) == 0 && st_touch.st_ino == st.st_ino && st_touch.st_dev == st.st_dev;
+    /* SHIM_MOTION_NODE names the FIFO that plays its motion node: "<pad name> Motion Sensors", accel
+     * on ABS_X/Y/Z (8192 per g) and gyro on ABS_RX/RY/RZ (1024 per degree/s), no buttons */
+    const char *motion_node = getenv("SHIM_MOTION_NODE");
+    struct stat st_motion;
+    bool motion = motion_node && stat(motion_node, &st_motion) == 0 && st_motion.st_ino == st.st_ino &&
+                  st_motion.st_dev == st.st_dev;
     if (req == 0x2100) { /* EVIOCGUNIQ: one controller, one Bluetooth address on all its nodes; */
         static const char uniq[] = "02:aa:bb:cc:dd:ee"; /* SHIM_TOUCH_UNIQ makes the touchpad another pad's */
-        const char *other = getenv("SHIM_TOUCH_UNIQ");
-        if (touch && other) snprintf(arg, 64, "%s", other);
+        const char *other = getenv(motion ? "SHIM_MOTION_UNIQ" : "SHIM_TOUCH_UNIQ");
+        if ((touch || motion) && other) snprintf(arg, 64, "%s", other);
         else memcpy(arg, uniq, sizeof(uniq));
         return 0;
+    }
+    if (motion) {
+        const char *pad_name = getenv("SHIM_PAD_NAME") ? getenv("SHIM_PAD_NAME") : "Wireless Controller";
+        if (req == 0x1000 + EV_KEY) {
+            memset(arg, 0, (KEY_CNT + 7) / 8);
+            return 0;
+        }
+        if (req == 0x1000 + EV_ABS) {
+            memset(arg, 0, (ABS_CNT + 7) / 8);
+            ((unsigned char *)arg)[0] |= 0x3f; /* ABS_X..ABS_RZ */
+            return 0;
+        }
+        if (req == 0x2000) {
+            snprintf(arg, 160, "%s Motion Sensors", pad_name);
+            return 0;
+        }
+        if (req == 0x3000) return 0;
+        if (req >= 0x4000 && req < 0x4040) {
+            struct input_absinfo *ai = arg;
+            memset(ai, 0, sizeof(*ai));
+            ai->minimum = req < 0x4003 ? -32768 : -2097152;
+            ai->maximum = -ai->minimum;
+            ai->resolution = req < 0x4003 ? 8192 : 1024;
+            return 0;
+        }
+        errno = ENOTTY;
+        return -1;
     }
     if (touch) {
         const char *pad_name = getenv("SHIM_PAD_NAME") ? getenv("SHIM_PAD_NAME") : "Wireless Controller";

@@ -44,6 +44,7 @@
 #include <chiaki/audioreceiver.h>
 #include <chiaki/common.h>
 #include <chiaki/controller.h>
+#include <chiaki/orientation.h>
 #include <chiaki/discovery.h>
 #include <chiaki/discoveryservice.h>
 #include <chiaki/log.h>
@@ -847,6 +848,12 @@ static uint32_t chiaki_buttons(uint32_t b) {
     return out;
 }
 
+/* the pad's motion turned into an orientation, as chiaki-ng does for an evdev motion node (Setsu) */
+static ChiakiOrientationTracker g_orient;
+static ChiakiAccelNewZero g_accel_zero;
+static uint32_t g_motion_seq;
+static bool g_motion_was;
+
 void session_set_pad(const session_pad_t *pad) {
     if (!pad) return;
     g_last_pad = *pad;
@@ -866,6 +873,20 @@ void session_set_pad(const session_pad_t *pad) {
         st.touches[0].id = 0;
         st.touch_id_next = 1;
     }
+    if (pad->motion) {
+        if (!g_motion_was) { /* a fresh start: no jump from an old orientation */
+            chiaki_orientation_tracker_init(&g_orient);
+            chiaki_accel_new_zero_set_inactive(&g_accel_zero, false);
+            g_motion_seq = pad->motion_seq - 1;
+        }
+        if (pad->motion_seq != g_motion_seq) {
+            g_motion_seq = pad->motion_seq;
+            chiaki_orientation_tracker_update(&g_orient, pad->gyro_x, pad->gyro_y, pad->gyro_z, pad->accel_x,
+                                              pad->accel_y, pad->accel_z, &g_accel_zero, false, pad->motion_ts);
+        }
+        chiaki_orientation_tracker_apply_to_controller_state(&g_orient, &st);
+    }
+    g_motion_was = pad->motion;
     chiaki_session_set_controller_state(&g_session, &st);
 }
 

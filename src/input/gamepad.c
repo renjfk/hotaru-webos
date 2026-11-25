@@ -213,6 +213,9 @@ static struct {
     uint32_t buttons; /* PAD_BTN_* */
     uint16_t touch_x, touch_y;
     bool touch_down;
+    bool motion;
+    uint32_t motion_seq, motion_ts;
+    float gyro[3], accel[3]; /* rad/s and g */
 } g_pad;
 
 /* Share + Options = the stream menu. The session gets those two buttons PAD_CHORD_MS late (a
@@ -245,6 +248,15 @@ static axis_t g_tx, g_ty;        /* its ranges */
 static Uint32 g_touch_next_scan; /* the node can show up just after the pad's */
 static int g_touch_tries;        /* looks left for it; a pad without one stops looking */
 #define TOUCH_TRIES 5
+/* ... and its motion sensors on one more, "<pad name> Motion Sensors": accel on ABS_X/Y/Z, gyro on
+ * ABS_RX/RY/RZ, each with its resolution (units per g, per degree/s) and MSC_TIMESTAMP in µs */
+static int g_motion_fd = -1;
+static int g_mres[6]; /* the resolutions */
+static int g_mraw[6]; /* the last raw values */
+static bool g_mdirty;
+static uint32_t g_mts;
+static Uint32 g_motion_next_scan;
+static int g_motion_tries;
 /* probe mode: the travel of each axis, read at grab, so a stick at full range logs a few lines and not hundreds */
 static int g_abs_span[ABS_CNT];
 static Uint32 g_pad_next_scan, g_pad_next_health;
@@ -426,6 +438,54 @@ bool gamepad_battery(int *pct) {
     return ok;
 }
 
+static void motion_close(void) {
+    if (g_motion_fd < 0) return;
+    ioctl(g_motion_fd, EVIOCGRAB, 0);
+    close(g_motion_fd);
+    g_motion_fd = -1;
+    g_pad.motion = false;
+}
+
+/* the pad's own motion node: the same name with " Motion Sensors", the same uniq when both have one */
+static bool motion_open(const char *pad_path, int pad_fd, const char *pad_name) {
+    char want[200], uniq[64] = { 0 };
+    snprintf(want, sizeof(want), "%s Motion Sensors", pad_name);
+    bool have_uniq = ioctl(pad_fd, EVIOCGUNIQ(sizeof(uniq) - 1), uniq) >= 0 && uniq[0];
+    DIR *d = opendir(INPUT_DIR);
+    if (!d) return false;
+    struct dirent *e;
+    while (g_motion_fd < 0 && (e = readdir(d))) {
+        if (strncmp(e->d_name, "event", 5) != 0) continue;
+        char path[300]; /* INPUT_DIR + d_name (up to 255) */
+        snprintf(path, sizeof(path), "%s/%s", INPUT_DIR, e->d_name);
+        if (!strcmp(path, pad_path)) continue;
+        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) continue;
+        char name[200] = { 0 }, u[64] = { 0 };
+        ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name);
+        unsigned char abs[(ABS_CNT + 7) / 8] = { 0 };
+        bool mine = !strcmp(name, want) &&
+                    (!have_uniq || (ioctl(fd, EVIOCGUNIQ(sizeof(u) - 1), u) >= 0 && !strcmp(u, uniq))) &&
+                    ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs)), abs) >= 0 && GETBIT(abs, ABS_RX) && GETBIT(abs, ABS_X);
+        if (!mine) {
+            close(fd);
+            continue;
+        }
+        for (int a = 0; a < 6; a++) { /* ABS_X..ABS_RZ are 0..5 */
+            struct input_absinfo ai;
+            g_mres[a] = a < 3 ? 8192 : 1024; /* hid-playstation's, when the node does not say */
+            if (ioctl(fd, EVIOCGABS(a), &ai) == 0 && ai.resolution > 0) g_mres[a] = ai.resolution;
+            g_mraw[a] = a == ABS_Y ? g_mres[a] : 0; /* at rest: 1 g down */
+        }
+        if (ioctl(fd, EVIOCGRAB, 1) < 0) log_msg("gamepad: motion %s grab FAILED: %s", path, strerror(errno));
+        g_motion_fd = fd;
+        g_mdirty = false;
+        log_msg("gamepad: motion %s \"%s\" (accel %d/g, gyro %d per degree/s)", path, name, g_mres[0], g_mres[3]);
+    }
+    closedir(d);
+    return g_motion_fd >= 0;
+}
+
 static void touch_close(void) {
     if (g_touch_fd < 0) return;
     ioctl(g_touch_fd, EVIOCGRAB, 0);
@@ -582,6 +642,10 @@ bool gamepad_try_acquire(void) {
                 g_ty = (axis_t){ .min = ai.minimum, .max = ai.maximum };
         }
         if (!g_can_touch && g_layout == LAYOUT_STD) g_can_touch = touch_open(path, fd, name);
+        motion_close();
+        if (g_layout == LAYOUT_STD) motion_open(path, fd, name);
+        g_motion_next_scan = SDL_GetTicks() + PAD_RESCAN_MS;
+        g_motion_tries = TOUCH_TRIES;
         memset(g_abs_span, 0, sizeof(g_abs_span));
         for (int c = 0; c < ABS_CNT; c++) {
             struct input_absinfo ai;
@@ -620,6 +684,7 @@ static void gamepad_lost(const char *why) {
     close(g_pad_fd);
     g_pad_fd = -1;
     touch_close();
+    motion_close();
     scroll_reset();
     g_hatx = g_haty = 0;
     g_ds3_dpad = 0;
@@ -832,6 +897,44 @@ static void touch_tick(Uint32 now) {
     }
 }
 
+/* the motion node next to a standard-layout pad: a report is complete at SYN_REPORT */
+static void motion_tick(Uint32 now) {
+    if (g_motion_fd < 0) {
+        if (g_layout != LAYOUT_STD || g_motion_tries <= 0 || (Sint32)(now - g_motion_next_scan) < 0) return;
+        g_motion_next_scan = now + PAD_RESCAN_MS;
+        g_motion_tries--; /* each look opens every node: a pad without one stops after a few */
+        motion_open(g_pad_path, g_pad_fd, g_pad_name);
+        return;
+    }
+    struct input_event ev;
+    ssize_t n;
+    while ((n = read(g_motion_fd, &ev, sizeof(ev))) == (ssize_t)sizeof(ev)) {
+        if (ev.type == EV_ABS && ev.code <= ABS_RZ) {
+            g_mraw[ev.code] = ev.value;
+            g_mdirty = true;
+        } else if (ev.type == EV_MSC && ev.code == MSC_TIMESTAMP) {
+            g_mts = (uint32_t)ev.value;
+            g_mdirty = true;
+        } else if (ev.type == EV_SYN && ev.code == SYN_REPORT && g_mdirty) {
+            const float deg2rad = 3.14159265f / 180.0f;
+            for (int a = 0; a < 3; a++) {
+                g_pad.accel[a] = (float)g_mraw[a] / (float)g_mres[a];
+                g_pad.gyro[a] = deg2rad * (float)g_mraw[a + 3] / (float)g_mres[a + 3];
+            }
+            g_pad.motion_ts = g_mts;
+            g_pad.motion_seq++;
+            g_pad.motion = true;
+            g_mdirty = false;
+        }
+    }
+    if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+        log_msg("gamepad: motion lost: %s", n == 0 ? "end of stream" : strerror(errno));
+        motion_close();
+        g_motion_next_scan = now + PAD_RESCAN_MS;
+        g_motion_tries = TOUCH_TRIES;
+    }
+}
+
 void gamepad_tick(void) {
     Uint32 now = SDL_GetTicks();
     if (g_pad_fd < 0) {
@@ -888,6 +991,7 @@ void gamepad_tick(void) {
         return;
     }
     touch_tick(now);
+    motion_tick(now);
     if (g_in.streaming) return; /* no scrolling or key repeat: the pad is the console's */
     float dt = g_last_tick ? (float)(now - g_last_tick) / 1000.0f : 0.0f;
     g_last_tick = now;
@@ -936,6 +1040,15 @@ bool gamepad_get(input_pad_t *out) {
     out->touch_down = g_pad.touch_down;
     out->touch_x = g_pad.touch_x;
     out->touch_y = g_pad.touch_y;
+    out->motion = g_pad.motion;
+    out->motion_seq = g_pad.motion_seq;
+    out->motion_ts = g_pad.motion_ts;
+    out->gyro_x = g_pad.gyro[0];
+    out->gyro_y = g_pad.gyro[1];
+    out->gyro_z = g_pad.gyro[2];
+    out->accel_x = g_pad.accel[0];
+    out->accel_y = g_pad.accel[1];
+    out->accel_z = g_pad.accel[2];
     return true;
 }
 

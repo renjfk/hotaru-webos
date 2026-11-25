@@ -10,6 +10,7 @@
  * v1-settings pass that builds the Stream panel for a webOS 4 TV). */
 #include <SDL.h>
 #include <fcntl.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1097,6 +1098,64 @@ int main(int argc, char **argv) {
            "losing the Touchpad node keeps the pad, without touches");
     unsetenv("SHIM_TOUCH_NODE");
     pad_unplug();
+    pump(100);
+
+    /* and its motion sensors on one more ("<name> Motion Sensors", the same uniq): opened next to the
+     * pad, each report turned into rad/s and g with the node's resolutions, with its own timestamp */
+    char motion_node[300];
+    snprintf(motion_node, sizeof(motion_node), "%s/event18", DEV);
+    unlink(motion_node);
+    mkfifo(motion_node, 0600);
+    int motion_r = open(motion_node, O_RDONLY | O_NONBLOCK), motion_w = open(motion_node, O_WRONLY | O_NONBLOCK);
+    setenv("SHIM_MOTION_NODE", motion_node, 1);
+    pad_plug("event13");
+    pump(1800);
+    bool still = input_pad_get(&p) && !p.motion; /* nothing before its first report */
+    struct input_event mev[5];
+    memset(mev, 0, sizeof(mev));
+    mev[0] = (struct input_event){ .type = EV_ABS, .code = ABS_Y, .value = 8192 };        /* 1 g down */
+    mev[1] = (struct input_event){ .type = EV_ABS, .code = ABS_RX, .value = 90 * 1024 };  /* 90 degree/s */
+    mev[2] = (struct input_event){ .type = EV_ABS, .code = ABS_RZ, .value = -45 * 1024 }; /* -45 degree/s */
+    mev[3] = (struct input_event){ .type = EV_MSC, .code = MSC_TIMESTAMP, .value = 123456 };
+    mev[4] = (struct input_event){ .type = EV_SYN, .code = SYN_REPORT, .value = 0 };
+    if (write(motion_w, mev, sizeof(mev)) != (ssize_t)sizeof(mev)) printf("motion write failed\n");
+    pump(60);
+    bool first = input_pad_get(&p) && p.motion;
+    uint32_t seq1 = p.motion_seq;
+    bool values = first && fabsf(p.accel_y - 1.0f) < 0.001f && fabsf(p.accel_x) < 0.001f &&
+                  fabsf(p.gyro_x - 1.5708f) < 0.001f && fabsf(p.gyro_z + 0.7854f) < 0.001f && p.motion_ts == 123456;
+    mev[3].value = 127456;
+    if (write(motion_w, &mev[3], 2 * sizeof(mev[0])) != (ssize_t)(2 * sizeof(mev[0]))) printf("motion write failed\n");
+    pump(60);
+    bool next = input_pad_get(&p) && p.motion_seq == seq1 + 1 && p.motion_ts == 127456;
+    expect(still && values, "webOS 11 DualSense: its Motion Sensors node is opened, a report arrives in rad/s and g");
+    expect(next, "each motion report is a new one, with the sensor's own timestamp");
+    close(motion_w);
+    close(motion_r);
+    unlink(motion_node);
+    pump(1800);
+    expect(input_pad_state() == PAD_ONLINE && input_pad_get(&p) && !p.motion,
+           "losing the Motion Sensors node keeps the pad, without motion");
+    pad_unplug();
+    pump(100);
+
+    /* a Motion Sensors node of another controller (its uniq differs) is not this pad's */
+    mkfifo(motion_node, 0600);
+    motion_r = open(motion_node, O_RDONLY | O_NONBLOCK);
+    motion_w = open(motion_node, O_WRONLY | O_NONBLOCK);
+    setenv("SHIM_MOTION_UNIQ", "02:11:22:33:44:55", 1);
+    pad_plug("event13");
+    pump(1800);
+    mev[3].value = 1;
+    if (write(motion_w, &mev[3], 2 * sizeof(mev[0])) != (ssize_t)(2 * sizeof(mev[0]))) printf("motion write failed\n");
+    pump(60);
+    expect(input_pad_get(&p) && !p.motion, "a Motion Sensors node with another controller's uniq is left alone");
+    unsetenv("SHIM_MOTION_UNIQ");
+    unsetenv("SHIM_MOTION_NODE");
+    pad_unplug();
+    close(motion_w);
+    close(motion_r);
+    unlink(motion_node);
     pump(100);
 
     /* a Touchpad node of another controller (its uniq differs) is not this pad's */
